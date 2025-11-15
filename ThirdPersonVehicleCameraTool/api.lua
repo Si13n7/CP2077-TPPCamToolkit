@@ -5,12 +5,15 @@ This file is distributed under the MIT License
 
 Standard API Definitions for IntelliSense
 
+All definitions included here are used in the
+main code.
+
 These definitions have no functionality. They
 are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-04-22, 10:38 UTC+01:00 (MEZ)
+Version: 2025-04-24, 10:43 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -35,7 +38,6 @@ ______________________________________________
 ---@field SliderInt fun(label: string, value: integer, min: integer, max: integer): integer # Creates an integer slider. Returns the new `value`.
 ---@field DragFloat fun(label: string, value: number, speed?: number, min?: number, max?: number, format?: string): number # Creates a draggable float input widget. Allows the user to adjust the value by dragging or with arrow keys. Optional speed, min/max limits, and format string. Returns the updated float value.
 ---@field IsItemHovered fun(): boolean # Returns true if the last item is hovered by the mouse cursor.
----@field IsItemClicked fun(mouse_button?: integer): boolean # Returns true if the last item was clicked this frame. Defaults to left mouse button (0). Must be called in the same frame the item was rendered.
 ---@field IsItemActive fun(): boolean # Returns true while the last item is being actively used (e.g., held with mouse or keyboard input).
 ---@field PushItemWidth fun(width: number): nil # Sets the width of the next UI element (e.g., slider, text input).
 ---@field PopItemWidth fun(): nil # Resets the width of the next UI element to the default value.

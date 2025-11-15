@@ -9,13 +9,15 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-22, 18:27 UTC+01:00 (MEZ)
+Version: 2025-04-24, 10:43 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
 ______________________________________________
 --]]
 
+
+--#region 🚧 Core Definitions
 
 --Aliases for commonly used standard library functions to simplify code.
 local format, rep, concat, insert, unpack, ceil, floor, max, min, band, bor, lshift, rshift =
@@ -82,7 +84,7 @@ local Colors = {
 	OLIVE = 0x8a297a68
 }
 
----Constant array of possible camera levels.
+---Constant array of all camera levels.
 ---@type string[]
 local CameraLevels = {
 	"High_Close",
@@ -99,7 +101,7 @@ local CameraLevels = {
 	"Low_DriverCombatFar"
 }
 
----Constant array of preset camera levels.
+---Constant array of base camera levels.
 ---@type string[]
 local PresetLevels = { "Close", "Medium", "Far" }
 
@@ -136,7 +138,7 @@ local used_presets = {}
 
 ---Represents optional overrides for how camera presets are accessed in TweakDB.
 ---@class ICameraAccessOverrides
----@field Key string[]? # Optional format string to override the TweakDB record key (replacing "Camera.VehicleTPP").
+---@field Key string? # Optional format string to override the TweakDB record key (replacing "Camera.VehicleTPP_4w_911").
 ---@field Levels string[]? # Optional list of level identifiers to use instead of the default `CameraLevels` array.
 ---@field Due boolean? # If true, indicates that these overrides are pending and should be applied on the next preset update action.
 
@@ -209,6 +211,10 @@ local overwrite_confirm
 ---@type boolean
 local file_man_open = false
 
+--#endregion
+
+--#region 🔧 Utility Functions
+
 ---Logs and displays messages based on the current `dev_mode` level.
 ---Messages can be written to the log file, printed to the console, or shown as in-game alerts.
 ---@param lvl LogLevelType # Logging level (0 = Info, 1 = Warning, 2 = Error).
@@ -279,6 +285,13 @@ local function isType(t, ...)
 	return true
 end
 
+---Checks whether all provided arguments are of type `boolean`.
+---@param ... any # A variable boolean of values to check.
+---@return boolean # Returns true only if all arguments are booleans.
+local function isBoolean(...)
+	return isType("boolean", ...)
+end
+
 ---Checks whether all provided arguments are of type `number`.
 ---@param ... any # A variable number of values to check.
 ---@return boolean # Returns true only if all arguments are numbers.
@@ -339,6 +352,8 @@ local function equals(a, b)
 
 	if isNumber(a) then
 		return math.abs(a - b) < 1e-4
+	elseif hasNumber(a) then
+		return math.abs(tonumber(a) - tonumber(b)) < 1e-4
 	elseif isTable(a) then
 		for k, va in pairs(a) do
 			if not equals(va, b[k]) then return false end
@@ -628,9 +643,14 @@ local function fileExists(path)
 	return false
 end
 
+--#endregion
+
+--#region 🧬 Tweak Accessors
+
 ---Returns a formatted TweakDB record key for accessing vehicle camera data.
 ---@param preset ICameraPreset # The camera preset.
 ---@param path string # The camera level path (e.g. "High_Close").
+---@param var string # The variable name.
 ---@return string? # The formatted TweakDB record key.
 local function getCameraTweakKey(preset, path, var)
 	if not isTable(preset) then return nil end
@@ -653,8 +673,7 @@ local function getCameraTweakKey(preset, path, var)
 	end
 
 	local section = isBasilisk and "Vehicle" or "Camera"
-	local key = format("%s.VehicleTPP_%s_%s.%s", section, preset.ID, path, var)
-	return key
+	return format("%s.VehicleTPP_%s_%s.%s", section, preset.ID, path, var)
 end
 
 ---Fetches the default rotation pitch value for a vehicle camera.
@@ -732,6 +751,48 @@ local function setCameraLookAtOffset(preset, path, x, y, z)
 	TweakDB:SetFlat(key, value)
 end
 
+---Resets custom camera behavior values for a vehicle to their global defaults.
+---Ensures modded vehicles do not override global TweakDB values such as FOV or camera locking.
+---This operation is destructive and cannot be undone once executed.
+---@param vehicle Vehicle? The vehicle whose camera behavior should be reset.
+local function resetCustomCameraParams(vehicle)
+	if not vehicle then return end
+
+	local vtid = vehicle:GetTDBID()
+	if not vtid then return end
+
+	local vname = TDBID.ToStringDEBUG(vtid)
+	if not vname then return end
+
+	local cptid = TweakDB:GetFlat(vname .. ".tppCameraParams")
+	if not cptid then return end
+
+	local cparam = TDBID.ToStringDEBUG(cptid)
+	if not cparam then return end
+	cparam = cparam .. "."
+
+	local param = "Camera.VehicleTPP_DefaultParams."
+	for _, v in ipairs({ "fov", "lockedCamera" }) do
+		local path = cparam .. v
+		local val = TweakDB:GetFlat(path)
+		if not val then goto continue end
+
+		local ref = TweakDB:GetFlat(param .. v)
+		if not ref then
+			if not isBoolean(val) then goto continue end
+			ref = false
+		end
+
+		if not equals(val, ref) then
+			TweakDB:SetFlat(path, ref)
+
+			log(LogLevels.INFO, Text.LOG_PARAM_MANIP, v, val, ref)
+		end
+
+		::continue::
+	end
+end
+
 ---Extracts the record name from a TweakDBID string representation.
 ---@param data any # The TweakDBID to be parsed.
 ---@return string? # The extracted record name, or nil if not found.
@@ -739,6 +800,10 @@ local function getRecordName(data)
 	if not data then return nil end
 	return tostring(data):match("%-%-%[%[(.-)%-%-%]%]"):match("^%s*(.-)%s*$")
 end
+
+--#endregion
+
+--#region 🚗 Vehicle Metadata
 
 ---Returns the vehicle the player is currently mounted in, if any.
 ---Internally retrieves the player instance and checks for an active vehicle.
@@ -754,29 +819,87 @@ local function getMountedVehicle()
 	return vehicle
 end
 
+---Retrieves the list of third-person camera preset keys for a given vehicle.
+---Each key is in the form "Camera.VehicleTPP_<CameraID>_<Level>".
+---@param vehicle Vehicle? # The vehicle object to extract camera keys from.
+---@return string[]? # Array of camera preset keys, or `nil` if not found.
+local function getVehicleCameraKeys(vehicle)
+	if not vehicle then return nil end
+
+	local vid = vehicle:GetRecordID()
+	if not vid then return nil end
+
+	local vname = getRecordName(vid)
+	if not vname then return nil end
+
+	local record = TweakDB:GetFlat(vname .. ".tppCameraPresets")
+	if not isTable(record) then return nil end ---@cast record table
+
+	local list = {}
+	for _, v in ipairs(record) do
+		local name = getRecordName(v)
+		if not name then goto continue end
+
+		insert(list, tostring(name))
+
+		::continue::
+	end
+
+	return next(list) and list or nil
+end
+
 ---Attempts to retrieve the camera ID associated with a given vehicle.
 ---@param vehicle Vehicle? # The vehicle from which to extract the camera ID.
 ---@return string? # The extracted camera ID (e.g., "4w_911") or nil if not found.
 local function getVehicleCameraID(vehicle)
-	if not vehicle then return nil end
+	local keys = getVehicleCameraKeys(vehicle)
+	if not isTable(keys) then return nil end ---@cast keys string[]
 
-	local record = vehicle:GetRecordID()
-	if not record then return nil end
-
-	local name = getRecordName(record)
-	if not name then return nil end
-
-	local data = TweakDB:GetFlat(name .. ".tppCameraPresets")
-	if not data then return nil end
-
-	for _, v in pairs(data) do
-		local item = getRecordName(v)
-		if item then
-			return item:match("^[%a]+%.VehicleTPP_([%w_]+)_[%w_]+_[%w_]+")
+	for _, v in pairs(keys) do
+		local match, _ = v:match("^[%a]+%.VehicleTPP_([%w_]+)_[%w_]+_[%w_]+")
+		if match then
+			return match
 		end
 	end
 
 	return nil
+end
+
+---Extracts a custom camera ID and associated level names.
+---@param vehicle Vehicle # The vehicle to analyze.
+---@return string? customID # The extracted prefix representing the custom camera ID, or nil if not found.
+---@return string[]? levels # A list of level suffixes (e.g., "High_Close", "Low_Far") associated with the custom ID.
+local function getCustomCameraRecordKeyData(vehicle)
+	local keys = getVehicleCameraKeys(vehicle) ---@cast keys string[]
+	if not isTable(keys) or not next(keys) then return nil, nil end
+
+	local vanillaID = getVehicleCameraID(vehicle)
+	if not vanillaID then return nil, nil end
+
+	local customID
+	local levels = {}
+	for _, s in ipairs(keys) do
+		if contains(s, vanillaID) then goto continue end
+
+		local parts = split(s, "_")
+		if #parts < 3 then goto continue end
+
+		local prefix = table.concat(parts, "_", 1, #parts - 2)
+		local suffix = table.concat(parts, "_", #parts - 1)
+
+		if not customID then
+			customID = prefix
+		end
+		insert(levels, suffix)
+
+		::continue::
+	end
+
+	if customID then
+		return customID, levels
+	end
+
+	return nil, nil
 end
 
 ---Attempts to retrieve the name of the specified vehicle.
@@ -791,7 +914,7 @@ local function getVehicleName(vehicle)
 	local str = TDBID.ToStringDEBUG(tid)
 	if not str then return nil end
 
-	local result = str:gsub("^Vehicle%.", "")
+	local result, _ = str:gsub("^Vehicle%.", "")
 	return result
 end
 
@@ -804,8 +927,21 @@ local function getVehicleAppearanceName(vehicle)
 	local name = vehicle:GetCurrentAppearanceName()
 	if not name then return nil end
 
-	local result = Game.NameToString(name)
-	return result
+	return Game.NameToString(name)
+end
+
+--#endregion
+
+--#region ⚖️ Preset Management
+
+---Checks whether a preset with the given key exists and matches the specified camera ID.
+---Returns true only if the preset is present in `camera_presets` and its `ID` matches `id`.
+---@param key string # The key under which the preset is stored in the `camera_presets` table.
+---@param id string # The camera ID of the mounted vehicle.
+---@return boolean # True if the preset exists and has a matching ID, false otherwise.
+local function presetExists(key, id)
+	local preset = deep(camera_presets, key)
+	return preset.ID == id
 end
 
 ---Attempts to find the best matching key in the `camera_presets` table using one or more candidate values.
@@ -839,9 +975,7 @@ local function validatePresetKey(vehicleName, appearanceName, currentKey, newKey
 	if not isString(newKey) then return currentKey end
 
 	local name = trimLuaExt(newKey)
-
-	local len = #name
-	if len < 1 then
+	if #name < 1 then
 		if dev_mode >= DevLevels.ALERT then
 			log(LogLevels.WARN, Text.LOG_BLANK_NAME)
 		end
@@ -960,8 +1094,9 @@ end
 ---Missing values in the preset are replaced with fallback values from the default preset, if available.
 ---Each successfully applied preset ID is recorded in `used_presets`.
 ---@param preset ICameraPreset? # The preset to apply. May be `nil` to auto-resolve via the current vehicle.
+---@param id string? # The camera ID of the mounted vehicle.
 ---@param count number? # Internal recursion counter to prevent infinite loops via `Link`. Do not set manually.
-local function applyPreset(preset, count)
+local function applyPreset(preset, id, count)
 	if not preset and not count then
 		local vehicle = getMountedVehicle()
 		if not vehicle then return end
@@ -975,11 +1110,21 @@ local function applyPreset(preset, count)
 		local key = name == appName and findPresetKey(name) or findPresetKey(name, appName)
 		if not key then return end
 
+		local cid = getVehicleCameraID(vehicle)
+		if not cid then return end
+
 		if dev_mode >= DevLevels.ALERT then
 			log(LogLevels.INFO, Text.LOG_CAM_PSET, key)
 		end
 
-		applyPreset(camera_presets[key], 0)
+		local pre = camera_presets[key]
+		if isTable(pre) and next(pre) then
+			if isTable(pre.Overrides) then
+				resetCustomCameraParams(vehicle)
+			end
+			applyPreset(camera_presets[key], cid, 0)
+		end
+
 		return
 	end
 
@@ -990,19 +1135,26 @@ local function applyPreset(preset, count)
 		end
 		preset = camera_presets[preset.Link]
 		if preset and preset.Link and count < 8 then
-			applyPreset(preset, count)
+			applyPreset(preset, id, count)
 			return
 		end
 	end
 
-	if not preset or not preset.ID then
-		log(LogLevels.ERROR, Text.LOG_FAIL_APPLY)
+	if not preset or not isString(preset.ID) then
+		logF(DevLevels.BASIC, LogLevels.ERROR, Text.LOG_FAIL_APPLY)
+		return
+	end
+
+	if isString(id) and id ~= preset.ID then
+		if dev_mode >= DevLevels.ALERT then
+			log(LogLevels.WARN, Text.LOG_CAMID_MISM, preset.ID, id)
+		end
 		return
 	end
 
 	local levelMap = { CameraLevels }
 	local overrides = preset.Overrides ---@cast overrides ICameraAccessOverrides
-	local hasOverrides = isTable(overrides)
+	local hasOverrides = isTable(overrides) and next(overrides)
 	if hasOverrides and overrides.Levels then
 		insert(levelMap, overrides.Levels)
 	end
@@ -1026,7 +1178,7 @@ local function applyPreset(preset, count)
 		end
 	end
 
-	if hasOverrides then
+	if hasOverrides and overrides.Due then
 		overrides.Due = nil
 	end
 
@@ -1048,7 +1200,7 @@ end
 ---Restores modified camera offset presets to their default values.
 local function restoreModifiedPresets()
 	local changed = used_presets
-	if #changed == 0 then return end
+	if not next(changed) then return end
 
 	local amount = #changed
 	local restored = 0
@@ -1121,6 +1273,10 @@ local function setPresetEntry(key, preset)
 	return true
 end
 
+--#endregion
+
+--#region 💾 Preset File Control
+
 ---Generates the full file path to a preset file, optionally pointing to the default directory.
 ---Automatically appends the `.lua` extension if not already present.
 ---@param name string # The base name of the preset file (with or without `.lua` extension).
@@ -1128,8 +1284,7 @@ end
 ---@return string? # The full file path to the preset, or `nil` if the name is invalid.
 local function getPresetFilePath(name, isDefault)
 	if not isString(name) then return nil end
-	local path = (isDefault and "defaults/" or "presets/") .. ensureLuaExt(name)
-	return path
+	return (isDefault and "defaults/" or "presets/") .. ensureLuaExt(name)
 end
 
 ---Checks whether a preset file with the given name exists in the appropriate folder.
@@ -1290,7 +1445,7 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 	if saveAsDefault then
 		insert(parts, "IsDefault=true")
 	else
-		local overrides = get(camera_presets, nil, name, "Overrides")
+		local overrides = get(preset, nil, "Overrides")
 		if isTable(overrides) then
 			local serialized = serialize(overrides)
 			insert(parts, format("Overrides=%s", serialized))
@@ -1315,6 +1470,160 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 
 	return true
 end
+
+--#endregion
+
+--#region 🧪 Preset Editor
+
+---Generates a checksum token for a camera preset by combining its ID and offset tables.
+---@param preset ICameraPreset? # The camera preset containing fields `ID`, `Close`, `Medium`, and `Far`.
+---@return integer # Adler‑32 checksum of `preset.ID`, `preset.Close`, `preset.Medium`, `preset.Far`, or -1 if invalid.
+local function getEditorPresetToken(preset)
+	if not isTable(preset) then return -1 end ---@cast preset ICameraPreset
+	return checksum(preset.ID, preset.Close, preset.Medium, preset.Far)
+end
+
+---Creates a new editor preset entry from a camera preset.
+---@param preset ICameraPreset # The source camera preset.
+---@param key string # Identifier/name for this preset entry.
+---@param snapshot boolean? # If true, deep-copies `preset` and clears its `IsDefault` flag.
+---@param verify boolean? # If true, sets `IsPresent` by checking the file system.
+---@return IEditorPreset # A table with fields: Preset, Key, Name, Token, IsPresent.
+local function getEditorPreset(preset, key, snapshot, verify)
+	local object = preset
+
+	if snapshot then
+		object = clone(object)
+	end
+
+	return {
+		Preset = object,
+		Key = key,
+		Name = key,
+		Token = getEditorPresetToken(object),
+		IsPresent = verify and presetFileExists(key) or false
+	}
+end
+
+---Retrieves (and if necessary initializes) the four editor‐preset entries for a given arguments.
+---If the entries already exist in `editor_bundles`, it simply returns them.
+---@param name string # Vehicle name (e.g. "v_sport2_porsche_911turbo_player").
+---@param appName string # Appearance name (e.g. "porsche_911turbo__basic_johnny").
+---@param id string # Camera‑preset ID for TweakDB lookup.
+---@param key string # Preset key/alias used for storage and display.
+---@return IEditorPreset? Flux # Live preset entry reflecting current UI edits.
+---@return IEditorPreset? Pivot # Snapshot of Flux at the last apply action.
+---@return IEditorPreset? Finale # Snapshot of Flux at the last save action.
+---@return IEditorPreset? Nexus # Immutable default preset entry.
+---@return IEditorTasks? Tasks # Pending action flags (Rename, Validate, Apply, Save, Restore).
+local function getEditorBundleUnpacked(vehicle, name, appName, id, key)
+	local bundle = deep(editor_bundles, format("%s*%s", name, appName)) ---@cast bundle IEditorBundle
+
+	if not isTable(bundle.Flux, bundle.Pivot, bundle.Finale, bundle.Nexus, bundle.Tasks) then
+		local flux = getPreset(id)
+		if not flux then
+			log(LogLevels.WARN, Text.LOG_NO_PSET_FOUND, id)
+			return
+		end
+
+		local legitID, levels = getCustomCameraRecordKeyData(vehicle)
+		if isString(legitID) and isTable(levels) then
+			flux.Overrides = {
+				Key = legitID,
+				Levels = levels
+			}
+		end
+
+		bundle.Flux = getEditorPreset(flux, key)
+		bundle.Pivot = getEditorPreset(flux, key, true)
+		bundle.Finale = getEditorPreset(flux, key, true, true)
+
+		local nexus = getDefaultPreset(flux) ---@cast nexus ICameraPreset
+		bundle.Nexus = getEditorPreset(nexus, key, true, true)
+
+		bundle.Tasks = {
+			Rename = false,
+			Validate = false,
+			Apply = false,
+			Save = false,
+			Restore = false
+		}
+	end
+
+	return bundle.Flux, bundle.Pivot, bundle.Finale, bundle.Nexus, bundle.Tasks
+end
+
+---Replaces an existing editor preset entry with values from another and updating its checksum.
+---@param src IEditorPreset # The source preset entry whose data will be copied.
+---@param dest IEditorPreset # The preset entry to overwrite (modified in place).
+---@param verify boolean? # If true, recomputes `IsPresent` by checking the file system for `src.Key`.
+local function replaceEditorPreset(src, dest, verify)
+	if not isTable(src, dest) then return end
+
+	local preset = clone(src.Preset)
+	dest.Preset = preset
+	dest.Key = src.Key
+	dest.Name = src.Name
+	dest.Token = getEditorPresetToken(preset)
+	dest.IsPresent = verify and presetFileExists(src.Key) or false
+end
+
+---Applies the current UI-edited camera preset to the internal preset registry.
+---Updates the pivot state, clears the old entry, and assigns any preserved overrides.
+---@param key string # The key under which the current preset will be stored.
+---@param flux IEditorPreset # The edited preset containing user modifications.
+---@param pivot IEditorPreset # The previously applied preset; will be overwritten with `flux`.
+---@param tasks IEditorTasks # Tracks pending editor actions; `Apply` will be cleared here.
+local function applyEditorPreset(key, flux, pivot, tasks)
+	if not isString(key) or not isTable(flux, pivot, tasks) then return end
+
+	tasks.Apply = false
+
+	camera_presets[pivot.Key] = nil
+	if not tasks.Restore then
+		camera_presets[key] = flux.Preset
+	end
+
+	replaceEditorPreset(flux, pivot)
+
+	logF(DevLevels.ALERT, LogLevels.INFO, Text.LOG_PSET_UPD, key)
+end
+
+---Saves the current camera preset to disk and updates the saved (finale) state.
+---Performs overwrite, cleanup of old files on rename, and syncs the checksum.
+---@param key string # The key used as filename for saving the preset (without `.lua` extension).
+---@param flux IEditorPreset # The currently edited preset with unsaved modifications.
+---@param finale IEditorPreset # The last saved version of the preset; will be updated to match `flux`.
+---@param tasks IEditorTasks # Tracks pending editor actions; will reset `Save`, `Restore`, and optionally `Rename`.
+local function saveEditorPreset(key, flux, finale, tasks)
+	if not isString(key) or not isTable(flux, finale, tasks) then return end
+
+	if not savePreset(key, flux.Preset, true) then
+		logF(DevLevels.ALERT, LogLevels.WARN, Text.LOG_PSET_NOT_SAVED, key)
+		return
+	end
+
+	tasks.Restore = false
+	tasks.Save = false
+
+	if tasks.Rename then
+		tasks.Rename = false
+
+		local path = getPresetFilePath(finale.Name) ---@cast path string
+		local ok, err = os.remove(path)
+		if not ok then
+			logF(DevLevels.FULL, LogLevels.ERROR, Text.LOG_MOVE_FAILURE, finale.Name, flux.Name, err)
+		end
+
+		camera_presets[finale.Key] = nil
+	end
+
+	replaceEditorPreset(flux, finale, true)
+end
+
+--#endregion
+
+--#region 🎨 UI Layout Helpers
 
 ---Calculates UI layout metrics based on the current content region and font size.
 ---Uses a baseline font height of 18px to derive a scale factor.
@@ -1498,142 +1807,13 @@ local function addPopupYesNo(id, text, scale, yesBtnColor, noBtnColor)
 	popColors(pushed)
 
 	ImGui.EndPopup()
+
 	return result
 end
 
----Generates a checksum token for a camera preset by combining its ID and offset tables.
----@param preset ICameraPreset? # The camera preset containing fields `ID`, `Close`, `Medium`, and `Far`.
----@return integer # Adler‑32 checksum of `preset.ID`, `preset.Close`, `preset.Medium`, `preset.Far`, or -1 if invalid.
-local function getEditorPresetToken(preset)
-	if not isTable(preset) then return -1 end ---@cast preset ICameraPreset
-	local token = checksum(preset.ID, preset.Close, preset.Medium, preset.Far)
-	return token
-end
+--#endregion
 
----Creates a new editor preset entry from a camera preset.
----@param preset ICameraPreset # The source camera preset.
----@param key string # Identifier/name for this preset entry.
----@param snapshot boolean? # If true, deep-copies `preset` and clears its `IsDefault` flag.
----@param verify boolean? # If true, sets `IsPresent` by checking the file system.
----@return IEditorPreset # A table with fields: Preset, Key, Name, Token, IsPresent.
-local function getEditorPreset(preset, key, snapshot, verify)
-	local object = preset
-	if snapshot then
-		object = clone(object)
-	end
-	return {
-		Preset = object,
-		Key = key,
-		Name = key,
-		Token = getEditorPresetToken(object),
-		IsPresent = verify and presetFileExists(key) or false
-	}
-end
-
----Retrieves (and if necessary initializes) the four editor‐preset entries for a given arguments.
----If the entries already exist in `editor_bundles`, it simply returns them.
----@param name string # Vehicle name (e.g. "v_sport2_porsche_911turbo_player").
----@param appName string # Appearance name (e.g. "porsche_911turbo__basic_johnny").
----@param id string # Camera‑preset ID for TweakDB lookup.
----@param key string # Preset key/alias used for storage and display.
----@return IEditorPreset? Flux # Live preset entry reflecting current UI edits.
----@return IEditorPreset? Pivot # Snapshot of Flux at the last apply action.
----@return IEditorPreset? Finale # Snapshot of Flux at the last save action.
----@return IEditorPreset? Nexus # Immutable default preset entry.
----@return IEditorTasks? Tasks # Pending action flags (Rename, Validate, Apply, Save, Restore).
-local function getEditorBundleUnpacked(name, appName, id, key)
-	local bundle = deep(editor_bundles, format("%s*%s", name, appName)) ---@cast bundle IEditorBundle
-	if not isTable(bundle.Flux, bundle.Pivot, bundle.Finale, bundle.Nexus, bundle.Tasks) then
-		local flux = getPreset(id)
-		if not flux then
-			log(LogLevels.WARN, Text.LOG_NO_PSET_FOUND)
-			return
-		end
-
-		bundle.Flux = getEditorPreset(flux, key)
-		bundle.Pivot = getEditorPreset(flux, key, true)
-		bundle.Finale = getEditorPreset(flux, key, true, true)
-
-		local nexus = getDefaultPreset(flux) ---@cast nexus ICameraPreset
-		bundle.Nexus = getEditorPreset(nexus, key, true, true)
-
-		bundle.Tasks = {
-			Rename = false,
-			Validate = false,
-			Apply = false,
-			Save = false,
-			Restore = false
-		}
-	end
-	return bundle.Flux, bundle.Pivot, bundle.Finale, bundle.Nexus, bundle.Tasks
-end
-
----Replaces an existing editor preset entry with values from another and updating its checksum.
----@param src IEditorPreset # The source preset entry whose data will be copied.
----@param dest IEditorPreset # The preset entry to overwrite (modified in place).
----@param verify boolean? # If true, recomputes `IsPresent` by checking the file system for `src.Key`.
-local function replaceEditorPreset(src, dest, verify)
-	if not isTable(src, dest) then return end
-
-	local preset = clone(src.Preset)
-	dest.Preset = preset
-	dest.Key = src.Key
-	dest.Name = src.Name
-	dest.Token = getEditorPresetToken(preset)
-	dest.IsPresent = verify and presetFileExists(src.Key) or false
-end
-
----Applies the current UI-edited camera preset to the internal preset registry.
----Updates the pivot state, clears the old entry, and assigns any preserved overrides.
----@param key string # The key under which the current preset will be stored.
----@param flux IEditorPreset # The edited preset containing user modifications.
----@param pivot IEditorPreset # The previously applied preset; will be overwritten with `flux`.
----@param tasks IEditorTasks # Tracks pending editor actions; `Apply` will be cleared here.
-local function applyEditorPreset(key, flux, pivot, tasks)
-	if not isString(key) or not isTable(flux, pivot, tasks) then return end
-
-	tasks.Apply = false
-
-	local overrides = get(camera_presets, nil, pivot.Key, "Overrides")
-	camera_presets[pivot.Key] = nil
-	if not tasks.Restore then
-		camera_presets[key] = flux.Preset
-		camera_presets[key].Overrides = overrides
-	end
-
-	replaceEditorPreset(flux, pivot)
-
-	logF(DevLevels.ALERT, LogLevels.INFO, Text.LOG_PSET_UPD, key)
-end
-
----Saves the current camera preset to disk and updates the saved (finale) state.
----Performs overwrite, cleanup of old files on rename, and syncs the checksum.
----@param key string # The key used as filename for saving the preset (without `.lua` extension).
----@param flux IEditorPreset # The currently edited preset with unsaved modifications.
----@param finale IEditorPreset # The last saved version of the preset; will be updated to match `flux`.
----@param tasks IEditorTasks # Tracks pending editor actions; will reset `Save`, `Restore`, and optionally `Rename`.
-local function saveEditorPreset(key, flux, finale, tasks)
-	if not isString(key) or not isTable(flux, finale, tasks) then return end
-
-	if not savePreset(key, flux.Preset, true) then
-		logF(DevLevels.ALERT, LogLevels.WARN, Text.LOG_PSET_NOT_SAVED, key)
-		return
-	end
-
-	tasks.Restore = false
-	tasks.Save = false
-
-	if tasks.Rename then
-		tasks.Rename = false
-		local path = getPresetFilePath(finale.Name) ---@cast path string
-		local ok, err = os.remove(path)
-		if not ok then
-			logF(DevLevels.FULL, LogLevels.ERROR, Text.LOG_MOVE_FAILURE, finale.Name, flux.Name, err)
-		end
-	end
-
-	replaceEditorPreset(flux, finale, true)
-end
+--#region 🎬 Runtime Behavior
 
 --This event is triggered when the CET environment initializes for a particular game session.
 registerForEvent("onInit", function()
@@ -1794,7 +1974,7 @@ registerForEvent("onDraw", function()
 		end
 	end
 
-	local flux, pivot, finale, nexus, tasks = getEditorBundleUnpacked(name, appName, id, key)
+	local flux, pivot, finale, nexus, tasks = getEditorBundleUnpacked(vehicle, name, appName, id, key)
 	---@cast flux IEditorPreset
 	---@cast pivot IEditorPreset
 	---@cast finale IEditorPreset
@@ -1810,48 +1990,23 @@ registerForEvent("onDraw", function()
 		ImGui.TableSetupColumn("\u{f09a8}", ImGuiTableColumnFlags.WidthStretch)
 		ImGui.TableHeadersRow()
 
-		local original = get(camera_presets, {}, key)
-		local overrides = get(original, {}, "Overrides")
-
-		--Toggles sectret override mode if any row value is right-clicked rapidly up to 10 times.
-		--This mode is not intended for mainstream use, as it cannot be implemented in a foolproof way.
-		if isTable(original) and editor_secret >= 10 then
-			editor_secret = 0
-			if not isString(overrides.Key) or not isTable(overrides.Levels) then
-				original.Overrides = {
-					Key = format("Camera.VehicleTPP_%s", id),
-					Levels = clone(CameraLevels)
-				}
-				overrides = original.Overrides
-			else
-				original.Overrides = nil
-				overrides = nil
-			end
-		end
+		local overrides = get(flux, {}, "Preset", "Overrides")
 
 		local rows = {
 			{ label = "\u{f010b}", tip = Text.GUI_TBL_LABL_VEH_TIP,   value = name },
 			{ label = "\u{f07ac}", tip = Text.GUI_TBL_LABL_APP_TIP,   value = appName },
 			{ label = "\u{f0567}", tip = Text.GUI_TBL_LABL_CAMID_TIP, value = id },
 			{
-				label = "\u{f0569}",
-				tip = Text.GUI_TBL_LABL_OKEY_TIP,
-				value = overrides.Key,
-				valTip = Text.GUI_TBL_VAL_OKEY_TIP,
-				override = true
-			},
-			{
-				label = "\u{f0ed2}",
-				tip = Text.GUI_TBL_LABL_OLVLS_TIP,
-				value = isTable(overrides.Levels) and concat(overrides.Levels, ",") or nil,
-				valTip = Text.GUI_TBL_VAL_OLVLS_TIP,
-				isArray = true,
-				override = true
+				label  = "\u{f0569}",
+				tip    = Text.GUI_TBL_LABL_CCAMKEY_TIP,
+				value  = overrides.Key,
+				valTip = (isTable(overrides.Levels) and next(overrides.Levels)) and
+					format(Text.GUI_TBL_VAL_CCAMKEY_TIP, concat(overrides.Levels, "\n")) or nil
 			},
 			{
 				label    = "\u{f1952}",
 				tip      = Text.GUI_TBL_LABL_PSET_TIP,
-				value    = (flux.Name ~= key or contains(camera_presets, key)) and flux.Name or id,
+				value    = (flux.Name ~= key or presetExists(key, id)) and flux.Name or id,
 				valTip   = Text.GUI_TBL_VAL_PSET_TIP,
 				editable = true
 			}
@@ -1890,7 +2045,8 @@ registerForEvent("onDraw", function()
 			elseif row.editable then
 				local namWidth, _ = ImGui.CalcTextSize(name)
 				local appWidth, _ = ImGui.CalcTextSize(appName)
-				local width = min(max(namWidth, appWidth), maxInputWidth) + ceil(8 * scale)
+				local maxWidth = max(namWidth, appWidth)
+				local width = min(maxWidth, maxInputWidth) + ceil(8 * scale)
 				ImGui.PushItemWidth(width)
 
 				local color
@@ -1903,7 +2059,8 @@ registerForEvent("onDraw", function()
 				end
 				local pushd = row.value ~= id and pushColors(ImGuiCol.FrameBg, color) or 0
 
-				local newVal, changed = ImGui.InputText("##FileName", row.value, 96)
+				local maxLen = max(#name, #appName)
+				local newVal, changed = ImGui.InputText("##FileName", row.value, maxLen)
 				if changed and newVal then
 					local trimVal = trimLuaExt(newVal)
 					if flux.Name ~= trimVal then
@@ -1931,13 +2088,7 @@ registerForEvent("onDraw", function()
 			else
 				alignVertNext(rowHeight)
 				ImGui.Text(tostring(row.value or Text.GUI_NONE))
-
-				--Count right-clicks to determine when critical editability features should be unlocked.
-				if ImGui.IsItemClicked(1) then
-					editor_secret = editor_secret + 1
-				else
-					editor_secret = max(0, editor_secret - 0.01)
-				end
+				addTooltip(row.valTip)
 			end
 
 			::continue::
@@ -2194,10 +2345,10 @@ registerForEvent("onDraw", function()
 	end
 
 	if not anyFiles then
-		local wPad = ceil(180 * scale)
-		local hPad = floor(controlPadding - 4 * scale)
-		ImGui.Dummy(0, wPad)
-		ImGui.Dummy(hPad, 0)
+		local hPad = ceil(180 * scale)
+		local wPad = floor(controlPadding - 4 * scale)
+		ImGui.Dummy(0, hPad)
+		ImGui.Dummy(wPad, 0)
 		ImGui.SameLine()
 		ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(Colors.GARNET, 0xff))
 		ImGui.Text(Text.GUI_FMAN_NO_PSETS)
@@ -2212,3 +2363,5 @@ end)
 registerForEvent("onShutdown", function()
 	restoreAllPresets()
 end)
+
+--#endregion

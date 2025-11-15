@@ -1,0 +1,1 @@
+return{ID="4w_Quadra",Close={z=1.15},Medium={z=1.65},Far={z=2.25}}
