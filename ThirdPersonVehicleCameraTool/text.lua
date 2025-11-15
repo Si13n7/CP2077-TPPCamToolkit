@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-11-02, 16:11 UTC+01:00 (MEZ)
+Version: 2025-11-12, 17:12 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -162,9 +162,12 @@ return {
 	GUI_EDIT_OWR_POP = "Replace existing file \"%s\"?",
 
 	--NUI: 📚 Native Settings UI
+	NUI_CAT_CSET = "Core Settings",
 	NUI_CAT_GSET = "Global Settings",
 	NUI_CAT_ASET1 = "Advanced (Cars, SUVs, Vans, Trucks, Tanks, etc.)",
 	NUI_CAT_ASET2 = "Advanced (Motorcycles)",
+	NUI_CSET_MOD = "Mod Enabled",
+	NUI_CSET_MOD_TIP = "Enables or disables all features of this mod.",
 	NUI_VAL_NOTE = "%s\n\nDefault: %s\n\nChanges only apply after exiting and re-entering the vehicle.",
 
 	--LOG: ℹ️ Info
@@ -180,6 +183,7 @@ return {
 	LOG_MOD_OFF = "Mod has been disabled!",
 	LOG_MOD_ON = "Mod has been enabled!",
 	LOG_NUI_INIT = "Native Settings UI initialized.",
+	LOG_NUI_UPD = "Native Settings UI updated.",
 	LOG_PARAM_BACKUP = "Backup param (key: '%s'; value: '%s').",
 	LOG_PARAM_IS_LOW = "Param '%s' is low height.",
 	LOG_PARAM_MANIP = "Param manipulation detected (key: '%s'; value: '%s'), reset value to '%s'.",

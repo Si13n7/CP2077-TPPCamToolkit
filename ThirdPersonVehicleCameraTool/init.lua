@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-11-10, 17:09 UTC+01:00 (MEZ)
+Version: 2025-11-12, 17:19 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -162,8 +162,9 @@ Development Environment:
 ---@field Finale IEditorPreset # Snapshot of Flux at the last save action.
 ---@field Tasks IEditorTasks # Flags for pending rename, validate, apply, save, or restore actions.
 
---Aliases for commonly used standard library functions to simplify code.
-local format, rep, concat, insert, remove, sort, unpack, abs, ceil, floor, band, bor, lshift, rshift =
+---Aliases for commonly used standard library functions to simplify code.
+---@diagnostic disable-next-line: lowercase-global
+format, rep, concat, insert, remove, sort, unpack, abs, ceil, floor, band, bor, lshift, rshift =
 	string.format,
 	string.rep,
 	table.concat,
@@ -2084,19 +2085,25 @@ end
 
 ---Stops and removes an active async timer with the given ID.
 ---Has no effect if the ID is invalid or already cleared.
----@param id integer Timer ID to stop.
-local function asyncStop(id)
-	if not id then return end
-	async.timers[id] = nil
+---@param target number|boolean # The timer ID to stop, or a boolean to stop all timers.
+local function asyncStop(target)
+	if not target then return end
+	if isBoolean(target) then
+		for id in pairs(async.timers) do
+			async.timers[id] = nil
+		end
+	elseif isNumber(target) then
+		async.timers[target] = nil
+	end
 	async.isActive = isTableValid(async.timers)
 end
 
 ---Creates a recurring async timer that executes a callback every `interval` seconds.
 ---The first execution happens only after the initial interval has passed, not immediately at creation time.
 ---The callback receives the timer ID as its only argument.
----@param interval number Time in seconds between executions (absolute value is used).
----@param callback fun(id: integer) Function to execute each cycle.
----@return integer timerID Unique ID of the created timer, or -1 if invalid parameters were passed.
+---@param interval number # Time in seconds between executions (absolute value is used).
+---@param callback fun(id: integer) # Function to execute each cycle.
+---@return integer timerID # Unique ID of the created timer, or -1 if invalid parameters were passed.
 local function asyncRepeat(interval, callback)
 	if not callback then return -1 end
 
@@ -2117,9 +2124,9 @@ local function asyncRepeat(interval, callback)
 end
 
 ---Executes the callback immediately once, then creates a recurring async timer that executes the callback every `interval` seconds.
----@param interval number Time in seconds between executions (absolute value is used).
----@param callback fun(id: integer) Function to execute each cycle.
----@return integer timerID Unique ID of the created timer, or -1 if invalid parameters were passed.
+---@param interval number # Time in seconds between executions (absolute value is used).
+---@param callback fun(id: integer) # Function to execute each cycle.
+---@return integer timerID # Unique ID of the created timer, or -1 if invalid parameters were passed.
 local function asyncRepeatBurst(interval, callback)
 	if not callback then return -1 end
 	local id = asyncRepeat(interval, callback)
@@ -2128,9 +2135,9 @@ local function asyncRepeatBurst(interval, callback)
 end
 
 ---Creates a one-shot async timer that executes a callback once after `delay` seconds.
----@param delay number Time in seconds before execution (absolute value is used).
----@param callback fun(id: integer?) Function to execute once after the delay.
----@return integer timerID Unique ID of the created timer, or -1 if invalid parameters were passed.
+---@param delay number # Time in seconds before execution (absolute value is used).
+---@param callback fun(id: integer?) # Function to execute once after the delay.
+---@return integer timerID # Unique ID of the created timer, or -1 if invalid parameters were passed.
 local function asyncOnce(delay, callback)
 	if not callback then return -1 end
 	return asyncRepeat(delay, function(id)
@@ -2395,7 +2402,16 @@ local function getVehicleStatus()
 	local veh = getMountedVehicle()
 	local tid = veh and veh:GetTDBID()
 	if tid then
-		for i, v in ipairs(getPlayerVehicles()) do
+		local hash = tid.hash
+
+		--0x51e42042: q000_v_nomad_car
+		--0x48b1463d: q001_archer_hella
+		if hash == 0x51e42042 or hash == 0x48b1463d then
+			return setCache(0xddf2, 1)
+		end
+
+		local vehicles = getPlayerVehicles()
+		for i, v in ipairs(vehicles) do
 			if v.hash == tid.hash then
 				--Workaround for mods that add vanilla crowd vehicles to the player's list,
 				--causing them to be detected as mods — now resolved through an external
@@ -5338,6 +5354,224 @@ local function onShutdown()
 	updateAdvancedConfigDefaultParams(true)
 end
 
+---Initializes or refreshes all settings in the Native Settings UI.
+local function setupNativeSettings()
+	local native = GetMod("nativeSettings")
+	if not native then return end
+	config.nativeInstance = native
+
+	local tab = "/" .. Text.GUI_NAME
+	local isNew = false
+	if not native.pathExists(tab) then
+		native.addTab(tab, Text.GUI_TITLE)
+		isNew = true
+	else
+		for _, option in pairs(config.nativeOptions) do
+			native.removeOption(option)
+		end
+		config.nativeOptions = {}
+	end
+
+	--Ensures that multiple save queues aren't started simultaneously.
+	local pendingSaves = {}
+
+	---Asynchronous queue that delays saving until the settings tab is closed.
+	---@param advanced boolean? # If true, Advanced Options are saved; otherwise, Global Settings are saved.
+	local function saveToFile(advanced)
+		advanced = advanced == true
+		if pendingSaves[advanced] then return end
+
+		pendingSaves[advanced] = true
+		asyncRepeat(1, function(id)
+			if gui.isOverlayOpen or not nilOrEmpty(native.currentTab) then return end
+			asyncStop(id)
+			pendingSaves[advanced] = false
+			if advanced == 0 then
+				saveGlobalOptions()
+			else
+				config.isAdvancedUnsaved = true
+				saveAdvancedOptions()
+			end
+		end)
+	end
+
+	---Adds a settings option dynamically based on its type (list, boolean, or numeric).
+	---Used internally to register configuration entries with the native settings system.
+	---@param key string # Unique option identifier.
+	---@param section string # The subcategory where the option appears in the Settings UI.
+	---@param label string # Display name shown in the settings UI.
+	---@param desc string # Description text.
+	---@param default number|boolean # Default value for the option.
+	---@param value number|boolean # Current value of the option.
+	---@param min number? # Minimum numeric value (for sliders).
+	---@param max number? # Maximum numeric value (for sliders).
+	---@param speed number? # Step size for numeric options; fractional speeds imply float sliders.
+	---@param list string[]? # Optional list of selectable string values.
+	---@param setValue fun(value: any) # Callback used when the value changes.
+	local function addOption(key, section, label, desc, default, value, min, max, speed, list, setValue)
+		local added
+		if isTableValid(list) then
+			added = native.addSelectorString(section, label, desc, list, value, default, setValue)
+		elseif isBoolean(default) then
+			added = native.addSwitch(section, label, desc, value, default, setValue)
+		elseif isNumber(default) then
+			speed = speed or 1
+
+			local isFloat = speed % 1 ~= 0
+			added = (isFloat and native.addRangeFloat or native.addRangeInt)(
+				section,
+				label,
+				desc,
+				min,
+				max,
+				speed,
+				isFloat and getPrecision(speed) or value,
+				isFloat and value or default,
+				isFloat and default or setValue,
+				isFloat and setValue or nil
+			)
+		end
+		if added then
+			while config.nativeOptions[key] ~= nil do
+				logF(DevLevels.FULL, LogLevels.ERROR, 0xc024, Text.LOG_KEY_DUPLICATE, key)
+				key = format("%s-%s", key, checksum(key))
+			end
+			config.nativeOptions[key] = added
+		end
+	end
+
+	---Core Settings
+	local cat = combine(tab, "CoreSettings")
+	if native.pathExists(cat) then
+		native.removeSubcategory(cat)
+	end
+	native.addSubcategory(cat, Text.NUI_CAT_CSET)
+
+	addOption("Mod", cat, Text.NUI_CSET_MOD, Text.NUI_CSET_MOD_TIP, true, state.isModEnabled, nil, nil, nil, nil,
+		function(value)
+			state.isModEnabled = value
+			if value then
+				onInit()
+				logF(DevLevels.ALERT, LogLevels.INFO, 0xcb3d, Text.LOG_MOD_ON)
+			else
+				asyncStop(true)
+
+				onUnmount(true)
+				onShutdown()
+				purgePresets()
+
+				editor.bundles = {}
+				presets.usage = {}
+				state.devMode = DevLevels.DISABLED
+
+				logF(DevLevels.ALERT, LogLevels.INFO, 0xcb3d, Text.LOG_MOD_OFF)
+
+				resetCache(false)
+				resetCache(true)
+			end
+			setupNativeSettings()
+		end
+	)
+
+	--Global Settings
+	cat = combine(tab, "GlobalSettings")
+	if native.pathExists(cat) then
+		native.removeSubcategory(cat)
+	end
+	if state.isModEnabled then
+		native.addSubcategory(cat, Text.NUI_CAT_GSET)
+
+		for key, option in opairs(config.options, "DisplayName") do
+			if not option.IsNotAvailable then
+				local def = option.Default
+				local cur = option.Value
+				local min = option.Min
+				local max = option.Max
+
+				local isFov = key == "fov"
+				if isFov and areNumber(def, cur, min, max) then
+					def = changeFovFormat(def)
+					cur = changeFovFormat(cur)
+					min = changeFovFormat(min)
+					max = changeFovFormat(max)
+				end
+				addOption(
+					key,
+					cat,
+					option.DisplayName,
+					option.Description or option.Tooltip,
+					def,
+					cur,
+					min,
+					max,
+					option.Speed,
+					option.Values,
+					function(value)
+						if isFov and state.isFovControlAvailable and isNumber(value) then
+							value = changeFovFormat(value, true)
+						end
+						updateConfigDefaultParam(key, value, true)
+						saveToFile()
+					end
+				)
+			end
+		end
+	end
+
+	--Advanced Settings
+	local cats = {
+		Text.NUI_CAT_ASET1,
+		Text.NUI_CAT_ASET2,
+	}
+	for i in ipairs(DefaultParams.Keys) do
+		cat = combine(tab, "AdvancedSettings" .. i)
+		if native.pathExists(cat) then
+			native.removeSubcategory(cat)
+		end
+		if not state.isModEnabled then goto continue end
+
+		native.addSubcategory(cat, cats[i])
+
+		for var, origin in opairs(DefaultParams.Vars) do
+			if config.options[var] then goto continue end
+
+			local label = truncateMiddle(camelToHuman(var), 48)
+			local default = pluck(origin.Default, i)
+			local current = get(config.advancedOptions, default, i, var)
+			local defText
+			if isBoolean(default) then
+				defText = default and Text.GUI_ON or Text.GUI_OFF
+			else
+				defText = tostring(default)
+			end
+			local desc = format(Text.NUI_VAL_NOTE, origin.Tip or Text.GUI_GSET_ADVANCED_TIP, defText)
+
+			addOption(
+				i .. var,
+				cat,
+				label,
+				desc,
+				default,
+				current,
+				origin.Min,
+				origin.Max,
+				origin.Step or 1,
+				nil,
+				function(value)
+					updateAdvancedConfigDefaultParam(i, var, value, true)
+					saveToFile(true)
+				end
+			)
+
+			::continue::
+		end
+
+		::continue::
+	end
+
+	logF(DevLevels.BASIC, LogLevels.INFO, 0x60b9, isNew and Text.LOG_NUI_INIT or Text.LOG_NUI_UPD)
+end
+
 --[[
 ---This event gets triggered even before `onInit`.
 registerForEvent("onTweak", function()
@@ -5601,174 +5835,13 @@ registerForEvent("onInit", function()
 	end
 
 	--Initializes the Native Settings UI addon.
-	asyncOnce(3, function()
-		local native = GetMod("nativeSettings")
-		if not native then return end
-		config.nativeInstance = native
-
-		local tab = "/" .. Text.GUI_NAME
-		if not native.pathExists(tab) then
-			native.addTab(tab, Text.GUI_TITLE)
+	local threshold = 0
+	asyncRepeat(0.3, function(id)
+		threshold = presets.loaderTask.IsActive and 0 or threshold + 1
+		if threshold > 5 then
+			asyncStop(id)
+			setupNativeSettings()
 		end
-
-		--Ensures that multiple save queues aren't started simultaneously.
-		local pendingSaves = {}
-
-		---Asynchronous queue that delays saving until the settings tab is closed.
-		---@param advanced boolean? # If true, Advanced Options are saved; otherwise, Global Settings are saved.
-		local function saveToFile(advanced)
-			advanced = advanced == true
-			if pendingSaves[advanced] then return end
-
-			pendingSaves[advanced] = true
-			asyncRepeat(1, function(id)
-				if gui.isOverlayOpen or not nilOrEmpty(native.currentTab) then return end
-				asyncStop(id)
-				pendingSaves[advanced] = false
-				if advanced == 0 then
-					saveGlobalOptions()
-				else
-					config.isAdvancedUnsaved = true
-					saveAdvancedOptions()
-				end
-			end)
-		end
-
-		---Adds a settings option dynamically based on its type (list, boolean, or numeric).
-		---Used internally to register configuration entries with the native settings system.
-		---@param key string # Unique option identifier.
-		---@param section string # The subcategory where the option appears in the Settings UI.
-		---@param label string # Display name shown in the settings UI.
-		---@param desc string # Description text.
-		---@param default number|boolean # Default value for the option.
-		---@param value number|boolean # Current value of the option.
-		---@param min number? # Minimum numeric value (for sliders).
-		---@param max number? # Maximum numeric value (for sliders).
-		---@param speed number? # Step size for numeric options; fractional speeds imply float sliders.
-		---@param list string[]? # Optional list of selectable string values.
-		---@param setValue function # Callback used when the value changes.
-		local function addOption(key, section, label, desc, default, value, min, max, speed, list, setValue)
-			local added
-			if isTableValid(list) then
-				added = native.addSelectorString(section, label, desc, list, value, default, setValue)
-			elseif isBoolean(default) then
-				added = native.addSwitch(section, label, desc, value, default, setValue)
-			elseif isNumber(default) then
-				speed = speed or 1
-
-				local isFloat = speed % 1 ~= 0
-				added = (isFloat and native.addRangeFloat or native.addRangeInt)(
-					section,
-					label,
-					desc,
-					min,
-					max,
-					speed,
-					isFloat and getPrecision(speed) or value,
-					isFloat and value or default,
-					isFloat and default or setValue,
-					isFloat and setValue or nil
-				)
-			end
-			if added then
-				if config.nativeOptions[key] then
-					logF(DevLevels.FULL, LogLevels.ERROR, 0xc024, Text.LOG_KEY_DUPLICATE, key)
-				end
-				config.nativeOptions[key] = added
-			end
-		end
-
-		--Global Settings
-		local cat = combine(tab, "GlobalSettings")
-		if native.pathExists(cat) then
-			native.removeSubcategory(cat)
-		end
-		native.addSubcategory(cat, Text.NUI_CAT_GSET)
-
-		for key, option in opairs(config.options, "DisplayName") do
-			if not option.IsNotAvailable then
-				local def = option.Default
-				local cur = option.Value
-				local min = option.Min
-				local max = option.Max
-
-				local isFov = key == "fov"
-				if isFov and areNumber(def, cur, min, max) then
-					def = changeFovFormat(def)
-					cur = changeFovFormat(cur)
-					min = changeFovFormat(min)
-					max = changeFovFormat(max)
-				end
-				addOption(
-					key,
-					cat,
-					option.DisplayName,
-					option.Description or option.Tooltip,
-					def,
-					cur,
-					min,
-					max,
-					option.Speed,
-					option.Values,
-					function(value)
-						if isFov and state.isFovControlAvailable and isNumber(value) then
-							value = changeFovFormat(value, true)
-						end
-						updateConfigDefaultParam(key, value, true)
-						saveToFile()
-					end
-				)
-			end
-		end
-
-		--Advanced Settings
-		local cats = {
-			Text.NUI_CAT_ASET1,
-			Text.NUI_CAT_ASET2,
-		}
-		for i in ipairs(DefaultParams.Keys) do
-			cat = combine(tab, "AdvancedSettings" .. i)
-			if native.pathExists(cat) then
-				native.removeSubcategory(cat)
-			end
-			native.addSubcategory(cat, cats[i])
-
-			for var, origin in opairs(DefaultParams.Vars) do
-				if config.options[var] then goto continue end
-
-				local label = truncateMiddle(camelToHuman(var), 48)
-				local default = pluck(origin.Default, i)
-				local current = get(config.advancedOptions, default, i, var)
-				local defText
-				if isBoolean(default) then
-					defText = default and Text.GUI_ON or Text.GUI_OFF
-				else
-					defText = tostring(default)
-				end
-				local desc = format(Text.NUI_VAL_NOTE, origin.Tip or Text.GUI_GSET_ADVANCED_TIP, defText)
-
-				addOption(
-					i .. var,
-					cat,
-					label,
-					desc,
-					default,
-					current,
-					origin.Min,
-					origin.Max,
-					origin.Step or 1,
-					nil,
-					function(value)
-						updateAdvancedConfigDefaultParam(i, var, value, true)
-						saveToFile(true)
-					end
-				)
-
-				::continue::
-			end
-		end
-
-		logF(DevLevels.BASIC, LogLevels.INFO, 0x60b9, Text.LOG_NUI_INIT)
 	end)
 end)
 
@@ -5916,6 +5989,8 @@ registerForEvent("onDraw", function()
 				onInit()
 				logF(DevLevels.ALERT, LogLevels.INFO, 0xcb3d, Text.LOG_MOD_ON)
 			else
+				asyncStop(true)
+
 				onUnmount(true)
 				onShutdown()
 				purgePresets()
@@ -5929,6 +6004,7 @@ registerForEvent("onDraw", function()
 				resetCache(false)
 				resetCache(true)
 			end
+			setupNativeSettings()
 		end
 		ImGui.Dummy(0, halfHeightPadding)
 		if not state.isModEnabled then
