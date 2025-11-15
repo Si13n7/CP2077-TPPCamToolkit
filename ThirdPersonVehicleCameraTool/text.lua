@@ -40,10 +40,10 @@ return {
 
 	--GUI: Table Values
 	GUI_TBL_VAL_PSET_TIP = "When saving, the name \"%s\" is used. The new name must exactly match the value of Vehicle or Appearance, or be at least a prefix of one of them.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each color variation.\n\n\nMatching Priorities (only the first match is loaded):\n\n1. Vehicle: (e.g. \"%s.lua\")\n2. Appearance (e.g. \"%s.lua\")\n3. Prefix of Vehicle: (e.g. \"%s.lua\")\n4. Prefix of Appearance: (e.g. \"%s.lua\")\n\n\nPlease ensure that your new preset name has the correct priority, otherwise, you will need to delete the one that will steal its priority. Take a look at the Preset File Manager to delete presets.",
-	GUI_TBL_VAL_ANG_TIP = "Min: %s\nMax: %s",
-	GUI_TBL_VAL_X_TIP = "Min: %s\nMax: %s\n\nIncrease: Right\nDecrease: Left",
-	GUI_TBL_VAL_Y_TIP = "Min: %s\nMax: %s\n\nIncrease: Closer\nDecrease: Farther",
-	GUI_TBL_VAL_Z_TIP = "Min: %s\nMax: %s\n\nIncrease: Up\nDecrease: Down",
+	GUI_TBL_VAL_ANG_TIP = "Default:|%d|Min:|%d|Max:|%d|In Use:|%d",
+	GUI_TBL_VAL_X_TIP = "Default:|%.3f|Min:|%.3f|Max:|%.3f|In Use:|%.3f|Decrease:|Left|Increase:|Right",
+	GUI_TBL_VAL_Y_TIP = "Default:|%.3f|Min:|%.3f|Max:|%.3f|In Use:|%.3f|Decrease:|Farther|Increase:|Closer",
+	GUI_TBL_VAL_Z_TIP = "Default:|%.3f|Min:|%.3f|Max:|%.3f|In Use:|%.3f|Decrease:|Down|Increase:|Up",
 
 	--GUI: Preset File Manager
 	GUI_FMAN_TITLE = "Preset File Manager",

@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-14, 21:07 UTC+01:00 (MEZ)
+Version: 2025-04-14, 00:05 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -719,12 +719,30 @@ local function fileExists(path)
 	return false
 end
 
+---Returns a formatted TweakDB record key for camera or vehicle data.
+---@param format string # The format string to use, e.g. "Camera.VehicleTPP_%s_%s.defaultRotationPitch".
+---@param id string # The vehicle camera preset ID.
+---@param path string # The camera level path (e.g. "High_Close").
+---@return string # The formatted TweakDB record key.
+local function getRecordKey(format, id, path)
+	if id == "v_militech_basilisk_CameraPreset" then
+		format = format:gsub("^Camera", "Vehicle", 1)
+		path = path:gsub("Low", "High", 1):gsub("DriverCombat", "")
+	end
+	return F(format, id, path)
+end
+
 ---Fetches the default rotation pitch value for a vehicle camera.
 ---@param id string # The preset ID of the vehicle.
 ---@param path string # The camera path for the vehicle.
 ---@return number # The default rotation pitch for the given camera path.
 local function getCameraDefaultRotationPitch(id, path)
-	return tonumber(TweakDB:GetFlat(F(TWEAKDB_PATH_FORMAT_DRP, id, path))) or 11
+	local defaults = {
+		v_militech_basilisk_CameraPreset = 5,
+		v_utility4_militech_behemoth_Preset = 12
+	}
+	local defValue = defaults[id] or 11
+	return tonumber(TweakDB:GetFlat(getRecordKey(TWEAKDB_PATH_FORMAT_DRP, id, path))) or defValue
 end
 
 ---Sets the default rotation pitch value for a vehicle camera.
@@ -733,10 +751,8 @@ end
 ---@param value number # The value to set for the default rotation pitch.
 local function setCameraDefaultRotationPitch(id, path, value)
 	local fallback = getCameraDefaultRotationPitch(id, path)
-	if equals(value, fallback) then
-		return
-	end
-	TweakDB:SetFlat(F(TWEAKDB_PATH_FORMAT_DRP, id, path), (value or fallback) + 1e-7)
+	if not isNumber(value) or equals(value, fallback) then return end
+	TweakDB:SetFlat(getRecordKey(TWEAKDB_PATH_FORMAT_DRP, id, path), value or fallback)
 end
 
 ---Fetches the current camera offset from TweakDB based on the specified ID and path.
@@ -744,7 +760,7 @@ end
 ---@param path string # The camera path to retrieve the offset for.
 ---@return Vector3? # The camera offset as a Vector3.
 local function getCameraLookAtOffset(id, path)
-	return TweakDB:GetFlat(F(TWEAKDB_PATH_FORMAT_LAO, id, path))
+	return TweakDB:GetFlat(getRecordKey(TWEAKDB_PATH_FORMAT_LAO, id, path))
 end
 
 ---Sets a camera offset in TweakDB to the specified position values.
@@ -755,11 +771,9 @@ end
 ---@param z number # The Z-coordinate of the camera position.
 local function setCameraLookAtOffset(id, path, x, y, z)
 	local fallback = getCameraLookAtOffset(id, path)
-	if not fallback or (equals(x, fallback.x) and equals(y, fallback.y) and equals(z, fallback.z)) then
-		return
-	end
+	if not fallback or (equals(x, fallback.x) and equals(y, fallback.y) and equals(z, fallback.z)) then return end
 	local value = Vector3.new(x or fallback.x, y or fallback.y, z or fallback.z)
-	TweakDB:SetFlat(F(TWEAKDB_PATH_FORMAT_LAO, id, path), value)
+	TweakDB:SetFlat(getRecordKey(TWEAKDB_PATH_FORMAT_LAO, id, path), value)
 end
 
 ---Extracts the record name from a TweakDBID string representation.
@@ -802,7 +816,7 @@ local function getVehicleCameraID(vehicle)
 	for _, v in pairs(data) do
 		local item = getRecordName(v)
 		if item then
-			return item:match("Camera%.VehicleTPP_([%w_]+)_[%w_]+_[%w_]+")
+			return item:match("^[%a]+%.VehicleTPP_([%w_]+)_[%w_]+_[%w_]+")
 		end
 	end
 
@@ -897,8 +911,6 @@ local function getPreset(id)
 	if not id then return nil end
 
 	local preset = { ID = id }
-	---@cast preset ICameraPreset
-
 	for i, path in ipairs(TWEAKDB_PATH_LEVELS) do
 		local vec3 = getCameraLookAtOffset(id, path)
 		if not vec3 or (not vec3.x and not vec3.y and not vec3.z) then return nil end
@@ -906,6 +918,7 @@ local function getPreset(id)
 		local level = CAMERA_LEVELS[(i - 1) % 3 + 1]
 		local angle = getCameraDefaultRotationPitch(id, path)
 
+		---@cast preset ICameraPreset
 		preset[level] = {
 			a = tonumber(angle),
 			x = tonumber(vec3.x),
@@ -1195,7 +1208,7 @@ local function loadPresets(refresh)
 		purgePresets()
 	end
 
-	if loadFrom("defaults") < 38 then
+	if loadFrom("defaults") < 39 then
 		_isEnabled = false
 		LogE(DevLevel.FULL, LogLevel.ERROR, Text.LOG_DEFS_INCOMP)
 		return
@@ -1350,14 +1363,41 @@ local function popSyleColors(num)
 end
 
 ---Displays a tooltip when the current UI item is hovered.
----@param text string # Text to display in the tooltip.
-local function addTooltip(text)
-	if not ImGui.IsItemHovered() or not isString(text) then return end
-	ImGui.BeginTooltip()
-	ImGui.PushTextWrapPos(420)
-	ImGui.Text(text)
-	ImGui.PopTextWrapPos()
-	ImGui.EndTooltip()
+---If a single string is passed, displays it as wrapped text.
+---If multiple arguments are passed, they are interpreted as alternating key-value pairs for a tooltip table.
+---If a table is passed, it will be unpacked as key-value pairs.
+---@param ... string|table # Either a single string, a table of pairs, or a sequence of key-value pairs.
+local function addTooltip(...)
+	if not ImGui.IsItemHovered() then return end
+
+	local count = select("#", ...)
+	if count >= 2 then
+		ImGui.BeginTooltip()
+		if not ImGui.BeginTable("TooltipTable", 2) then return end
+		for i = 1, count, 2 do
+			local key = tostring(select(i, ...))
+			local val = tostring(select(i + 1, ...) or "")
+			ImGui.TableNextRow()
+			ImGui.TableSetColumnIndex(0)
+			ImGui.Text(key)
+			ImGui.TableSetColumnIndex(1)
+			ImGui.Text(val)
+		end
+		ImGui.EndTable()
+		ImGui.EndTooltip()
+		return
+	end
+
+	local item = select(1, ...)
+	if isString(item) then
+		ImGui.BeginTooltip()
+		ImGui.PushTextWrapPos(420)
+		ImGui.Text(item)
+		ImGui.PopTextWrapPos()
+		ImGui.EndTooltip()
+	elseif isTable(item) then
+		addTooltip(table.unpack(item))
+	end
 end
 
 ---Displays a modal popup with a text prompt and two buttons: Yes and No.
@@ -1404,7 +1444,7 @@ registerForEvent("onInit", function()
 	--Save default presets.
 	--[[
 	local defaults = {
-		"4w_911"
+		"v_militech_basilisk_CameraPreset"
 	}
 	for _, value in ipairs(defaults) do
 		local preset = getPreset(value)
@@ -1412,7 +1452,7 @@ registerForEvent("onInit", function()
 			savePreset(preset.ID, preset, true, true)
 		end
 	end
-	--]]
+	]]
 
 	--Load all saved presets from disk.
 	loadPresets(true)
@@ -1695,7 +1735,8 @@ registerForEvent("onDraw", function()
 
 				local tip = tooltips[i]
 				if tip then
-					addTooltip(F(tip, min, max))
+					local origValue = get(editor.Origin, defValue, level, field)
+					addTooltip(split(F(tip, defValue, min, max, origValue), "|"))
 				end
 
 				ImGui.PopItemWidth()
