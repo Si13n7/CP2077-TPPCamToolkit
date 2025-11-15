@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-10-14, 00:11 UTC+01:00 (MEZ)
+Version: 2025-10-16, 1:35 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -68,6 +68,14 @@ Development Environment:
 ---@field Callback fun(id: integer) # The function to be executed when the timer triggers; receives the timer's unique ID.
 ---@field IsActive boolean # True if the timer is currently active, false if paused or canceled.
 
+---Represents a default parameter variable.
+---@class IDefaultParam
+---@field Default any # The default value for this parameter. Can be a number, boolean, or table depending on context.
+---@field Min number? # The minimum allowed value (for numeric params only).
+---@field Max number? # The maximum allowed value (for numeric params only).
+---@field Step number? # The step size used for value adjustments (for numeric params only).
+---@field Tip string # A short explanatory note or hint describing the purpose or effect of this parameter.
+
 ---Represents a global options structure.
 ---@class IOptionData
 ---@field DisplayName string # The display name.
@@ -78,6 +86,7 @@ Development Environment:
 ---@field Min number? # The minimum value.
 ---@field Max number? # The maximum value.
 ---@field Speed number? # Adjust sensitivity for ImGui controls; lower values allow finer adjustments.
+---@field Values string[]? # An array of selectable options.
 ---@field IsGameOption boolean? # Determines whether this is treated as game option.
 ---@field IsNotAvailable boolean? # Determines whether this option is currently not available.
 
@@ -100,7 +109,7 @@ Development Environment:
 ---@field IsActive boolean? # True if the task is currently running.
 ---@field StartTime number? # Timestamp when the task started.
 ---@field EndTime number? # Timestamp when the task finished or last finished.
----@field Duration number? # Total elapsed time of the task. For multiple consecutive runs, this is the sum of all individual run durations.
+---@field Duration number? # Total elapsed time of the task. The sum of all individual run durations.
 ---@field Finalizer function? # Function called when all tasks have finished.
 
 ---Represents a camera offset configuration with rotation and positional data.
@@ -231,19 +240,22 @@ local LogMeta = {
 
 ---Provides predefined hexadecimal color constants used for UI theming and styling.
 local Colors = {
-	---Caramel is a warm, golden brown with rich amber tones.
+	---A dark, muted blue with subtle grayish undertones.
+	DEFAULT = 0xab7a4a29,
+
+	---A warm, golden brown with rich amber tones.
 	CARAMEL = 0xab295c7a,
 
-	---Fir is a dark, cool green with subtle blue undertones.
+	---A dark, cool green with subtle blue undertones.
 	FIR = 0xab6a7a29,
 
-	---Garnet is a deep, muted red with a subtle brown undertone.
+	---A deep, muted red with a subtle brown undertone.
 	GARNET = 0xbb3d297a,
 
-	---Mulberry is a deep, muted purple with rich red undertones and a cool, berry-like hue.
+	---A deep, muted purple with rich red undertones and a cool, berry-like hue.
 	MULBERRY = 0xab68297a,
 
-	---Olive is a muted yellow-green with an earthy, natural tone.
+	---A muted yellow-green with an earthy, natural tone.
 	OLIVE = 0xab297a68
 }
 
@@ -291,49 +303,49 @@ local DefaultParams = {
 
 	---The string represents the variable name, and their value is usually a boolean or a number.
 	---However, it can also be a table containing the actual values, separated for four-wheeled and two-wheeled vehicles.
-	---@type table<string, any>
+	---@type table<string, IDefaultParam>
 	Vars = {
-		airFlowDistortion                              = true,
-		autoCenterMaxSpeedThreshold                    = 20,
-		autoCenterSpeed                                = 5,
-		cameraBoomExtensionSpeed                       = 3,
-		cameraMaxPitch                                 = 80,
-		cameraMinPitch                                 = -28,
-		cameraSphereRadius                             = 1,
-		collisionDetection                             = true,
-		drivingDirectionCompensation                   = true,
-		drivingDirectionCompensationAngle              = 100,
-		drivingDirectionCompensationAngleSmooth        = 70,
-		drivingDirectionCompensationAngularVelocityMin = 150,
-		drivingDirectionCompensationSpeedCoef          = 1,
-		drivingDirectionCompensationSpeedMax           = 120,
-		drivingDirectionCompensationSpeedMin           = 4,
-		elasticBoomAcceleration                        = true,
-		elasticBoomAccelerationExpansionLength         = 0.5,
-		elasticBoomForwardAccelerationCoef             = 10,
-		elasticBoomSpeedExpansionLength                = 0.5,
-		elasticBoomSpeedExpansionSpeedMax              = 20,
-		elasticBoomSpeedExpansionSpeedMin              = 10,
-		elasticBoomVelocity                            = true,
-		fov                                            = 69,
-		headLookAtCenterYawThreshold                   = { 100, 140 },
-		headLookAtMaxPitchDown                         = { 40, 10 },
-		headLookAtMaxPitchUp                           = { 0, 30 },
-		headLookAtMaxYaw                               = { 70, 100 },
-		headLookAtRotationSpeed                        = { 0.8, 2 },
-		inverseCameraInputBreakThreshold               = 30,
-		lockedCamera                                   = false,
-		slopeAdjustement                               = true,
-		slopeCorrectionInAirDampFactor                 = 0.1,
-		slopeCorrectionInAirFallCoef                   = 2,
-		slopeCorrectionInAirPitchMax                   = 30,
-		slopeCorrectionInAirPitchMin                   = -30,
-		slopeCorrectionInAirRaiseCoef                  = 0.5,
-		slopeCorrectionInAirSpeedMax                   = 10,
-		slopeCorrectionInAirStrength                   = 20,
-		slopeCorrectionOnGroundPitchMax                = 30,
-		slopeCorrectionOnGroundPitchMin                = -30,
-		slopeCorrectionOnGroundStrength                = 4
+		airFlowDistortion                              = { Default = true, Tip = Text.GUI_ASET_AFD_TIP },
+		autoCenterMaxSpeedThreshold                    = { Default = 20, Min = 0, Max = 300, Tip = Text.GUI_ASET_ACMST_TIP },
+		autoCenterSpeed                                = { Default = 5, Min = 0, Max = 10, Tip = Text.GUI_ASET_ACS_TIP },
+		cameraBoomExtensionSpeed                       = { Default = 3, Min = 0, Max = 10, Tip = Text.GUI_ASET_CBES_TIP },
+		cameraMaxPitch                                 = { Default = 80, Min = 0, Max = 90, Tip = Text.GUI_ASET_CMAXP_TIP },
+		cameraMinPitch                                 = { Default = -28, Min = -90, Max = 0, Tip = Text.GUI_ASET_CMINP_TIP },
+		cameraSphereRadius                             = { Default = 1, Min = 0.2, Max = 5, Step = 0.01, Tip = Text.GUI_ASET_CSR_TIP },
+		collisionDetection                             = { Default = true, Tip = Text.GUI_ASET_CD_TIP },
+		drivingDirectionCompensation                   = { Default = true, Tip = Text.GUI_ASET_DDC_TIP },
+		drivingDirectionCompensationAngle              = { Default = 100, Min = -180, Max = 180, Tip = Text.GUI_ASET_DDCA_TIP },
+		drivingDirectionCompensationAngleSmooth        = { Default = 70, Min = -180, Max = 180, Tip = Text.GUI_ASET_DDCAS_TIP },
+		drivingDirectionCompensationAngularVelocityMin = { Default = 150, Min = 0, Max = 500, Tip = Text.GUI_ASET_DDCAVM_TIP },
+		drivingDirectionCompensationSpeedCoef          = { Default = 1, Min = 0, Max = 5, Tip = Text.GUI_ASET_DDCSC_TIP },
+		drivingDirectionCompensationSpeedMax           = { Default = 120, Min = 0, Max = 300, Tip = Text.GUI_ASET_DDCSX_TIP },
+		drivingDirectionCompensationSpeedMin           = { Default = 4, Min = 0, Max = 100, Tip = Text.GUI_ASET_DDCSN_TIP },
+		elasticBoomAcceleration                        = { Default = true, Tip = Text.GUI_ASET_EBA_TIP },
+		elasticBoomAccelerationExpansionLength         = { Default = 0.5, Min = 0, Max = 5, Step = 0.01, Tip = Text.GUI_ASET_EBAEL_TIP },
+		elasticBoomForwardAccelerationCoef             = { Default = 10, Min = 0, Max = 20, Tip = Text.GUI_ASET_EBAFAC_TIP },
+		elasticBoomSpeedExpansionLength                = { Default = 0.5, Min = 0, Max = 5, Step = 0.01, Tip = Text.GUI_ASET_EBSEL_TIP },
+		elasticBoomSpeedExpansionSpeedMax              = { Default = 20, Min = 0, Max = 300, Tip = Text.GUI_ASET_EBSESX_TIP },
+		elasticBoomSpeedExpansionSpeedMin              = { Default = 10, Min = 0, Max = 100, Tip = Text.GUI_ASET_EBSESN_TIP },
+		elasticBoomVelocity                            = { Default = true, Tip = Text.GUI_ASET_EBV_TIP },
+		fov                                            = { Default = 69, Min = 40, Max = 120, Tip = Text.GUI_ASET_FOV_TIP },
+		headLookAtCenterYawThreshold                   = { Default = { 100, 140 }, Min = 0, Max = 180, Tip = Text.GUI_ASET_HLACYT_TIP },
+		headLookAtMaxPitchDown                         = { Default = { 40, 10 }, Min = 0, Max = 90, Tip = Text.GUI_ASET_HLAMPD_TIP },
+		headLookAtMaxPitchUp                           = { Default = { 0, 30 }, Min = 0, Max = 90, Tip = Text.GUI_ASET_HLAMPU_TIP },
+		headLookAtMaxYaw                               = { Default = { 70, 100 }, Min = 0, Max = 180, Tip = Text.GUI_ASET_HLAMY_TIP },
+		headLookAtRotationSpeed                        = { Default = { 0.8, 2 }, Min = 0.1, Max = 5, Step = 0.01, Tip = Text.GUI_ASET_HLARS_TIP },
+		inverseCameraInputBreakThreshold               = { Default = 30, Min = 0, Max = 180, Tip = Text.GUI_ASET_ICIBT_TIP },
+		lockedCamera                                   = { Default = false, Tip = Text.GUI_ASET_LC_TIP },
+		slopeAdjustement                               = { Default = true, Tip = Text.GUI_ASET_SA_TIP },
+		slopeCorrectionInAirDampFactor                 = { Default = 0.1, Min = 0, Max = 1, Step = 0.01, Tip = Text.GUI_ASET_SCIADF_TIP },
+		slopeCorrectionInAirFallCoef                   = { Default = 2, Min = 0, Max = 5, Tip = Text.GUI_ASET_SCIAFC_TIP },
+		slopeCorrectionInAirPitchMax                   = { Default = 30, Min = 0, Max = 90, Tip = Text.GUI_ASET_SCIAPX_TIP },
+		slopeCorrectionInAirPitchMin                   = { Default = -30, Min = -90, Max = 0, Tip = Text.GUI_ASET_SCIAPN_TIP },
+		slopeCorrectionInAirRaiseCoef                  = { Default = 0.5, Min = 0, Max = 2, Step = 0.01, Tip = Text.GUI_ASET_SCIARC_TIP },
+		slopeCorrectionInAirSpeedMax                   = { Default = 10, Min = 0, Max = 100, Tip = Text.GUI_ASET_SCIASX_TIP },
+		slopeCorrectionInAirStrength                   = { Default = 20, Min = 0, Max = 50, Tip = Text.GUI_ASET_SCIAS_TIP },
+		slopeCorrectionOnGroundPitchMax                = { Default = 30, Min = 0, Max = 90, Tip = Text.GUI_ASET_SCOGPX_TIP },
+		slopeCorrectionOnGroundPitchMin                = { Default = -30, Min = -90, Max = 0, Tip = Text.GUI_ASET_SCOGPN_TIP },
+		slopeCorrectionOnGroundStrength                = { Default = 4, Min = 0, Max = 10, Tip = Text.GUI_ASET_SCOGS_TIP }
 	}
 }
 
@@ -492,7 +504,15 @@ local config = {
 		closerBikes = {
 			DisplayName = Text.GUI_GSET_CLOSER_BIKES,
 			Tooltip = Text.GUI_GSET_CLOSER_BIKES_TIP,
-			Default = false
+			Default = 1,
+			Min = 1,
+			Max = 4,
+			Values = {
+				Text.GUI_OFF,
+				Text.GUI_ON,
+				Text.GUI_LEFT,
+				Text.GUI_RIGHT
+			}
 		},
 
 		---Mod-only option: enables or disables all vanilla presets.
@@ -507,7 +527,7 @@ local config = {
 			DisplayName = Text.GUI_GSET_FOV,
 			Description = Text.GUI_GSET_FOV_DESC,
 			Tooltip = Text.GUI_GSET_FOV_TIP,
-			Default = DefaultParams.Vars["fov"],
+			Default = DefaultParams.Vars.fov.Default,
 			Min = 30,
 			Max = 120,
 			Speed = 1,
@@ -518,7 +538,7 @@ local config = {
 		lockedCamera = {
 			DisplayName = Text.GUI_GSET_AUTO_CENTER,
 			Tooltip = Text.GUI_GSET_AUTO_CENTER_TIP,
-			Default = DefaultParams.Vars["lockedCamera"],
+			Default = DefaultParams.Vars.lockedCamera.Default,
 			IsGameOption = true
 		},
 
@@ -900,11 +920,27 @@ end
 ---For numbers greater than or equal to 1, the format "%.0f" is returned for integer rounding.
 ---@param value number # The numeric value for which to determine the format.
 ---@return string # The format pattern suitable for string.format.
-local function getFloatFormat(value)
+local function getPrecision(value)
 	if isNumber(value) and value > 0 and value < 1 then
-		return "%." .. math.abs(math.floor(math.log(value, 10))) .. "f"
+		return "%." .. abs(floor(math.log(value, 10))) .. "f"
 	end
 	return "%.0f"
+end
+
+---Calculates a recommended step size for a numeric value based on its decimal precision.
+---This can be used to automatically determine a suitable increment for sliders or numeric inputs.
+---@param value number # The numeric value to analyze. Can be an integer or float.
+---@return number # Recommended step size. For integers, returns 1. For floats, returns 10^-n where n is the number of decimal places.
+local function getStep(value)
+	if not isNumber(value) then return 1 end
+
+	local str = tostring(value)
+	local dec = str:match("%.(%d+)")
+	if not dec then return 1 end
+
+	local len = #dec
+	local step = 10 ^ (-len)
+	return step >= 1 and 1 or step
 end
 
 ---Checks whether a numeric value lies within a specified inclusive range.
@@ -2297,6 +2333,12 @@ local function getVehicleDisplayName()
 
 	local veh = getMountedVehicle()
 	local name = veh and veh:GetDisplayName()
+
+	--Fixes incorrectly named custom vehicles.
+	if name and startsWith(name, "LocKey#") then
+		name = Game.GetLocalizedText(name)
+	end
+
 	return name and setCache(0x05b4, name:gsub("„", '"'):gsub("“", '"')) or nil
 end
 
@@ -2383,9 +2425,9 @@ local function updateConfigDefaultParam(name, value, updateConfig)
 	if not option or option.IsNotAvailable then return end
 
 	local default = option.Default
-	local isRestore = value == default
-	if not isRestore and value then
-		if type(value) ~= type(default) then return end
+	local isRestore = equals(value, default)
+	if not isRestore and value ~= nil then
+		if default == nil or type(value) ~= type(default) then return end
 
 		local min, max = option.Min, option.Max
 		if areNumber(value, min, max) then ---@cast value number
@@ -2406,26 +2448,37 @@ local function updateConfigDefaultParam(name, value, updateConfig)
 			for key, preset in pairs(presets.restoreCollection) do
 				presets.collection[key] = preset
 			end
+			presets.restoreCollection = nil
 		end
 
-		if value == true then
+		if value > 1 then
 			presets.restoreCollection = {}
 			for key, preset in pairs(presets.collection) do
 				local isDef = preset.IsDefault
 				local id = preset.ID
 				if isDef or not equalsAny(id, "2w_Preset", "Brennan_Preset") then goto continue end
 
-				local defPreset = get(presets.collection, {}, id)
-				if not isTableValid(defPreset) then goto continue end ---@cast defPreset ICameraPreset
+				local origin = get(presets.collection, {}, id)
+				if not isTableValid(origin) then goto continue end ---@cast origin ICameraPreset
 
 				presets.restoreCollection[key] = clone(preset)
 
-				preset.Far = merge(defPreset.Medium, preset.Medium)
-				preset.Medium = merge(defPreset.Close, preset.Close)
+				preset.Far = merge(origin.Medium, preset.Medium)
+				preset.Medium = merge(origin.Close, preset.Close)
 
-				preset.Close = merge(defPreset.Close, preset.Close)
+				preset.Close = merge(origin.Close, preset.Close)
 				preset.Close.a = 12
 				preset.Close.d = -0.7
+
+				if value == 3 then
+					preset.Far.x = -0.5
+					preset.Medium.x = -0.4
+					preset.Close.x = -0.3
+				elseif value == 4 then
+					preset.Far.x = 0.5
+					preset.Medium.x = 0.4
+					preset.Close.x = 0.3
+				end
 
 				::continue::
 			end
@@ -2436,8 +2489,8 @@ local function updateConfigDefaultParam(name, value, updateConfig)
 
 	for _, section in ipairs(DefaultParams.Keys) do
 		local key = format("%s.%s", section, name)
-		local curVal = TweakDB:GetFlat(key)
-		if curVal ~= nil and not equals(curVal, value) then
+		local current = TweakDB:GetFlat(key)
+		if current ~= nil and not equals(current, value) then
 			TweakDB:SetFlat(key, value)
 			logIf(DevLevels.ALERT, LogLevels.INFO, 0xeef2, isRestore and Text.LOG_PARAM_REST or Text.LOG_PARAM_SET, key, value)
 		end
@@ -2476,39 +2529,64 @@ local function updateConfigDefaultParams(doRestore)
 	end
 end
 
----Updates or restores advanced default parameter values in TweakDB.
----@param doRestore boolean? # If true, changed values are reset to their default.
-local function updateAdvancedConfigDefaultParams(doRestore)
-	local sections = DefaultParams.Keys
+---Updates a specific advanced default parameter.
+---@param sIdx number # Index referencing the section name within `DefaultParams.Keys`.
+---@param name string # Name of the variable to update.
+---@param value boolean|number # New value to apply.
+---@param updateConfig? boolean # If true, updates the related advanced configuration; defaults to false if omitted.
+---@param noDbUpdate? boolean # If true, uses `TweakDB:SetFlatNoUpdate()` instead of `TweakDB:SetFlat()`; defaults to false if omitted.
+---@return boolean # Returns true if the parameter value changed, false otherwise.
+local function updateAdvancedConfigDefaultParam(sIdx, name, value, updateConfig, noDbUpdate)
+	if not sIdx or not name or value == nil then return false end
 
-	if doRestore then
-		for i, section in ipairs(sections) do
-			local commit = false
-			for var, value in pairs(DefaultParams.Vars) do
-				local key = section and format("%s.%s", section, var)
-				local default = key and pluck(value, i)
-				local current = default and TweakDB:GetFlat(key)
-				if current and current ~= default then
-					commit = true
-					TweakDB:SetFlatNoUpdate(key, default)
-				end
-			end
-			if commit then
-				TweakDB:Update(section)
-			end
+	local section = DefaultParams.Keys[sIdx]
+	if not section then return false end
+
+	local origin = get(DefaultParams.Vars, nil, name)
+	local default = origin ~= nil and pluck(origin.Default, sIdx)
+	if default == nil or type(value) ~= type(default) then return false end
+
+	local result = false
+
+	local key = format("%s.%s", section, name)
+	local current = TweakDB:GetFlat(key)
+	local isRestore = default ~= nil and equals(default, value)
+	if not equals(current, value) then
+		result = true
+
+		if isNumber(value) and value % 1 ~= 0 then
+			value = tonumber(format("%.3f", value)) or value
 		end
-		return
+
+		if noDbUpdate then
+			TweakDB:SetFlatNoUpdate(key, value)
+		else
+			TweakDB:SetFlat(key, value)
+		end
+
+		logIf(DevLevels.ALERT, LogLevels.INFO, 0x2e3b, isRestore and Text.LOG_PARAM_REST or Text.LOG_PARAM_SE, key, value)
 	end
 
-	for i, options in pairs(config.advancedOptions) do
+	if not updateConfig then return result end
+
+	config.isAdvancedUnsaved = true
+	local option = deep(config.advancedOptions, sIdx)
+	option[name] = isRestore and nil or value
+
+	return result
+end
+
+---Iterates through all advanced configuration parameters and restores or updates their default values.
+---If any parameter changes, its section is committed to the TweakDB.
+---@param doRestore boolean? # If true, restores all parameters to their default values instead of keeping current ones.
+local function updateAdvancedConfigDefaultParams(doRestore)
+	for i, section in ipairs(DefaultParams.Keys) do
 		local commit = false
-		local section = sections[i]
-		for var, value in pairs(options) do
-			local key = section and format("%s.%s", section, var)
-			local current = key and TweakDB:GetFlat(key)
-			if current and current ~= value then
+		for var, data in pairs(DefaultParams.Vars) do
+			local default = pluck(data.Default, i)
+			local value = get(config.advancedOptions, default, i, var)
+			if updateAdvancedConfigDefaultParam(i, var, doRestore and default or value, false, true) then
 				commit = true
-				TweakDB:SetFlatNoUpdate(key, value)
 			end
 		end
 		if commit then
@@ -2534,36 +2612,43 @@ local function resetCustomDefaultParams(key)
 	local vtid = veh and veh:GetTDBID()
 	local vname = vtid and getRecordName(vtid)
 	local cptid = vname and TweakDB:GetFlat(vname .. ".tppCameraParams")
-	local cparam = cptid and getRecordName(cptid)
-	if not cparam then return end
+	local section = cptid and getRecordName(cptid)
+	if not section then return end
 
-	local options, i, commit = config.options, contains(cparam, "_2w_") and 2 or 1, false
-	for var, value in pairs(DefaultParams.Vars) do
-		local curKey = format("%s.%s", cparam, var)
-		local curVal = TweakDB:GetFlat(curKey)
-		if not curVal then goto continue end
+	local sIdx = contains(section, "_2w_") and 2 or 1
+	local commit = false
+	for var, data in pairs(DefaultParams.Vars) do
+		local entry = format("%s.%s", section, var)
+		local current = TweakDB:GetFlat(entry)
+		if not current then goto continue end
 
-		local defVal
-		if options[var] then
-			defVal = options[var].Value or options[var].Default
-		elseif isTable(value) then
-			defVal = value[i]
+		local default = data.Default
+		local option = get(config.options, nil, var)
+		local advanced = get(config.advancedOptions, nil, sIdx, var)
+
+		if option then
+			default = option.Value or option.Default
+		elseif advanced ~= nil then
+			default = advanced
 		else
-			defVal = value
+			default = pluck(default, sIdx)
 		end
-		if equals(curVal, defVal) then goto continue end
 
-		if not presets.restoreParams[curKey] then
-			presets.restoreParams[curKey] = curVal
+		if equals(current, default) then goto continue end
+
+		if not presets.restoreParams[entry] then
+			presets.restoreParams[entry] = current
 		end
+
 		commit = true
-		TweakDB:SetFlatNoUpdate(curKey, defVal)
-		logF(DevLevels.BASIC, LogLevels.INFO, 0x460a, Text.LOG_PARAM_MANIP, curKey, curVal, defVal)
+		TweakDB:SetFlatNoUpdate(entry, default)
+		logF(DevLevels.BASIC, LogLevels.INFO, 0x460a, Text.LOG_PARAM_MANIP, entry, current, default)
 
 		::continue::
 	end
+
 	if commit then
-		TweakDB:Update(cparam)
+		TweakDB:Update(section)
 	end
 end
 
@@ -3654,13 +3739,9 @@ local function saveAdvancedOptions()
 		for name, value in pairs(options) do
 			local current = serialize(value)
 
-			local default = DefaultParams.Vars[name]
+			local default = DefaultParams.Vars[name].Default
 			default = serialize(pluck(default, i))
 			if equals(current, default) then
-				config.advancedOptions[i][name] = nil
-				if not isTableValid(config.advancedOptions[i]) then
-					config.advancedOptions[i] = nil
-				end
 				doVacuum = true
 				sqliteDelete(tableName, "Name", name)
 				goto continue
@@ -4219,20 +4300,40 @@ local function drawRuler(scale, maxWidth, maxHeight)
 	local lineH = ImGui.GetTextLineHeight() * 0.2
 	local posX, posY = ImGui.GetCursorPos()
 	local fov = get(config.options.fov, 69, "Value")
+	local zoom = get(config.options.zoom, 1.00, "Value")
 	local ticks = fov > 69 and fov or 62
-	local colors = {
-		[10]        = 0xffffff00, --cyan
-		[ticks - 2] = 0xff00ffff, --yellow
-		[ticks - 1] = 0xff00aaff, --orange
-		[ticks]     = 0xff0000ff --red
-	}
+
+	local indices = zoom == 1 and ({
+		[69] = { -1, 10, 60, 61, 62 },
+		[75] = { -1, 25, 70, 71, 72 },
+		[80] = { 7, 36, 76, 77, 78 },
+		[85] = { 18, 45, 83, 84, 85 },
+		[90] = { 30, 54, 88, 89, 90 }
+	})[fov] or {}
+
+	local markers = {}
+	if isTableValid(indices) then
+		local codes = {
+			0xff00ff00, --green
+			0xffffff00, --cyan
+			0xff00ffff, --yellow
+			0xff00aaff, --orange
+			0xff0000ff --red
+		}
+		for i, idx in ipairs(indices) do
+			if idx > 0 then
+				markers[idx] = codes[i]
+			end
+		end
+	end
+
 	for i = 0, ticks do
 		local isMajor = i % 5 == 0
 		local tick = rep("_", isMajor and 4 or 3)
 		local text = isMajor and format(" %3d", i) or ""
 		local osetY = posY + (ticks - i) * lineH
 		ImGui.SetCursorPos(posX, osetY)
-		ImGui.PushStyleColor(ImGuiCol.Text, colors[i] or 0xafffffff)
+		ImGui.PushStyleColor(ImGuiCol.Text, markers[i] or 0xafffffff)
 		ImGui.Text(isMajor and tick .. text or tick)
 		ImGui.PopStyleColor()
 	end
@@ -4301,9 +4402,25 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 
 		ImGui.TableNextColumn()
 		local current = option.Value
+		local items = option.Values
 		local label = "##" .. key
 		local changed, recent = false, nil
-		if isBoolean(current) then ---@cast current boolean
+		if isTableValid(items) then ---@cast items string[]
+			ImGui.SetNextItemWidth(floor(60 * scale))
+			if ImGui.BeginCombo(label, items[current]) then
+				for i, item in ipairs(items) do
+					local isSelected = current == i
+					if ImGui.Selectable(item, isSelected) and current ~= i then
+						recent = i
+						changed = true
+					end
+					if isSelected then
+						ImGui.SetItemDefaultFocus()
+					end
+				end
+				ImGui.EndCombo()
+			end
+		elseif isBoolean(current) then ---@cast current boolean
 			recent = ImGui.Checkbox(label, current)
 			if recent ~= current then
 				changed = true
@@ -4316,20 +4433,19 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 				min = -math.huge
 				max = math.huge
 			end
-			ImGui.PushItemWidth(floor(24 * scale * #format("%3s", max) * 0.5))
 
 			local speed = option.Speed or 0.01
-			local fmt = getFloatFormat(speed)
-			recent = ImGui.DragFloat(label, current, speed, min, max, fmt)
+			local precision = getPrecision(speed)
+
+			ImGui.SetNextItemWidth(floor(24 * scale * #format("%3s", max) * 0.5))
+			recent = ImGui.DragFloat(label, current, speed, min, max, precision)
 			if recent ~= current and inRange(recent, min, max) then
 				changed = true
 			end
 
-			ImGui.PopItemWidth()
-
 			addTooltip(nil, split(format(option.Tooltip, option.Default, min, max), "|"))
 		else
-			ImGui.Text(Text.GUI_NONE)
+			ImGui.Text(Text.GUI_UNKNOWN)
 		end
 
 		if changed then
@@ -4423,62 +4539,52 @@ local function openAdvancedOptionsWindow(scale, isOpening, maxWidth, maxHeight)
 				ImGui.TableSetupColumn("##" .. 1, ImGuiTableColumnFlags.WidthStretch)
 				ImGui.TableSetupColumn("##" .. 2, ImGuiTableColumnFlags.WidthFixed, -1)
 
-				for var, values in opairs(DefaultParams.Vars) do
+				for var, data in opairs(DefaultParams.Vars) do
 					if config.options[var] then goto continue end
 
 					ImGui.TableNextColumn()
-
 					local text = camelToTitle(var)
 					ImGui.Text(text)
+					addTooltip(scale, data.Tip)
 
 					ImGui.TableNextColumn()
-
-					local default = pluck(values, i)
+					local default = pluck(data.Default, i)
 					local current = get(config.advancedOptions, default, i, var)
 					local changed, recent = false, nil
-					ImGui.PushItemWidth(-1)
+					ImGui.SetNextItemWidth(-1)
 					if isBoolean(current) then
 						recent = ImGui.Checkbox("##" .. var .. i, current)
 					elseif isNumber(current) then
-						recent = ImGui.DragFloat("##" .. var .. i, current, 0.005, -math.huge, math.huge, "%.03f")
+						local min = data.Min or -math.huge
+						local max = data.Max or math.huge
+						local step = data.Step or getStep(current)
+						local precision = getPrecision(step)
+						recent = ImGui.DragFloat("##" .. var .. i, current, step, min, max, precision)
+						addTooltip(nil, split(format(Text.GUI_ASET_VAL_TIP, default, min, max), "|"))
 					else
 						ImGui.Text("\u{f01f7}")
 					end
-					ImGui.PopItemWidth()
-
-					local option = deep(config.advancedOptions, i)
-					if recent ~= nil then
+					if not equals(recent, current) then
 						changed = true
-						if equals(recent, default) then
-							if get(option, nil, var) ~= nil then
-								config.isAdvancedUnsaved = true
-								option[var] = default
-							end
-						elseif not equals(recent, current) then
-							config.isAdvancedUnsaved = true
-							option[var] = recent
-						end
 					end
 
 					ImGui.TableNextColumn()
-
 					local isUndoOff = equals(current, default)
-					local pushdColors = isUndoOff and pushColors(ImGuiCol.Button, 0x40808080) or 0
+					local pushd = isUndoOff and pushColors(ImGuiCol.Button, 0x40808080) or 0
 					ImGui.BeginDisabled(isUndoOff)
-					ImGui.PushItemWidth(-1)
+					ImGui.SetNextItemWidth(-1)
 					if ImGui.Button("\u{f054d}##" .. var .. i) then
+						changed = true
 						recent = default
-						if get(option, nil, var) ~= nil then
-							config.isAdvancedUnsaved = true
-							option[var] = default
-						end
 					end
 					ImGui.EndDisabled()
-					popColors(pushdColors)
-					ImGui.PopItemWidth()
+					popColors(pushd)
 
-					if changed and config.nativeInstance and config.nativeOptions[i .. var] then
-						config.nativeInstance.setOption(config.nativeOptions[i .. var], recent)
+					if changed then
+						updateAdvancedConfigDefaultParam(i, var, default, true)
+						if config.nativeInstance and config.nativeOptions[i .. var] then
+							config.nativeInstance.setOption(config.nativeOptions[i .. var], recent)
+						end
 					end
 
 					::continue::
@@ -4576,12 +4682,11 @@ local function openFileExplorerWindow(scale, isOpening, x, y, width, height, max
 		ImGui.Text(label)
 
 		ImGui.TableNextColumn()
-		ImGui.PushItemWidth(-1)
+		ImGui.SetNextItemWidth(-1)
 		local recent, changed = ImGui.InputText("##Search", explorer.searchText or "", 96)
 		if changed and recent then
 			explorer.searchText = recent
 		end
-		ImGui.PopItemWidth()
 
 		local cmds = cache.commands
 		if not cmds then
@@ -4635,7 +4740,6 @@ local function openFileExplorerWindow(scale, isOpening, x, y, width, height, max
 				if isStringValid(command) and command ~= ExplorerCommands.UNAVAILABLE and command ~= ExplorerCommands.VANILLA then
 					goto continue
 				end
-
 				color = Colors.GARNET
 			end
 			if command == ExplorerCommands.UNAVAILABLE and not color then
@@ -4654,11 +4758,7 @@ local function openFileExplorerWindow(scale, isOpening, x, y, width, height, max
 			ImGui.TableNextColumn()
 
 			alignNext(buttonHeight)
-
-			if color then
-				color = pushColors(ImGuiCol.Text, color)
-			end
-
+			color = color and pushColors(ImGuiCol.Text, color) or 0
 			columnWidth = columnWidth or ((ImGui.GetColumnWidth(0) - 4) * scale)
 			local textWidth = ImGui.CalcTextSize(key) * scale
 			local nameTooLong = columnWidth < textWidth
@@ -4674,10 +4774,7 @@ local function openFileExplorerWindow(scale, isOpening, x, y, width, height, max
 			else
 				ImGui.Text(key)
 			end
-
-			if color then
-				popColors(color)
-			end
+			popColors(color)
 
 			if usage then
 				if nameTooLong then
@@ -4796,7 +4893,7 @@ local function onInit()
 				end
 			end
 			if not available then
-				config.options.closerBikes.Value = false
+				config.options.closerBikes.Value = config.options.closerBikes.Default
 				config.options.closerBikes.IsNotAvailable = true
 			end
 		end
@@ -4908,7 +5005,9 @@ registerForEvent("onInit", function()
 	--Codeware dependencies.
 	---@diagnostic disable-next-line
 	state.isCodewareAvailable = isUserdata(Codeware)
-	config.options.zoom.IsNotAvailable = not state.isCodewareAvailable
+	if not state.isCodewareAvailable then
+		config.options.zoom.IsNotAvailable = false
+	end
 
 	--Ensures the log file is fresh when the mod initializes.
 	pcall(function()
@@ -5124,24 +5223,42 @@ registerForEvent("onInit", function()
 			end
 
 			local label = option.DisplayName
-			local description = option.Description or option.Tooltip
+			local desc = option.Description or option.Tooltip
 			local default = option.Default
 			local current = option.Value
+			local items = option.Values
 			local speed = option.Speed
 
-			if isBoolean(default) then
-				config.nativeOptions[key] = native.addSwitch(cat, label, description, current, default, setValue)
+			if isTableValid(items) then
+				config.nativeOptions[key] = native.addSelectorString(
+					cat,
+					label,
+					desc,
+					items,
+					current,
+					default,
+					setValue
+				)
+			elseif isBoolean(default) then
+				config.nativeOptions[key] = native.addSwitch(
+					cat,
+					label,
+					desc,
+					current,
+					default,
+					setValue
+				)
 			elseif isNumber(default) then
 				local isFloat = speed % 1 ~= 0
 
 				local parameters = {
 					cat,
 					label,
-					description,
-					option.Min,
-					option.Max,
+					desc,
+					option.Min or -math.huge,
+					option.Max or math.huge,
 					speed,
-					isFloat and getFloatFormat(speed) or current,
+					isFloat and getPrecision(speed) or current,
 					isFloat and current or default,
 					isFloat and default or setValue
 				}
@@ -5167,45 +5284,54 @@ registerForEvent("onInit", function()
 			end
 			native.addSubcategory(cat, cats[i])
 
-			for var, values in opairs(DefaultParams.Vars) do
+			for var, origin in opairs(DefaultParams.Vars) do
 				if config.options[var] then goto continue end
 
-				local default = pluck(values, i)
+				local default = pluck(origin.Default, i)
 				local current = get(config.advancedOptions, default, i, var)
+				local step = origin.Step or 1
 
 				local function setValue(value)
-					local option = deep(config.advancedOptions, i)
-					if value ~= nil then
-						if equals(value, default) then
-							if get(option, nil, var) ~= nil then
-								option[var] = default
-								saveToFile(1)
-							end
-						elseif not equals(value, current) then
-							option[var] = value
-							saveToFile(1)
-						end
-					end
+					updateAdvancedConfigDefaultParam(i, var, value, true)
+					saveToFile(1)
 				end
 
 				local label = truncateMiddle(camelToTitle(var), 48)
-				local desc = Text.GUI_GSET_ADVANCED_TIP
+				local defText
 				if isBoolean(default) then
-					config.nativeOptions[i .. var] = native.addSwitch(cat, label, desc, current, default, setValue)
+					defText = default and Text.GUI_ON or Text.GUI_OFF
+				else
+					defText = tostring(default)
+				end
+				local note = format(Text.NUI_VAL_NOTE, origin.Tip or Text.GUI_GSET_ADVANCED_TIP, defText)
+				if isBoolean(default) then
+					config.nativeOptions[i .. var] = native.addSwitch(
+						cat,
+						label,
+						note,
+						current,
+						default,
+						setValue
+					)
 				elseif isNumber(default) then
-					config.nativeOptions[i .. var] =
-						native.addRangeFloat(
-							cat,
-							label,
-							desc,
-							abs(default + 1) * -100,
-							abs(default + 1) * 100,
-							0.1,
-							"%.01f",
-							current,
-							default,
-							setValue
-						)
+					local isFloat = step % 1 ~= 0
+
+					local parameters = {
+						cat,
+						label,
+						note,
+						origin.Min or -math.huge,
+						origin.Max or math.huge,
+						step,
+						isFloat and getPrecision(step) or current,
+						isFloat and current or default,
+						isFloat and default or setValue
+					}
+					if isFloat then
+						insert(parameters, setValue)
+					end
+
+					config.nativeOptions[i .. var] = (isFloat and native.addRangeFloat or native.addRangeInt)(unpack(parameters))
 				end
 
 				::continue::
@@ -5297,7 +5423,7 @@ registerForEvent("onDraw", function()
 	--Computes scaled layout values.
 	local scale = ImGui.GetFontSize() / 18
 	local contentMinWidth = floor(240 * scale)
-	local buttonWidth = ceil(192 * scale)
+	local buttonWidth = floor(192 * scale)
 	local buttonHeight = floor(24 * scale)
 	local rowHeight = floor(28 * scale)
 	local heightPadding = floor(4 * scale)
@@ -5309,12 +5435,12 @@ registerForEvent("onDraw", function()
 	local sbarWidth = style.ScrollbarSize
 
 	local contentWidth = ImGui.GetContentRegionAvail()
-	local halfContentWidth = ceil(contentWidth * 0.5)
+	local halfContentWidth = floor(contentWidth * 0.5)
 	halfContentWidth = math.min(halfContentWidth, ceil(abs(halfContentWidth - (itemSpacing * 0.5))))
 
 	if not gui.isPaddingLocked then
 		local relativePadding = (contentWidth - contentMinWidth) * 0.5 + (22 * scale) - itemSpacing
-		gui.paddingWidth = ceil(math.max(16 * scale, relativePadding))
+		gui.paddingWidth = floor(math.max(16 * scale, relativePadding))
 	end
 	local controlPadding = gui.paddingWidth
 
@@ -5392,7 +5518,7 @@ registerForEvent("onDraw", function()
 		local sliderWidth = floor(90 * scale)
 		ImGui.Dummy(controlPadding, 0)
 		ImGui.SameLine()
-		ImGui.PushItemWidth(sliderWidth)
+		ImGui.SetNextItemWidth(sliderWidth)
 		local devMode = ImGui.SliderInt(Text.GUI_CREAT_MODE, state.devMode, DevLevels.DISABLED, DevLevels.FULL)
 		if devMode ~= state.devMode then
 			state.devMode = clamp(devMode, DevLevels.DISABLED, DevLevels.FULL)
@@ -5401,7 +5527,6 @@ registerForEvent("onDraw", function()
 				resetCache(true)
 			end
 		end
-		ImGui.PopItemWidth()
 		gui.isPaddingLocked = ImGui.IsItemActive()
 		addTooltip(scale, Text.GUI_CREAT_MODE_TIP)
 
@@ -5430,7 +5555,7 @@ registerForEvent("onDraw", function()
 
 	--Table showing vehicle name, camera ID and more — if certain conditions are met.
 	local cache = getCache(0xcb3d) or {}
-	local vehicle, name, appName, id, key, displayName, status, statusText, camHeight
+	local vehicle, name, appName, id, key, displayName, status, statusText, camHeight, activeCam, activeCamText
 	local steps = {
 		function()
 			return not isLocked and state.devMode > DevLevels.DISABLED
@@ -5492,9 +5617,9 @@ registerForEvent("onDraw", function()
 			statusText = cache.statusText
 			if isString(statusText) then return statusText end
 			statusText = ({
-				[0] = Text.GUI_TBL_VAL_STATUS_0,
-				[1] = Text.GUI_TBL_VAL_STATUS_1,
-				[2] = Text.GUI_TBL_VAL_STATUS_2
+				[0] = Text.GUI_TBL_VAL_STATE_0,
+				[1] = Text.GUI_TBL_VAL_STATE_1,
+				[2] = Text.GUI_TBL_VAL_STATE_2
 			})[status] or Text.GUI_UNKNOWN
 			cache.statusText = statusText
 			setCache(0xcb3d, cache)
@@ -5504,11 +5629,32 @@ registerForEvent("onDraw", function()
 			camHeight = cache.camHeight
 			if isString(camHeight) then return camHeight end
 			local settings = getUserSettingsOption("/controls/vehicle", "VehicleTPPCameraHeight", true)
-			camHeight = isTableValid(settings) and settings.Value or Text.GUI_NONE
+			local height = isTableValid(settings) and settings.Value
+			camHeight = equals(height, "Low") and Text.GUI_TBL_VAL_CAMH_0 or Text.GUI_TBL_VAL_CAMH_1
 			cache.camHeight = camHeight
 			setCache(0xcb3d, cache)
 			return camHeight
 		end,
+		function()
+			local player = Game.GetPlayer()
+			local manager = player and player:FindVehicleCameraManager()
+			local active = manager and manager:GetActivePerspective()
+			activeCam = active and tonumber(Game.EnumValueFromString("vehicleCameraPerspective", active.value)) or -1
+			return activeCam
+		end,
+		function()
+			local text = ({
+				[0] = Text.GUI_TBL_VAL_CAMA__0,
+				[1] = Text.GUI_TBL_VAL_CAMA__1,
+				[2] = Text.GUI_TBL_VAL_CAMA__2,
+				[3] = Text.GUI_TBL_VAL_CAMA__3,
+				[4] = Text.GUI_TBL_VAL_CAMA__4,
+				[5] = Text.GUI_TBL_VAL_CAMA__5,
+				[6] = Text.GUI_TBL_VAL_CAMA__6,
+			})[activeCam] or Text.GUI_UNKNOWN
+			activeCamText = activeCam == 0 and text or format(text, camHeight)
+			return activeCamText
+		end
 	}
 
 	local failed = false
@@ -5601,9 +5747,9 @@ registerForEvent("onDraw", function()
 		ImGui.TableHeadersRow()
 
 		local equNames = name == appName
-		local idAndHeight = format("%s : %s", id, camHeight)
+		local idAndHeight = format("%s : %s", id, activeCamText)
 		local customID = getCustomVehicleCameraID()
-		local cIdAndHeight = isStringValid(customID) and format("%s : %s", customID, camHeight)
+		local cIdAndHeight = isStringValid(customID) and format("%s : %s", customID, activeCamText)
 		local rows = {
 			{ label = "\u{f0208}", tip = Text.GUI_TBL_LABL_DNAME_TIP,  value = displayName },
 			{ label = "\u{f1975}", tip = Text.GUI_TBL_LABL_STATUS_TIP, value = statusText },
@@ -5614,7 +5760,7 @@ registerForEvent("onDraw", function()
 				label      = "\u{f0569}",
 				tip        = Text.GUI_TBL_LABL_CCAMID_TIP,
 				value      = cIdAndHeight,
-				valTip     = Text.GUI_TBL_VAL_CCAMID_TIP,
+				valTip     = Text.GUI_TBL_VAL_CCID_TIP,
 				isCustomID = cIdAndHeight ~= nil
 			},
 			{
@@ -5622,6 +5768,7 @@ registerForEvent("onDraw", function()
 				tip        = Text.GUI_TBL_LABL_PSET_TIP,
 				value      = presetName,
 				valTip     = equNames and Text.GUI_TBL_VAL_PSET_TIP2 or Text.GUI_TBL_VAL_PSET_TIP1,
+				isDisabled = isStillVisible and presetName == id,
 				isEditable = true
 			}
 		}
@@ -5661,11 +5808,6 @@ registerForEvent("onDraw", function()
 					addTooltip(nil, tip)
 				end
 			elseif row.isEditable then
-				local namWidth = math.min(ImGui.CalcTextSize(name), 302)
-				local appWidth = math.min(ImGui.CalcTextSize(appName), 302)
-				local width = clamp(appWidth, namWidth, maxInputWidth) + doubleHeightPadding
-				ImGui.PushItemWidth(width)
-
 				local color
 				if flux.Name ~= flux.Key then
 					color = Colors.GARNET
@@ -5676,9 +5818,14 @@ registerForEvent("onDraw", function()
 				else
 					color = Colors.FIR
 				end
-				local pushd = row.value ~= id and pushColors(ImGuiCol.FrameBg, color) or 0
+				color = row.value ~= id and pushColors(ImGuiCol.FrameBg, color) or 0
 
+				local namWidth = math.min(ImGui.CalcTextSize(name), 302)
+				local appWidth = math.min(ImGui.CalcTextSize(appName), 302)
+				local width = clamp(appWidth, namWidth, maxInputWidth) + doubleHeightPadding
 				local maxLen = math.max(#name, #appName) + 1
+
+				ImGui.SetNextItemWidth(width)
 				local recent, changed = ImGui.InputText("##FileName", row.value, maxLen)
 				if changed and recent then
 					local trimVal = trimLuaExt(recent)
@@ -5696,8 +5843,7 @@ registerForEvent("onDraw", function()
 					end
 				end
 
-				popColors(pushd)
-				ImGui.PopItemWidth()
+				popColors(color)
 
 				cache.renameTip = cache.renameTip or {}
 				local tipKey = equNames and name or appName
@@ -5727,7 +5873,7 @@ registerForEvent("onDraw", function()
 			else
 				alignNext(rowHeight)
 
-				local rawValue = tostring(row.value or Text.GUI_NONE)
+				local rawValue = tostring(row.value or Text.GUI_UNKNOWN)
 				local value = rawValue
 				local maxSize = floor(290 * scale)
 
@@ -5785,27 +5931,40 @@ registerForEvent("onDraw", function()
 		ImGui.TableHeadersRow()
 
 		local rows = {
-			{ label = "\u{f0623}", tip = Text.GUI_TBL_LABL_CLO_TIP },
-			{ label = "\u{f0622}", tip = Text.GUI_TBL_LABL_MID_TIP },
-			{ label = "\u{f0621}", tip = Text.GUI_TBL_LABL_FAR_TIP }
+			{ label = "\u{f0623}", tip = Text.GUI_TBL_LABL_CAM_1_TIP, isActive = equalsAny(activeCam, 1, 4), isCombat = activeCam == 4 },
+			{ label = "\u{f0622}", tip = Text.GUI_TBL_LABL_CAM_2_TIP, isActive = equalsAny(activeCam, 2, 5), isCombat = activeCam == 5 },
+			{ label = "\u{f0621}", tip = Text.GUI_TBL_LABL_CAM_3_TIP, isActive = equalsAny(activeCam, 3, 6), isCombat = activeCam == 6 }
 		}
 
 		local tips = {
-			Text.GUI_TBL_VAL_ANG_TIP,
+			Text.GUI_TBL_VAL_A_TIP,
 			Text.GUI_TBL_VAL_X_TIP,
 			Text.GUI_TBL_VAL_Y_TIP,
 			Text.GUI_TBL_VAL_Z_TIP,
-			Text.GUI_TBL_VAL_DIST_TIP
+			Text.GUI_TBL_VAL_D_TIP
 		}
 
 		for i, row in ipairs(rows) do
+			local isGameDefault = id == presetName
 			local level = PresetInfo.Levels[i]
+			local color
 
 			ImGui.TableNextRow(0, rowHeight)
 			ImGui.TableNextColumn()
 
 			alignNext(rowHeight)
-			ImGui.Text(row.label)
+
+			if isGameDefault then
+				color = not isStillVisible and Colors.DEFAULT
+			elseif isStillVisible and tasks.Save then
+				color = tasks.Restore and Colors.OLIVE or Colors.CARAMEL
+			else
+				color = Colors.FIR
+			end
+			color = row.isActive and color and pushColors(ImGuiCol.Text, color) or 0
+
+			ImGui.Text(row.isActive and (row.isCombat and "\u{f0703}" or "\u{f1879}") or row.label)
+			popColors(color)
 			addTooltip(scale, row.tip)
 
 			for j, field in ipairs(PresetInfo.Offsets) do
@@ -5814,14 +5973,13 @@ registerForEvent("onDraw", function()
 				local speed = pick(j, 1, 1e-2)
 				local minVal = pick(j, -45, -5, -10, 0, -3.8)
 				local maxVal = pick(j, 90, 5, 10, 32, 24)
-				local fmt = pick(j, "%.0f", "%.2f")
+				local precision = pick(j, "%.0f", "%.2f")
+				color = nil
 
 				ImGui.TableNextColumn()
-				ImGui.PushItemWidth(-1)
 
-				local color
 				if not equals(curVal, defVal) then
-					if id == presetName then
+					if isGameDefault then
 						color = Colors.GARNET
 					elseif isStillVisible and tasks.Save then
 						color = Colors.CARAMEL
@@ -5829,15 +5987,17 @@ registerForEvent("onDraw", function()
 						color = Colors.FIR
 					end
 				end
-				local pushd = color and pushColors(ImGuiCol.FrameBg, color) or 0
+				color = color and pushColors(ImGuiCol.FrameBg, color) or 0
 
-				local recent = ImGui.DragFloat(format("##%s_%s", level, field), curVal, speed, minVal, maxVal, fmt)
+				ImGui.SetNextItemWidth(-1)
+				local recent = ImGui.DragFloat(format("##%s_%s", level, field), curVal, speed, minVal, maxVal, precision)
 				if not equals(recent, curVal) then
 					recent = clamp(recent, minVal, maxVal)
 					deep(flux.Preset, level)[field] = recent
 					tasks.Validate = true
 				end
-				popColors(pushd)
+
+				popColors(color)
 
 				local tip = tips[j]
 				if tip then
@@ -5845,7 +6005,6 @@ registerForEvent("onDraw", function()
 					addTooltip(nil, split(format(tip, defVal, minVal, maxVal, origVal), "|"))
 				end
 
-				ImGui.PopItemWidth()
 			end
 		end
 

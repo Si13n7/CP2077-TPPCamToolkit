@@ -1,0 +1,1 @@
+return{ID="v_utility4_kaukaz_zeya_Preset",Close={y=0.25,d=0.5},Medium={y=0.25,d=1.6},Far={y=0.25,d=5.8},IsVanilla=true}

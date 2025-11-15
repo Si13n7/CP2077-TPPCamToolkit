@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-10-14, 00:11 UTC+01:00 (MEZ)
+Version: 2025-10-16, 1:35 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -21,6 +21,10 @@ return {
 	--GUI: 🧩 General
 	GUI_YES = "\u{f0026} Yes",
 	GUI_NO = "\u{f073a} No",
+	GUI_ON = "On",
+	GUI_OFF = "Off",
+	GUI_LEFT = "Left",
+	GUI_RIGHT = "Right",
 	GUI_NONE = "None",
 	GUI_UNKNOWN = "Unknown",
 
@@ -64,10 +68,54 @@ return {
 	GUI_GSET_RESET = "\u{f054d} Reset",
 	GUI_GSET_RESET_TIP = "You may need to reload the presets for changes to fully take effect, and some changes only apply after exiting and re-entering the vehicle.",
 	GUI_GSET_ADVANCED = "\u{f0169} Advanced",
-	GUI_GSET_ADVANCED_TIP = "Direct access to all raw global parameters. No automatic calibration or value limits applied.\n\nChanges take effect once you exit and get back into the vehicle.",
+	GUI_GSET_ADVANCED_TIP = "Direct access to all raw global parameters.\n\nMinimum and maximum values are not enforced and only serve as guidelines. Manual input can still set values outside these limits.\n\nChanges take effect once you exit and get back into the vehicle.",
+
+	--GUI: ⚔️ Advanced Settings
 	GUI_ASET_TITLE = "\u{f0169} Advanced Settings",
 	GUI_ASET_HEAD1 = "\u{f0bd8} Cars, SUVs, Vans, Trucks, Tanks, etc.",
 	GUI_ASET_HEAD2 = "\u{f037c} Motorcycles",
+	GUI_ASET_AFD_TIP = "Adds aerodynamic distortion when moving at higher speed.",
+	GUI_ASET_ACMST_TIP = "Speed above which the strength of auto-centering is reduced or capped.",
+	GUI_ASET_ACS_TIP = "Speed at which the camera automatically returns behind the vehicle.",
+	GUI_ASET_CBES_TIP = "Speed at which the camera boom extends to its full length.",
+	GUI_ASET_CMAXP_TIP = "Maximum vertical angle the camera can pitch upward.",
+	GUI_ASET_CMINP_TIP = "Minimum vertical angle the camera can pitch downward.",
+	GUI_ASET_CSR_TIP = "Radius of the virtual sphere around the camera for collision checks.",
+	GUI_ASET_CD_TIP = "Enables collision detection to prevent the camera from clipping through objects.",
+	GUI_ASET_DDC_TIP = "Keeps the camera aligned with the vehicle's driving direction.",
+	GUI_ASET_DDCA_TIP = "Maximum yaw angle for driving direction compensation.",
+	GUI_ASET_DDCAS_TIP = "Smoothness of the compensation angle transition.",
+	GUI_ASET_DDCAVM_TIP = "Minimum angular velocity required to trigger direction compensation.",
+	GUI_ASET_DDCSC_TIP = "Scales the strength of direction compensation based on speed.",
+	GUI_ASET_DDCSX_TIP = "Maximum vehicle speed where driving direction compensation applies.",
+	GUI_ASET_DDCSN_TIP = "Minimum vehicle speed where driving direction compensation starts applying.",
+	GUI_ASET_EBA_TIP = "Enables elastic boom acceleration behavior.",
+	GUI_ASET_EBAEL_TIP = "Length offset applied when accelerating forward.",
+	GUI_ASET_EBAFAC_TIP = "Influence of forward acceleration on boom extension.",
+	GUI_ASET_EBSEL_TIP = "Length offset applied based on vehicle speed.",
+	GUI_ASET_EBSESX_TIP = "Maximum speed where speed-based boom expansion applies.",
+	GUI_ASET_EBSESN_TIP = "Minimum speed where speed-based boom expansion begins.",
+	GUI_ASET_EBV_TIP = "Enables boom movement based on vehicle velocity.",
+	GUI_ASET_FOV_TIP = "Determines how wide the camera field of view is.",
+	GUI_ASET_HLACYT_TIP = "Yaw angle range within which the driver's head follows the camera direction.",
+	GUI_ASET_HLAMPD_TIP = "Maximum pitch angle downward the driver's head can rotate.",
+	GUI_ASET_HLAMPU_TIP = "Maximum pitch angle upward the driver's head can rotate.",
+	GUI_ASET_HLAMY_TIP = "Maximum yaw angle the driver's head can rotate sideways.",
+	GUI_ASET_HLARS_TIP = "Speed at which the driver's head rotates toward the camera direction.",
+	GUI_ASET_ICIBT_TIP = "Camera input threshold that triggers inverted input response.",
+	GUI_ASET_LC_TIP = "Locks the camera to the vehicle, disabling relative movement.",
+	GUI_ASET_SA_TIP = "Adjusts the camera pitch to compensate for vehicle slope.",
+	GUI_ASET_SCIADF_TIP = "Reduces slope correction strength when the vehicle is airborne.",
+	GUI_ASET_SCIAFC_TIP = "Multiplier that increases downward correction strength while airborne.",
+	GUI_ASET_SCIAPX_TIP = "Maximum pitch correction angle upward while airborne.",
+	GUI_ASET_SCIAPN_TIP = "Maximum pitch correction angle downward while airborne.",
+	GUI_ASET_SCIARC_TIP = "Multiplier that controls how much the camera rises while airborne.",
+	GUI_ASET_SCIASX_TIP = "Maximum speed where in-air slope correction applies.",
+	GUI_ASET_SCIAS_TIP = "Overall strength of slope correction when airborne.",
+	GUI_ASET_SCOGPX_TIP = "Maximum pitch correction angle upward while on ground.",
+	GUI_ASET_SCOGPN_TIP = "Maximum pitch correction angle downward while on ground.",
+	GUI_ASET_SCOGS_TIP = "Overall strength of slope correction when on ground.",
+	GUI_ASET_VAL_TIP = "Default:|%s|Min:|%s|Max:|%s",
 
 	--GUI: 🗂️ Preset Explorer
 	GUI_PSET_EXPL_SEARCH_TIP = "\u{f0232} Search Options| |%s|Shows files of vehicles available in the game|%s|Shows files of available custom vehicles|%s|Shows files of vehicles not available in the game|%s|Shows files of vehicles that have been actively used|%s|Shows files of vehicles that exist but have never been used|%s|Shows files of vanilla vehicles|anything|Normal text search",
@@ -86,25 +134,35 @@ return {
 	GUI_TBL_LABL_CAMID_TIP = "\u{f0567} Vehicle's camera identifier",
 	GUI_TBL_LABL_CCAMID_TIP = "\u{f0569} Vehicle's custom camera identifier",
 	GUI_TBL_LABL_PSET_TIP = "\u{f1668} Vehicle's active camera preset",
-	GUI_TBL_LABL_CLO_TIP = "\u{f0623} Close camera distance",
-	GUI_TBL_LABL_MID_TIP = "\u{f0622} Medium camera distance",
-	GUI_TBL_LABL_FAR_TIP = "\u{f0621} Far camera distance",
-	GUI_TBL_VAL_STATUS_0 = "Vanilla Crowd Vehicle",
-	GUI_TBL_VAL_STATUS_1 = "Vanilla Player Vehicle",
-	GUI_TBL_VAL_STATUS_2 = "Custom Player Vehicle",
-	GUI_TBL_VAL_CCAMID_TIP = "\u{f1980} Camera Access Map| |Distance Level:|Database Access Path:",
+	GUI_TBL_LABL_CAM_1_TIP = "\u{f0623} Close camera distance",
+	GUI_TBL_LABL_CAM_2_TIP = "\u{f0622} Medium camera distance",
+	GUI_TBL_LABL_CAM_3_TIP = "\u{f0621} Far camera distance",
+	GUI_TBL_VAL_STATE_0 = "Vanilla Crowd Vehicle",
+	GUI_TBL_VAL_STATE_1 = "Vanilla Player Vehicle",
+	GUI_TBL_VAL_STATE_2 = "Custom Player Vehicle",
+	GUI_TBL_VAL_CAMH_0 = "Low",
+	GUI_TBL_VAL_CAMH_1 = "High",
+	GUI_TBL_VAL_CAMA__0 = "FPP",
+	GUI_TBL_VAL_CAMA__1 = "TPP / %s / Close",
+	GUI_TBL_VAL_CAMA__2 = "TPP / %s / Medium",
+	GUI_TBL_VAL_CAMA__3 = "TPP / %s / Far",
+	GUI_TBL_VAL_CAMA__4 = "TPP / Combat / %s / Close",
+	GUI_TBL_VAL_CAMA__5 = "TPP / Combat / %s / Medium",
+	GUI_TBL_VAL_CAMA__6 = "TPP / Combat / %s / Far",
+	GUI_TBL_VAL_CCID_TIP = "\u{f1980} Camera Access Map| |Distance Level:|Database Access Path:",
 	GUI_TBL_VAL_PSET_TIP1 = "\u{f1668} Active Camera Preset\n\nWhen saving, the name \"%s\" is used. The new name must exactly match the value of \u{f1b8d} or \u{f0301}, or be at least a prefix of one of them.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each variation.\n\nMatching Priorities (first match is used):\n\u{f0b3a}\u{f1b8d} (e.g. \"%s\")\n\u{f0b3b}\u{f0301} (e.g. \"%s\")\n\u{f0b3c}Prefix of \u{f1b8d} (e.g. \"%s\")\n\u{f0b3d}Prefix of \u{f0301} (e.g. \"%s\")\n\nPlease ensure that your new preset name has the correct priority. It is recommended to make prefixes as long as possible to avoid conflicts in the future. Take a look at the Preset File Explorer to delete presets, if necessary.",
 	GUI_TBL_VAL_PSET_TIP2 = "\u{f1668} Active Camera Preset\n\nWhen saving, the name \"%s\" is used. The new name must exactly match the value of \u{f1b8d}, or at least be its prefix.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each variation.\n\nMatching Priorities (first match is used):\n\u{f0b3a}\u{f1b8d} (e.g. \"%s\")\n\u{f0b3b}Prefix of \u{f1b8d} (e.g. \"%s\")\n\nPlease ensure that your new preset name has the correct priority. It is recommended to make prefixes as long as possible to avoid conflicts in the future. Take a look at the Preset File Explorer to delete presets, if necessary.",
-	GUI_TBL_VAL_ANG_TIP = "\u{f10f3} Angles (°)| |Default:|%d|Min:|%d|Max:|%d|In Use:|%d",
-	GUI_TBL_VAL_DIST_TIP = "\u{f054e} Distance| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Closer|Increase:|Farther",
+	GUI_TBL_VAL_A_TIP = "\u{f10f3} Angles (°)| |Default:|%d|Min:|%d|Max:|%d|In Use:|%d",
 	GUI_TBL_VAL_X_TIP = "\u{f0d4c} X-Offset| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Left|Increase:|Right",
 	GUI_TBL_VAL_Y_TIP = "\u{f0d51} Y-Offset| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Farther|Increase:|Closer",
 	GUI_TBL_VAL_Z_TIP = "\u{f0d55} Z-Offset| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Down|Increase:|Up",
+	GUI_TBL_VAL_D_TIP = "\u{f054e} Distance| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Closer|Increase:|Farther",
 
-	--NUI: ⚔️ Native Settings UI
+	--NUI: 📚 Native Settings UI
 	NUI_CAT_GSET = "Global Settings",
 	NUI_CAT_ASET1 = "Advanced (Cars, SUVs, Vans, Trucks, Tanks, etc.)",
 	NUI_CAT_ASET2 = "Advanced (Motorcycles)",
+	NUI_VAL_NOTE = "%s\n\nDefault: %s\n\nChanges only apply after exiting and re-entering the vehicle.",
 
 	--LOG: ℹ️ Info
 	LOG_CAM_OSET_DONE = "Camera offset '%s' is ready.",
@@ -179,6 +237,6 @@ return {
 	--THROW: 🆘 Errors
 	THROW_CACHE_ID = "Cache ID is missing.",
 	THROW_SQL_DELETE = "Invalid arguments in SQLite delete.",
-	THROW_SQL_INIT = "nvalid arguments in SQLite init.",
-	THROW_SQL_UPSERT = "nvalid arguments in SQLite upserts."
+	THROW_SQL_INIT = "Invalid arguments in SQLite init.",
+	THROW_SQL_UPSERT = "Invalid arguments in SQLite upserts."
 }

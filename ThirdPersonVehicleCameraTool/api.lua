@@ -13,7 +13,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-10-14, 00:11 UTC+01:00 (MEZ)
+Version: 2025-10-16, 1:35 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -41,11 +41,14 @@ ______________________________________________
 ---@field InputText fun(label: string, value: string, maxLength?: integer): (string, boolean) # Creates a single-line text input field. Returns a tuple: the `new value` and `changed` (true if the text was edited).
 ---@field SliderInt fun(label: string, value: integer, min: integer, max: integer): integer # Creates an integer slider. Returns the new `value`.
 ---@field DragFloat fun(label: string, value: number, speed?: number, min?: number, max?: number, format?: string): number # Creates a draggable float input widget. Allows the user to adjust the value by dragging or with arrow keys. Optional speed, min/max limits, and format string. Returns the updated float value.
+---@field BeginCombo fun(label: string, previewValue: string, flags?: integer): boolean # Begins a combo box (drop-down list) with a preview value. Returns true if the combo is open and items should be drawn.
+---@field Selectable fun(label: string, selected?: boolean, flags?: integer, sizeX?: number, sizeY?: number): boolean # Creates a selectable item inside a combo or list. Returns true if the item was clicked.
+---@field SetItemDefaultFocus fun() # Sets keyboard focus to the most recently added item if no other item is active. Commonly used inside combos or lists.
+---@field EndCombo fun() # Ends the current combo box started with `ImGui.BeginCombo()`.
 ---@field IsItemHovered fun(): boolean # Returns true if the last item is hovered by the mouse cursor.
 ---@field IsItemActive fun(): boolean # Returns true while the last item is being actively used (e.g., held with mouse or keyboard input).
 ---@field SetKeyboardFocusHere fun(offset?: integer) # Sets the keyboard focus to the next widget (or `offset` widgets ahead) in the window. Useful to programmatically focus text inputs or other interactive items.
----@field PushItemWidth fun(width: number) # Sets the width of the next UI element (e.g., slider, text input).
----@field PopItemWidth fun() # Resets the width of the next UI element to the default value.
+---@field SetNextItemWidth fun(width: number) # Sets a fixed width for the next item (e.g., combo box, slider, or text input). Affects layout and alignment.
 ---@field BeginTooltip fun() # Begins creating a tooltip. Must be paired with `ImGui.EndTooltip()`.
 ---@field EndTooltip fun() # Ends the creation of a tooltip. Must be called after `ImGui.BeginTooltip()`.
 ---@field BeginTable fun(id: string, columns: integer, flags?: integer): boolean # Begins a table with the specified number of columns. Returns true if the table is created successfully and should be rendered.
@@ -202,14 +205,19 @@ TDBID = TDBID
 ---@class ResourceDepot
 ---@field LoadResource fun(self: ResourceDepot, name: string): ResourceLoader? # Loads the resource with the specified name, or nil if not found.
 
+---Provides control and query access to the vehicle camera system.
+---@class VehicleCameraManager
+---@field GetActivePerspective fun(self: VehicleCameraManager): table # Returns the currently active vehicle camera perspective as an enum value.
+
 ---Represents the player character in the game, providing functions to interact with the player instance.
 ---@class Player
----@field FindComponentByType fun(self: Player, typeName: string): any # Finds and returns a component of the specified type attached to the player, or nil if not found.
+---@field FindComponentByType fun(self: Player, typeName: string): table # Finds and returns a component of the specified type attached to the player, or nil if not found.
+---@field FindVehicleCameraManager fun(self: Player): VehicleCameraManager? # Returns the VehicleCameraManager instance associated with the player, or nil if not available.
 ---@field SetWarningMessage fun(self: Player, message: string, duration: number) # Displays a warning message on the player's screen for a specified duration.
 
 ---Represents a vehicle entity within the game, providing functions to interact with it, such as getting the appearance name.
 ---@class Vehicle
----@field GetRecordID fun(self: Vehicle): any # Returns the unique TweakDBID associated with the vehicle.
+---@field GetRecordID fun(self: Vehicle): table # Returns the unique TweakDBID associated with the vehicle.
 ---@field GetTDBID fun(self: Vehicle): TDBID? # Retrieves the internal TweakDB identifier used to reference this vehicle in the game database. Returns nil if unavailable.
 ---@field GetCurrentAppearanceName fun(self: Vehicle): CName? # Retrieves the current appearance name of the vehicle.
 ---@field GetDisplayName fun(self: Vehicle): string? # Retrieves the human-readable display name of the vehicle.
@@ -234,6 +242,8 @@ TDBID = TDBID
 ---Provides various global game functions, such as getting the player, mounted vehicles, and converting names to strings.
 ---@class Game
 ---@field NameToString fun(value: CName): string # Converts a game name object to a readable string.
+---@field EnumValueFromString fun(enumName: string, valueName: string): any # Converts an enum name and value string into its corresponding cdata enum value.
+---@field GetLocalizedText fun(key: string): string # Returns the localized text for the specified localization key, e.g., "LocKey#1234".
 ---@field GetSystemRequestsHandler fun(): SystemRequestsHandler # Provides access to system requests, e.g., game version.
 ---@field GetResourceDepot fun(): ResourceDepot? # Returns the resource depot object, or nil if not available.
 ---@field GetPlayer fun(): Player? # Retrieves the current player instance if available.

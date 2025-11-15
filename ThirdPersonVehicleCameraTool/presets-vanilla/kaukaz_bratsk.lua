@@ -1,0 +1,1 @@
+return{ID="v_utility4_kaukaz_bratsk_Preset",Close={y=0.4,d=-1.8},Medium={y=0.4,d=-0.4},Far={y=0.4,d=5},IsVanilla=true}

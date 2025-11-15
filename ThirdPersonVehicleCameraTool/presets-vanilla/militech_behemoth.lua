@@ -1,0 +1,1 @@
+return{ID="v_utility4_militech_behemoth_Preset",Close={y=0.15,d=-0.5},Medium={y=0.15,d=0.7},Far={y=0.15,d=5},IsVanilla=true}
