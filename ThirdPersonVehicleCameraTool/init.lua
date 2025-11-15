@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-11, 20:01 UTC+01:00 (MEZ)
+Version: 2025-04-12, 13:11 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -127,6 +127,7 @@ TDBID = TDBID
 ---@field NameToString fun(value: any): string # Converts a game name object to a readable string.
 ---@field GetPlayer fun(): Player|nil # Retrieves the current player instance if available.
 ---@field GetMountedVehicle fun(player: Player): Vehicle|nil # Returns the vehicle the player is currently mounted in, if any.
+---@field GetVehicleSystem fun(): IVehicleSystem|nil # Returns the global VehicleSystem, used to query and control player vehicles.
 Game = Game
 
 ---Represents the player character in the game, providing functions to interact with the player instance.
@@ -140,6 +141,10 @@ Player = Player
 ---@field GetRecordID fun(self: Vehicle): any # Returns the unique TweakDBID associated with the vehicle.
 ---@field GetTDBID fun(self: Vehicle): TDBID|nil # Retrieves the internal TweakDB identifier used to reference this vehicle in the game database. Returns `nil` if unavailable.
 Vehicle = Vehicle
+
+---Provides access to vehicle-related systems, including vehicle registration, unlocking, and lookup functions.
+---@class IVehicleSystem
+---@field GetPlayerVehicles fun(self: IVehicleSystem): table[] # Returns all registered vehicles for the player. Each entry includes at least a `recordID` field (TDBID).
 
 ---Represents a three-dimensional vector, commonly used for positions or directions in the game.
 ---@class Vector3
@@ -255,7 +260,7 @@ local TWEAKDB_PATH_LEVELS = {
 ---@type string[]
 local CAMERA_LEVELS = { "Close", "Medium", "Far" }
 
----Constant array of `OffsetData` keys.
+---Constant array of `IOffsetData` keys.
 ---@type string[]
 local OFFSETDATA_KEYS = { "a", "x", "y", "z" }
 
@@ -272,7 +277,7 @@ local _isVehicleMounted = false
 local _modifiedPresets = {}
 
 ---Represents a camera offset configuration with rotation and positional data.
----@class OffsetData
+---@class IOffsetData
 ---@field a number # The camera's angle in degrees.
 ---@field x number # The offset on the X-axis.
 ---@field y number # The offset on the Y-axis.
@@ -281,9 +286,9 @@ local _modifiedPresets = {}
 ---Represents a vehicle camera preset or links to another one.
 ---@class CameraPreset
 ---@field ID string|nil # The camera ID used for the vehicle.
----@field Close OffsetData|nil # The offset data for close camera view.
----@field Medium OffsetData|nil # The offset data for medium camera view.
----@field Far OffsetData|nil # The offset data for far camera view.
+---@field Close IOffsetData|nil # The offset data for close camera view.
+---@field Medium IOffsetData|nil # The offset data for medium camera view.
+---@field Far IOffsetData|nil # The offset data for far camera view.
 ---@field Link string|nil # The name of another vehicle appearance to link to (if applicable).
 ---@field IsDefault boolean|nil # Whether to reset to default camera offsets.
 
@@ -476,11 +481,12 @@ end
 ---Checks whether a given value exists in a sequential table.
 ---@param tbl table # The table to search through (must be a sequential array).
 ---@param value any # The value to search for in the table.
+---@param matchPrefix boolean|nil # If true, the function also matches entries that start with the given value.
 ---@return boolean # Returns true if the value exists in the table, otherwise false.
-local function tblContains(tbl, value)
+local function tblContains(tbl, value, matchPrefix)
 	if type(tbl) ~= "table" or value == nil then return false end
 	for _, v in ipairs(tbl) do
-		if v == value then return true end
+		if v == value or matchPrefix and strStartsWith(v, value) then return true end
 	end
 	return false
 end
@@ -699,7 +705,7 @@ local function getPreset(id)
 		local level = CAMERA_LEVELS[(i - 1) % 3 + 1]
 		local angle = getCameraDefaultRotationPitch(id, path)
 
-		---@cast preset table<string, OffsetData>
+		---@cast preset table<string, IOffsetData>
 		preset[level] = {
 			a = angle,
 			x = vec3.x,
@@ -757,7 +763,7 @@ end
 ---@return number z # The Z offset value. Falls back to a default per level (Close = 1.115, Medium = 1.65, Far = 2.25).
 local function getOffsetData(preset, fallback, level)
 	if type(preset) ~= "table" or not tblContains(CAMERA_LEVELS, level) then
-		Log(LogLevel.ERROR, Text.LOG_NO_PRESET_FOR_LEVEL, level)
+		LogE(DevLevel.FULL, LogLevel.ERROR, Text.LOG_NO_PRESET_FOR_LEVEL, level)
 		return 0, 0, 0, 0 --Should never be returned with the current code.
 	end
 
@@ -937,15 +943,44 @@ local function loadPresets(refresh)
 			return -1
 		end
 
+		local isDefault = path == "defaults"
+		local installedVehicles = {}
+		if not isDefault then
+			local vs = Game.GetVehicleSystem()
+			local ents = vs and vs:GetPlayerVehicles() or {}
+			for _, v in ipairs(ents) do
+				local id = v.recordID
+				if not id then goto continue end
+
+				local name = TDBID.ToStringDEBUG(id)
+				name = name and name:gsub("^Vehicle%.", "")
+				if not name then goto continue end
+
+				table.insert(installedVehicles, name)
+
+				local app = TweakDB:GetFlat(name .. ".appearanceName")
+				name = app and Game.NameToString(app)
+				if not name then goto continue end
+
+				table.insert(installedVehicles, name)
+
+				::continue::
+			end
+		end
+
 		local count = 0
 		for _, file in ipairs(files) do
 			local name = file.name
 			if not name or not fileIsLua(name) then goto continue end
 
-			local key = name:sub(1, -5)
+			local key = fileWithoutLuaExt(name)
 			if _cameraPresets[key] then
 				count = count + 1
-				Log(LogLevel.WARN, Text.LOG_SKIPPED_PRESET, key, path, name)
+				LogE(DevLevel.BASIC, LogLevel.WARN, Text.LOG_SKIPPED_PRESET, key, path, name)
+				goto continue
+			end
+
+			if not isDefault and not tblContains(installedVehicles, key, true) then
 				goto continue
 			end
 
@@ -958,7 +993,9 @@ local function loadPresets(refresh)
 			local ok, result = pcall(chunk)
 			if ok and setPresetEntry(key, result) then
 				count = count + 1
-				Log(LogLevel.INFO, Text.LOG_LOADED_PRESET, key, path, name)
+				if not isDefault then
+					LogE(DevLevel.BASIC, LogLevel.INFO, Text.LOG_LOADED_PRESET, key, path, name)
+				end
 				goto continue
 			end
 
@@ -979,6 +1016,7 @@ local function loadPresets(refresh)
 		LogE(DevLevel.FULL, LogLevel.ERROR, Text.LOG_DEFAULTS_INCOMPLETE)
 		return
 	end
+	LogE(DevLevel.BASIC, LogLevel.INFO, Text.LOG_DEFAULTS_LOADED)
 
 	_isEnabled = loadFrom("presets") >= 0
 end
@@ -1312,7 +1350,7 @@ registerForEvent("onDraw", function()
 				end
 
 				addTooltip(F(Text.GUI_TABLE_VALUE_PRESET_TOOLTIP, isNotDefault and extValue or fileWithLuaExt(name), name,
-				appName, nameShortenSmart(name), nameShortenSmart(appName)))
+					appName, nameShortenSmart(name), nameShortenSmart(appName)))
 
 				ImGui.PopItemWidth()
 			else
