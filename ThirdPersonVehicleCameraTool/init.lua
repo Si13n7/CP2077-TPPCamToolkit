@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-10-08, 20:41 UTC+01:00 (MEZ)
+Version: 2025-10-09, 22:44 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -564,7 +564,10 @@ local gui = {
 	---Forces a one–frame skip in `onDraw` after certain events (e.g. onUnmount).
 	---Used to ensure `getMetrics()` is executed once, then discarded,
 	---so the next frame can rebuild the window with a clean width.
-	doMetricsReset = true,
+	forceMetricsReset = true,
+
+	---Indicates whether window bounds validation is currently active.
+	isValidating = false,
 
 	---When set to true, disables dynamic window padding
 	---adjustments and uses the fixed `gui.paddingWidth` value.
@@ -842,17 +845,6 @@ local function areNumeric(...)
 		end
 	end
 	return true
-end
-
----Ensures the input is returned as a table.
----If the input is already a table, it is returned as-is.
----If the input is nil, returns an empty table.
----Otherwise, wraps the input in a new table.
----@param x any? # The value to cast into a table.
----@return table # The resulting table.
-local function castTable(x)
-	if x == nil then return {} end
-	return isTable(x) and x or { x }
 end
 
 ---Checks whether a numeric value lies within a specified inclusive range.
@@ -1241,6 +1233,25 @@ end
 local function pick(i, ...)
 	local len = select("#", ...)
 	return select(i < len and i or len, ...)
+end
+
+---Returns the i-th element of a table or the value itself if it's not a table.
+---@param x any # A table or any other value
+---@param i integer # Index to access if values is a table
+---@return any # The element at index i if values is a table, otherwise values itself
+local function pluck(x, i)
+	return isTable(x) and x[i] or x
+end
+
+---Ensures the input is returned as a table.
+---If the input is already a table, it is returned as-is.
+---If the input is nil, returns an empty table.
+---Otherwise, wraps the input in a new table.
+---@param x any? # The value to cast into a table.
+---@return table # The resulting table.
+local function tabular(x)
+	if x == nil then return {} end
+	return isTable(x) and x or { x }
 end
 
 ---Converts any value to a readable string representation.
@@ -2325,7 +2336,7 @@ local function updateAdvancedConfigDefaultParams(doRestore)
 			local commit = false
 			for var, value in pairs(DefaultParams.Vars) do
 				local key = section and format("%s.%s", section, var)
-				local default = key and isTable(value) and value[i] or value
+				local default = key and pluck(value, i)
 				local current = default and TweakDB:GetFlat(key)
 				if current and current ~= default then
 					commit = true
@@ -3467,7 +3478,7 @@ local function saveAdvancedOptions()
 			local current = serialize(value)
 
 			local default = DefaultParams.Vars[name]
-			default = serialize(isTable(default) and default[i] or default)
+			default = serialize(pluck(default, i))
 			if equals(current, default) then
 				config.advancedOptions[i][name] = nil
 				if not isTableValid(config.advancedOptions[i]) then
@@ -3711,41 +3722,46 @@ end
 
 --#region 🎨 UI Layout Helpers
 
----Calculates UI layout metrics based on the current content region and font size.
----Uses a baseline font height of 18px to derive a scale factor.
----If `gui.isPaddingLocked` is true and `gui.paddingWidth` is already set, returns the locked value.
----@return number width # Available width of the content region in pixels.
----@return number half # Half of `width` minus half the item spacing.
----@return number spacing # Item spacing width.
----@return number scale # UI scale factor (fontSize / 18).
----@return number padding # Computed horizontal padding (pixels), at least 10 * scale when unlocked.
----@return number scrollbarWidth # Vertical scrollbar width.
-local function getMetrics()
-	local w = ImGui.GetContentRegionAvail()
-
-	local st = ImGui.GetStyle()
-	local sp = st.ItemSpacing.x
-
-	local h = ImGui.GetFontSize()
-	local s = h / 18
-
-	if gui.doMetricsReset then
-		w = 240 * s
+---Ensures an ImGui window stays fully within the screen boundaries and optionally repositions it.
+---If any of the `x`, `y`, `width`, `height`, `maxWidth`, or `maxHeight` parameters are not provided,
+---the function automatically queries the current window position/size and display resolution.
+---@param x number? # Optional X position of the window.
+---@param y number? # Optional Y position of the window.
+---@param width number? # Optional width of the window.
+---@param height number? # Optional height of the window.
+---@param maxWidth number? # Optional maximum screen width; defaults to display width.
+---@param maxHeight number? # Optional maximum screen height; defaults to display height.
+---@return boolean isValidated # True if the window position was adjusted to fit within bounds.
+---@return number newX # The validated X position.
+---@return number newY # The validated Y position.
+---@return number width # The width of the window.
+---@return number height # The height of the window.
+---@return number maxWidth # The maximum screen width.
+---@return number maxHeight # The maximum screen height.
+local function validateWindowBounds(x, y, width, height, maxWidth, maxHeight, parent)
+	if not areNumber(x, y) then
+		x, y = ImGui.GetWindowPos()
+		---@cast x number
+		---@cast y number
 	end
-
-	local hf = w * 0.5
-	hf = math.min(hf, ceil(abs(hf - (sp * 0.5))))
-
-	if gui.isPaddingLocked then
-		return w, hf, sp, s, gui.paddingWidth, st.ScrollbarSize
+	if not areNumber(width, height) then
+		width, height = ImGui.GetWindowSize()
+		---@cast width number
+		---@cast height number
 	end
-
-	local bw = 240 * s
-	local bo = 22 * s
-	local rp = (w - bw) * 0.5 + bo - sp
-	gui.paddingWidth = ceil(math.max(16 * s, rp))
-
-	return w, hf, sp, s, gui.paddingWidth, st.ScrollbarSize
+	if not areNumber(maxWidth, maxHeight) then
+		maxWidth, maxHeight = GetDisplayResolution()
+		---@cast maxWidth number
+		---@cast maxHeight number
+	end
+	local newX = clamp(x, 0, maxWidth - width)
+	local newY = clamp(y, 0, maxHeight - height)
+	local isValidated = false
+	if newX ~= x or newY ~= y then
+		isValidated = true
+		ImGui.SetWindowPos(newX, newY)
+	end
+	return isValidated, newX, newY, width, height, maxWidth, maxHeight
 end
 
 ---Aligns the next ImGui item horizontally, vertically, or both.
@@ -4000,45 +4016,142 @@ local function addPopupYesNo(id, text, scale, yesBtnColor, noBtnColor)
 	return result
 end
 
----Draws and manages the Advanced Settings window.
----@param scale number # Scaling factor for UI elements, affects minimum and maximum window size.
----@param x number? # Optional X position for the window. Must be provided together with `y` to explicitly set position.
----@param y number? # Optional Y position for the window.
----@param w number? # Optional width for the window. Must be provided together with `h` to explicitly set the size.
----@param h number? # Optional height for the window.
-local function openAdvancedOptionsWindow(scale, x, y, w, h)
-	if not config.isAdvancedOpen or not areNumber(scale) then return end
-
-	local minWidth, minHeight = 440 * scale, 200 * scale
-	local maxWidth, maxHeight = 600 * scale, math.huge
-	ImGui.SetNextWindowSizeConstraints(minWidth, minHeight, maxWidth, maxHeight)
-
-	if areNumber(x, y) then
-		---@cast x number
-		---@cast y number
-		ImGui.SetNextWindowPos(x, y)
+---Draws and manages the Global Settings window.
+---@param scale number # UI scale factor based on current DPI and font size.
+---@param x number # X-coordinate of the window's top-left corner.
+---@param y number # Y-coordinate of the window's top-left corner.
+---@param width number # Width of the window in pixels.
+---@param height number # Height of the window in pixels. Minimum height enforced internally.
+---@param halfContentWidth number # Half of the usable content width, used for calculating button widths.
+---@param heightPadding number # Vertical spacing below the table, in pixels.
+---@param buttonHeight number # Height of buttons in pixels.
+---@param sbarWidth number # Width of the vertical scrollbar, used for button layout adjustments.
+---@return boolean # Returns true if the Advanced Settings section was just opened by the user; false otherwise.
+local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWidth, heightPadding, buttonHeight, sbarWidth)
+	if not config.isOpen or not areNumber(scale, x, y, width, height, halfContentWidth, heightPadding, buttonHeight, sbarWidth) then
+		return false
 	end
 
-	if areNumber(w, h) then
-		---@cast w number
-		---@cast h number
-		ImGui.SetNextWindowSize(w, h)
+	ImGui.SetNextWindowPos(x, y)
+
+	height = math.max(height, 210 * scale)
+	ImGui.SetNextWindowSize(width, height)
+
+	local flags = bor(ImGuiWindowFlags.NoResize, ImGuiWindowFlags.NoMove, ImGuiWindowFlags.NoCollapse)
+	config.isOpen = ImGui.Begin(Text.GUI_GSETS, config.isOpen, flags)
+	if not config.isOpen then return false end
+
+	if not isTableValid(config.options) or not ImGui.BeginTable("GlobalOptions", 2, ImGuiTableFlags.Borders) then
+		ImGui.End()
+		return false
+	end
+
+	ImGui.TableSetupColumn(" \u{f0572}", ImGuiTableColumnFlags.WidthStretch)
+	ImGui.TableSetupColumn(" \u{f189a}", ImGuiTableColumnFlags.WidthFixed)
+	ImGui.TableHeadersRow()
+
+	for key, option in opairs(config.options) do
+		---@cast key string
+		---@cast option IOptionData
+		ImGui.TableNextRow()
+
+		ImGui.TableNextColumn()
+		ImGui.Text(tostring(option.DisplayName or key))
+
+		ImGui.TableNextColumn()
+		local current = option.Value
+		local label = "##" .. key
+		if isBoolean(current) then ---@cast current boolean
+			local recent = ImGui.Checkbox(label, current)
+			if recent ~= current then
+				updateConfigDefaultParam(key, recent, true)
+			end
+			addTooltip(scale, option.Tooltip)
+		elseif isNumber(current) then ---@cast current number
+			local min = option.Min ---@cast min number
+			local max = option.Max ---@cast max number
+			if not areNumber(min, max) then
+				min = -math.huge
+				max = math.huge
+			end
+			ImGui.PushItemWidth(floor(24 * scale * #format("%3s", max) * 0.5))
+
+			local speed = option.Speed or 0.01
+			local fmt = speed < 1 and ("%." .. abs(floor(math.log(speed, 10))) .. "f") or "%.0f"
+			local recent = ImGui.DragFloat(label, current, speed, min, max, fmt)
+			if recent ~= current and inRange(recent, min, max) then
+				updateConfigDefaultParam(key, recent, true)
+			end
+
+			ImGui.PopItemWidth()
+
+			addTooltip(nil, split(format(option.Tooltip, option.Default, min, max), "|"))
+		else
+			ImGui.Text(Text.GUI_NONE)
+		end
+	end
+
+	ImGui.EndTable()
+	ImGui.Dummy(0, heightPadding)
+
+	local isAdvancedOpening = false
+
+	local buttonWidth = halfContentWidth - (ImGui.GetScrollMaxY() > 0 and sbarWidth / 2 or 0)
+	if ImGui.Button(Text.GUI_GOPT_ADVANCED, buttonWidth, buttonHeight) then
+		config.isAdvancedOpen = not config.isAdvancedOpen
+		isAdvancedOpening = config.isAdvancedOpen
+	end
+	addTooltip(scale, Text.GUI_GOPT_ADVANCED_TIP)
+	ImGui.SameLine()
+
+	if ImGui.Button(Text.GUI_GOPT_RESET, buttonWidth, buttonHeight) then
+		for key, option in pairs(config.options) do
+			updateConfigDefaultParam(key, option.Default, true)
+		end
+	end
+	addTooltip(scale, Text.GUI_GOPT_RESET_TIP)
+
+	ImGui.End()
+
+	return isAdvancedOpening
+end
+
+---Draws and manages the Advanced Settings window.
+---@param scale number # UI scale factor based on current DPI and font size.
+---@param isOpening boolean # True if the window is being opened; positions and sizes are reset accordingly.
+---@param maxWidth number # Screen width for window positioning and constraints.
+---@param maxHeight number # Screen height for window positioning and constraints.
+local function openAdvancedOptionsWindow(scale, isOpening, maxWidth, maxHeight)
+	if not config.isAdvancedOpen or not areNumber(scale) then return end
+
+	ImGui.SetNextWindowSizeConstraints(440 * scale, 200 * scale, 600 * scale, maxHeight or math.huge)
+
+	local x, y, width, height
+	if isOpening and areNumber(maxWidth, maxHeight) then
+		width, height = 460 * scale, maxHeight * 0.85
+		x, y = (maxWidth - width) * 0.5, (maxHeight - height) * 0.25
+		ImGui.SetNextWindowPos(x, y)
+		ImGui.SetNextWindowSize(width, height)
 	end
 
 	config.isAdvancedOpen = ImGui.Begin(Text.GUI_AOPT_TITLE, config.isAdvancedOpen, ImGuiWindowFlags.NoCollapse)
 	if not config.isAdvancedOpen then return end
 
+	if validateWindowBounds(x, y, width, height, maxWidth, maxHeight) then
+		ImGui.End()
+		return
+	end
+
 	local cache = getCache(0x2e7c) or {}
 	local wheels = { "\u{f07ac} ", "\u{f037c} " }
-	local _, ch, fh = ImGui.GetContentRegionAvail()
+	local _, regionHeight, frameHeight = ImGui.GetContentRegionAvail()
 	for i, section in ipairs(DefaultParams.Keys) do
 		cache[i] = ImGui.CollapsingHeader(wheels[i] .. section, bor(ImGuiTreeNodeFlags.DefaultOpen))
 		if not cache[i] then goto continue end
 
-		fh = fh or ImGui.GetFrameHeight()
-
-		local height = (cache[1] and cache[2] and ch / 2 - fh * 1.5 or ch - fh * 3)
-		if ImGui.BeginChild("TableChild_" .. section .. i, 0, height, false) then
+		frameHeight = frameHeight or ImGui.GetFrameHeight()
+		local childHeight = (cache[1] and cache[2] and regionHeight / 2 - frameHeight * 1.5 or regionHeight - frameHeight * 3)
+		if ImGui.BeginChild("TableChild_" .. section .. i, 0, childHeight, false) then
 			if ImGui.BeginTable("DataTable_" .. section .. i, 3, bor(ImGuiTableFlags.Borders, ImGuiTableFlags.RowBg)) then
 				ImGui.TableSetupColumn("##" .. 0, ImGuiTableColumnFlags.WidthFixed, -1)
 				ImGui.TableSetupColumn("##" .. 1, ImGuiTableColumnFlags.WidthStretch)
@@ -4052,7 +4165,7 @@ local function openAdvancedOptionsWindow(scale, x, y, w, h)
 
 					ImGui.TableNextColumn()
 
-					local default = isTable(values) and values[i] or values
+					local default = pluck(values, i)
 					local current = get(config.advancedOptions, default, i, var)
 					local recent
 					ImGui.PushItemWidth(-1)
@@ -4110,138 +4223,21 @@ local function openAdvancedOptionsWindow(scale, x, y, w, h)
 	ImGui.End()
 end
 
----Draws and manages the Global Settings window.
----@param scale number # UI scale factor based on current DPI and font size.
----@param halfContentWidth number # The half width of the content region to size the buttons.
----@param controlPadding number # Left padding used to center content within the window.
----@param heightPadding number # Height padding used to center content within the window.
----@param buttonHeight number # Height of the button.
----@param scrollbarWidth number # Width of vertical scrollbar.
----@param x number? # Optional X position to place the window. Must be provided together with `y` to explicitly set position.
----@param y number? # Optional Y position to place the window.
----@param w number? # Optional width for the window. Must be provided together with `h` to explicitly set size.
----@param h number? # Optional height for the window.
-local function openGlobalOptionsWindow(scale, halfContentWidth, controlPadding, heightPadding, buttonHeight, scrollbarWidth, x, y, w, h)
-	if not config.isOpen or not areNumber(scale, controlPadding, heightPadding) then return end
-
-	if areNumber(x, y) then
-		---@cast x number
-		---@cast y number
-		ImGui.SetNextWindowPos(x, y)
-	end
-
-	if areNumber(w, h) then
-		---@cast w number
-		---@cast h number
-		ImGui.SetNextWindowSize(w, h)
-	end
-
-	local flags = bor(ImGuiWindowFlags.NoResize, ImGuiWindowFlags.NoMove, ImGuiWindowFlags.NoCollapse)
-	config.isOpen = ImGui.Begin(Text.GUI_GSETS, config.isOpen, flags)
-	if not config.isOpen then
-		if config.isAdvancedOpen then
-			config.isAdvancedOpen = false
-		end
-		return
-	end
-
-	if not isTableValid(config.options) or not ImGui.BeginTable("GlobalOptions", 2, ImGuiTableFlags.Borders) then
-		ImGui.End()
-		return
-	end
-
-	ImGui.TableSetupColumn(" \u{f0572}", ImGuiTableColumnFlags.WidthStretch)
-	ImGui.TableSetupColumn(" \u{f189a}", ImGuiTableColumnFlags.WidthFixed)
-	ImGui.TableHeadersRow()
-
-	for key, option in opairs(config.options) do
-		---@cast key string
-		---@cast option IOptionData
-		ImGui.TableNextRow()
-
-		ImGui.TableNextColumn()
-		ImGui.Text(tostring(option.DisplayName or key))
-
-		ImGui.TableNextColumn()
-		local current = option.Value
-		local label = "##" .. key
-		if isBoolean(current) then ---@cast current boolean
-			local recent = ImGui.Checkbox(label, current)
-			if recent ~= current then
-				updateConfigDefaultParam(key, recent, true)
-			end
-			addTooltip(scale, option.Tooltip)
-		elseif isNumber(current) then ---@cast current number
-			local min = option.Min ---@cast min number
-			local max = option.Max ---@cast max number
-			if not areNumber(min, max) then
-				min = -math.huge
-				max = math.huge
-			end
-
-			local width = floor(24 * scale) * #format("%3s", max) / 2
-			ImGui.PushItemWidth(width)
-
-			local speed = option.Speed or 0.01
-			local fmt
-			if speed < 1 then
-				---@diagnostic disable-next-line
-				fmt = "%." .. abs(floor(math.log10(speed))) .. "f"
-			else
-				fmt = "%.0f"
-			end
-
-			local recent = ImGui.DragFloat(label, current, speed, min, max, fmt)
-			if recent ~= current and inRange(recent, min, max) then
-				updateConfigDefaultParam(key, recent, true)
-			end
-
-			ImGui.PopItemWidth()
-
-			addTooltip(nil, split(format(option.Tooltip, option.Default, min, max), "|"))
-		else
-			ImGui.Text(Text.GUI_NONE)
-		end
-	end
-
-	ImGui.EndTable()
-	ImGui.Dummy(0, heightPadding)
-
-	local sbarWidth = ImGui.GetScrollMaxY() > 0 and scrollbarWidth / 2 or 0
-	local nx, ny, nw, nh
-	if ImGui.Button(Text.GUI_GOPT_ADVANCED, halfContentWidth - sbarWidth, buttonHeight) then
-		config.isAdvancedOpen = not config.isAdvancedOpen
-		local sw, sh = GetDisplayResolution()
-		nw, nh = 460 * scale, sh * 0.85
-		nx, ny = (sw - nw) * 0.5, (sh - nh) * 0.25
-	end
-	addTooltip(scale, Text.GUI_GOPT_ADVANCED_TIP)
-	ImGui.SameLine()
-
-	if ImGui.Button(Text.GUI_GOPT_RESET, halfContentWidth - sbarWidth, buttonHeight) then
-		for key, option in pairs(config.options) do
-			updateConfigDefaultParam(key, option.Default, true)
-		end
-	end
-	addTooltip(scale, Text.GUI_GOPT_RESET_TIP)
-
-	ImGui.End()
-
-	openAdvancedOptionsWindow(scale, nx, ny, nw, nh)
-end
-
 ---Draws and manages the Preset File Explorer window.
----Displays all available preset files, allows file deletion, shows usage stats, and supports live search filtering.
 ---@param scale number # UI scale factor based on current DPI and font size.
----@param controlPadding number # Left padding used to center content within the window.
----@param halfHeightPadding number # Vertical padding between UI elements.
----@param buttonHeight number # Height of the file action buttons.
----@param x number? # Optional X position to place the window. Must be provided together with `y` to explicitly set position.
----@param y number? # Optional Y position to place the window.
----@param w number? # Optional width for the window. Must be provided together with `h` to explicitly set size.
----@param h number? # Optional height for the window.
-local function openFileExplorerWindow(scale, controlPadding, halfHeightPadding, buttonHeight, x, y, w, h)
-	if not explorer.isOpen or not areNumber(scale, controlPadding, halfHeightPadding, buttonHeight) then return end
+---@param isOpening boolean # Whether the window is being opened (to set initial position and size).
+---@param x number # The initial X position of the window, used only on first opening.
+---@param y number # The initial Y position of the window, used only on first opening.
+---@param width number # The initial width of the window.
+---@param height number # The initial height of the window.
+---@param maxHeight number # The maximum height allowed for the window.
+---@param controlPadding number # Padding used for UI spacing and alignment.
+---@param halfHeightPadding number # Half of the vertical padding value, used for layout spacing.
+---@param buttonHeight number # The height for button controls in the file table.
+local function openFileExplorerWindow(scale, isOpening, x, y, width, height, maxHeight, controlPadding, halfHeightPadding, buttonHeight)
+	if not explorer.isOpen or not areNumber(scale, x, y, width, height, maxHeight, controlPadding, halfHeightPadding, buttonHeight) then
+		return
+	end
 
 	local cache = getCache(0x970b, true) or {}
 	local dirs = cache.dirs or {
@@ -4275,21 +4271,20 @@ local function openFileExplorerWindow(scale, controlPadding, halfHeightPadding, 
 		return
 	end
 
-	if areNumber(x, y) then
-		---@cast x number
-		---@cast y number
+	height = math.max(height, 400 * scale)
+	if isOpening then
 		ImGui.SetNextWindowPos(x, y)
+		ImGui.SetNextWindowSize(width, height)
 	end
+	ImGui.SetNextWindowSizeConstraints(width, height, math.max(width, 400 * scale), maxHeight)
 
-	if areNumber(w, h) then
-		---@cast w number
-		---@cast h number
-		ImGui.SetNextWindowSize(w, h)
-	end
-
-	local flags = bor(ImGuiWindowFlags.NoResize, ImGuiWindowFlags.NoMove, ImGuiWindowFlags.NoCollapse)
-	explorer.isOpen = ImGui.Begin(Text.GUI_FEXP, explorer.isOpen, flags)
+	explorer.isOpen = ImGui.Begin(Text.GUI_FEXP, explorer.isOpen, ImGuiWindowFlags.NoCollapse)
 	if not explorer.isOpen then return end
+
+	if validateWindowBounds() then
+		ImGui.End()
+		return
+	end
 
 	local barFlags = bor(ImGuiTableFlags.NoBordersInBody, ImGuiTableFlags.SizingFixedFit)
 	local barHeight = floor(32 * scale)
@@ -4521,7 +4516,7 @@ local function onUnmount(force)
 		log(LogLevels.INFO, 0x9dee, Text.LOG_EVNT_UMNT)
 	end
 
-	gui.doMetricsReset = true
+	gui.forceMetricsReset = true
 	savePresetUsage()
 
 	restoreModifiedPresets()
@@ -4668,9 +4663,11 @@ registerForEvent("onInit", function()
 			backupDevMode = backupDevMode or state.devMode
 			state.devMode = DevLevels.DISABLED
 			config.isOpen = false
+			config.isAdvancedOpen = false
 			explorer.isOpen = false
 			return
 		end
+		gui.isOverlaySuppressed = false
 		if backupDevMode ~= nil then
 			state.devMode = backupDevMode
 			backupDevMode = nil
@@ -4713,15 +4710,28 @@ registerForEvent("onInit", function()
 	end)
 
 	--Registers menu event observers and maps them to GUI state updates.
-	local function suppressOverlay() gui.isOverlaySuppressed = true end
-	local function releaseOverlay() gui.isOverlaySuppressed = false end
-	local function autoToggleOverlay(a, b) gui.isOverlaySuppressed = not isBoolean(b) and a or b end
-	local function resetMetrics()
-		gui.doMetricsReset = true
-		config.isOpen = false
-		explorer.isOpen = false
-		setCache(0xcb3d, nil) --Clear `onDraw` cache.
+	local function suppressOverlay()
+		gui.isOverlaySuppressed = true
+		logIf(DevLevels.FULL, LogLevels.INFO, 0x60b9, Text.LOG_MENU_SUPPRESS)
 	end
+
+	local function releaseOverlay()
+		gui.isOverlaySuppressed = false
+		logIf(DevLevels.FULL, LogLevels.INFO, 0x60b9, Text.LOG_MENU_RELEASE)
+	end
+
+	local function autoToggleOverlay(a, b)
+		gui.isOverlaySuppressed = not isBoolean(b) and a or b
+		logIf(DevLevels.FULL, LogLevels.INFO, 0x60b9, Text.LOG_MENU_TOGGLE)
+	end
+
+	local function resetMetrics()
+		gui.forceMetricsReset = true
+		config.isOpen = false
+		setCache(0xcb3d, nil) --Clear `onDraw` cache.
+		logIf(DevLevels.FULL, LogLevels.INFO, 0x60b9, Text.LOG_MENU_RESET)
+	end
+
 	local menuObservers = {
 		[suppressOverlay] = {
 			OnEnterScenario  = {
@@ -4756,7 +4766,7 @@ registerForEvent("onInit", function()
 	}
 	for handler, events in pairs(menuObservers) do
 		for event, scenarios in pairs(events) do
-			scenarios = castTable(scenarios)
+			scenarios = tabular(scenarios)
 			for _, scenario in ipairs(scenarios) do
 				Observe(scenario, event, handler)
 			end
@@ -4772,9 +4782,6 @@ end)
 --Detects when the CET overlay is closed.
 registerForEvent("onOverlayClose", function()
 	gui.isOverlayOpen = false
-	config.isOpen = false
-	explorer.isOpen = false
-	explorer.searchText = ExplorerCommands.INSTALLED
 	setCache(0x970b, nil, true) --Clear `openFileExplorerWindow` cache.
 	saveGlobalOptions()
 	saveAdvancedOptions()
@@ -4812,36 +4819,58 @@ registerForEvent("onDraw", function()
 	end
 
 	--Main window begins.
-	local flags = ImGuiWindowFlags.AlwaysAutoResize
+	local flags = gui.isValidating and 0 or ImGuiWindowFlags.AlwaysAutoResize
 	if not gui.isOverlayOpen then
 		flags = bor(flags, ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.NoFocusOnAppearing, ImGuiWindowFlags.NoInputs)
 	end
 	if not ImGui.Begin(Text.GUI_TITL, flags) then return end
+
+	--Forces ImGui to rebuild the window on the next frame with fresh metrics.
+	if gui.forceMetricsReset then
+		gui.forceMetricsReset = false
+		ImGui.End()
+		return
+	end
+
+	--Ensure the window stays fully within the screen boundaries.
+	local isValidated, winX, winY, winWidth, winHeight, maxWidth, maxHeight = validateWindowBounds()
+	gui.isValidating = isValidated
+	if isValidated then
+		ImGui.End()
+		return
+	end
 
 	local isLocked = gui.isOverlayLocked
 	if isLocked or presets.loaderTask.IsActive then
 		ImGui.BeginDisabled(true)
 	end
 
-	--Computes scaled layout values (content width, control sizes, and paddings) based on the UI scale factor.
-	local contentWidth, halfContentWidth, itemSpacing, scale, controlPadding, scrollbarWidth = getMetrics()
-	local baseContentWidth = floor(240 * scale)
-	local buttonWidth = floor(192 * scale)
+	--Computes scaled layout values.
+	local scale = ImGui.GetFontSize() / 18
+	local contentMinWidth = floor(240 * scale)
+	local buttonWidth = ceil(192 * scale)
 	local buttonHeight = floor(24 * scale)
 	local rowHeight = floor(28 * scale)
 	local heightPadding = floor(4 * scale)
 	local halfHeightPadding = floor(2 * scale)
 	local doubleHeightPadding = floor(8 * scale)
 
-	--Forces ImGui to rebuild the window on the next frame with fresh metrics.
-	if gui.doMetricsReset then
-		gui.doMetricsReset = false
-		ImGui.End()
-		return
-	end
+	local style = ImGui.GetStyle()
+	local itemSpacing = style.ItemSpacing.x
+	local sbarWidth = style.ScrollbarSize
 
-	--Minimum window width and height padding.
-	ImGui.Dummy(baseContentWidth, heightPadding)
+	local contentWidth = ImGui.GetContentRegionAvail()
+	local halfContentWidth = ceil(contentWidth * 0.5)
+	halfContentWidth = math.min(halfContentWidth, ceil(abs(halfContentWidth - (itemSpacing * 0.5))))
+
+	if not gui.isPaddingLocked then
+		local relativePadding = (contentWidth - contentMinWidth) * 0.5 + (22 * scale) - itemSpacing
+		gui.paddingWidth = ceil(math.max(16 * scale, relativePadding))
+	end
+	local controlPadding = gui.paddingWidth
+
+	--Set Minimum window width.
+	ImGui.Dummy(contentMinWidth, heightPadding)
 
 	--Create top controls only if CET is open.
 	if not isStillVisible then
@@ -4889,17 +4918,25 @@ registerForEvent("onDraw", function()
 		end
 
 		--Button to open the Global Settings window.
-		local dpx, dpy, dpw, dph
 		ImGui.Dummy(controlPadding, 0)
 		ImGui.SameLine()
 		if ImGui.Button(Text.GUI_GSETS, buttonWidth, buttonHeight) then
-			dpx, dpy = ImGui.GetWindowPos()
-			dpw, dph = ImGui.GetWindowSize()
-			dph = math.max(dph, 210 * scale)
-			config.isOpen = not config.isOpen
+			config.isOpen = true
 		end
 		ImGui.Dummy(0, halfHeightPadding)
-		openGlobalOptionsWindow(scale, halfContentWidth, controlPadding, heightPadding, buttonHeight, scrollbarWidth, dpx, dpy, dpw, dph)
+		local isAdvancedOpening =
+			openGlobalOptionsWindow(
+				scale,
+				winX,
+				winY,
+				winWidth,
+				winHeight,
+				halfContentWidth,
+				heightPadding,
+				buttonHeight,
+				sbarWidth
+			)
+		openAdvancedOptionsWindow(scale, isAdvancedOpening, maxWidth, maxHeight)
 
 		--Slider to set the developer mode level.
 		local sliderWidth = floor(90 * scale)
@@ -4910,7 +4947,7 @@ registerForEvent("onDraw", function()
 		if devMode ~= state.devMode then
 			state.devMode = clamp(devMode, DevLevels.DISABLED, DevLevels.FULL)
 			if state.devMode == DevLevels.DISABLED then
-				gui.doMetricsReset = true
+				gui.forceMetricsReset = true
 				resetCache(true)
 			end
 		end
@@ -5053,16 +5090,14 @@ registerForEvent("onDraw", function()
 		end
 
 		--Button to open the Preset File Explorer.
-		local x, y, w, h
 		ImGui.Separator()
 		ImGui.Dummy(0, heightPadding)
 		ImGui.Dummy(controlPadding, 0)
 		ImGui.SameLine()
+		local isExplorerOpening = false
 		if ImGui.Button(Text.GUI_FEXP, buttonWidth, buttonHeight) then
-			x, y = ImGui.GetWindowPos()
-			w, h = ImGui.GetWindowSize()
-			h = math.max(h, 400 * scale)
 			explorer.isOpen = not explorer.isOpen
+			isExplorerOpening = explorer.isOpen
 		end
 		ImGui.Dummy(0, halfHeightPadding)
 
@@ -5074,7 +5109,17 @@ registerForEvent("onDraw", function()
 		ImGui.End()
 
 		--Opens the Preset File Explorer window when button triggered.
-		openFileExplorerWindow(scale, controlPadding, halfHeightPadding, buttonHeight, x, y, w, h)
+		openFileExplorerWindow(
+			scale,
+			isExplorerOpening,
+			winX,
+			winY,
+			winWidth,
+			winHeight,
+			maxHeight,
+			controlPadding,
+			halfHeightPadding,
+			buttonHeight)
 		return
 	end
 
@@ -5412,14 +5457,12 @@ registerForEvent("onDraw", function()
 	ImGui.Dummy(0, heightPadding)
 
 	--Button to open the Preset File Explorer.
-	local x, y, w, h
 	ImGui.Separator()
 	ImGui.Dummy(0, halfHeightPadding)
+	local isExplorerOpening = false
 	if ImGui.Button(Text.GUI_FEXP, contentWidth, buttonHeight) then
-		x, y = ImGui.GetWindowPos()
-		w, h = ImGui.GetWindowSize()
-		h = math.max(h, 400 * scale)
 		explorer.isOpen = not explorer.isOpen
+		isExplorerOpening = explorer.isOpen
 	end
 	ImGui.Dummy(0, halfHeightPadding)
 
@@ -5427,7 +5470,18 @@ registerForEvent("onDraw", function()
 	ImGui.End()
 
 	--Opens the Preset File Explorer window when toggled.
-	openFileExplorerWindow(scale, controlPadding, halfHeightPadding, buttonHeight, x, y, w, h)
+	openFileExplorerWindow(
+		scale,
+		isExplorerOpening,
+		winX,
+		winY,
+		winWidth,
+		winHeight,
+		maxHeight,
+		controlPadding,
+		halfHeightPadding,
+		buttonHeight
+	)
 end)
 
 --Restores default camera offsets for vehicles upon mod shutdown.

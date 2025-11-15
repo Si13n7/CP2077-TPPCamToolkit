@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-10-08, 18:48 UTC+01:00 (MEZ)
+Version: 2025-10-09, 22:44 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -98,6 +98,10 @@ return {
 	LOG_EVNT_MNT = "Event 'VehicleComponent:OnMountingEvent' triggered.",
 	LOG_EVNT_UMNT = "Event 'VehicleComponent:OnUnmountingEvent' triggered.",
 	LOG_EVNT_UMNT_FAIL = "Event 'VehicleComponent:OnUnmountingEvent' triggered without any valid reason.",
+	LOG_MENU_RELEASE = "Menu scenario triggered to release the overlay.",
+	LOG_MENU_RESET = "Menu scenario triggered to reset GUI metrics.",
+	LOG_MENU_SUPPRESS = "Menu scenario triggered to suppress the overlay.",
+	LOG_MENU_TOGGLE = "Menu scenario triggered overlay state toggle.",
 	LOG_MOD_OFF = "Mod has been disabled!",
 	LOG_MOD_ON = "Mod has been enabled!",
 	LOG_PARAM_BACKUP = "Backup param (key: '%s'; value: '%s').",

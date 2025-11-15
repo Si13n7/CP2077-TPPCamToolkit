@@ -13,7 +13,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-10-08, 18:48 UTC+01:00 (MEZ)
+Version: 2025-10-09, 22:44 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -54,7 +54,7 @@ ______________________________________________
 ---@field EndTable fun() # Ends the creation of the current table. Must always be called after `ImGui.BeginTable()`.
 ---@field GetColumnWidth fun(columnIndex?: integer): number # Returns the current width in pixels of the specified column index (default: 0). Only valid when called within an active table.
 ---@field GetFrameHeight fun(): number # Returns the height of a standard frame (e.g., button, input box) in pixels.
----@field GetContentRegionAvail fun(): number # Returns the width of the remaining content region inside the current window, excluding padding. Useful for calculating dynamic layouts or centering elements.
+---@field GetContentRegionAvail fun(): number, number # Returns the size of the remaining content region inside the current window, excluding padding. Useful for calculating dynamic layouts or centering elements.
 ---@field GetScrollMaxY fun(): number # Returns the maximum vertical scroll offset of the current window. If greater than 0, a vertical scrollbar is visible. Useful to determine scroll range and scrollbar visibility.
 ---@field CalcTextSize fun(text: string): number # Calculates the width of a given text string as it would be displayed using the current font. Returns the width in pixels as a floating-point number.
 ---@field GetStyle fun(): ImGuiStyle # Returns the current ImGui style object, which contains values for UI layout, spacing, padding, rounding, and more.
@@ -63,6 +63,7 @@ ______________________________________________
 ---@field SetNextWindowPos fun(x: number, y: number) # Sets the position for the next window before calling `ImGui.Begin()`.
 ---@field SetNextWindowSize fun(width: number, height: number) # Sets the size for the next window before calling `ImGui.Begin()`.
 ---@field SetNextWindowSizeConstraints fun(minWidth: number, minHeight: number, maxWidth?: number, maxHeight?: number) # Sets minimum and optional maximum size constraints for the next window. Must be called before `ImGui.Begin()`.
+---@field SetWindowPos fun(x: number, y: number) # Sets the position for the current window.
 ---@field GetFontSize fun(): number # Returns the height in pixels of the currently used font. Useful for vertical alignment calculations.
 ---@field GetCursorPosX fun(): number # Returns the current X-position of the cursor within the window. Can be used to place elements precisely.
 ---@field GetCursorPosY fun(): number # Returns the current Y-position of the cursor within the window. Can be used to place elements precisely.
