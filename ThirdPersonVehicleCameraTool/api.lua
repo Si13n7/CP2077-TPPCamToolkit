@@ -13,7 +13,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-04-28, 00:00 UTC+01:00 (MEZ)
+Version: 2025-05-05, 15:06 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -126,7 +126,6 @@ ImGui.Toast = ImGui.Toast
 ---@class bit32
 ---@field bor fun(...: integer): integer # Bitwise OR of all given integer values.
 ---@field band fun(x: integer, y: integer): integer # Returns the bitwise AND of two integers.
----@field bxor fun(x: integer, y: integer): integer # Returns the bitwise XOR (exclusive or) of two integers.
 ---@field rshift fun(x: integer, disp: integer): integer # Shifts `x` right by `disp` bits, filling in with zeros from the left.
 ---@field lshift fun(x: integer, disp: integer): integer # Shifts `x` left by `disp` bits, discarding bits shifted out on the left.
 bit32 = bit32

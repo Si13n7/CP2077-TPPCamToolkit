@@ -1,1 +1,1 @@
-return{ID="4w_BMF",Close={y=3.4,z=1.8},Medium={y=3,z=2.2},Far={y=3.2,z=2.6}}
+return{ID="4w_BMF",Close={y=3.5,z=1.8},Medium={y=3,z=2.2},Far={y=3.3,z=2.6}}

@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-05-04, 14:15 UTC+01:00 (MEZ)
+Version: 2025-05-05, 15:05 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -74,15 +74,16 @@ return {
 	LOG_LOAD_PSET = "Preset '%s' has been loaded from '%s/%s'.",
 	LOG_MOD_OFF = "Mod has been disabled!",
 	LOG_MOD_ON = "Mod has been enabled!",
-	LOG_PARAM_CAM = "Custom camera entry detected (%s: '%s'), set to '%s'.",
-	LOG_PARAM_MANIP = "Global param manipulation detected (%s: '%s'), reset to '%s'.",
-	LOG_PARAM_REST = "Overriden param found (%s: '%s'), restore to '%s'.",
+	LOG_PARAM_BAK = "Backup param (key: '%s'; value: '%s').",
+	LOG_PARAM_MANIP = "Global param manipulation detected (key: '%s'; value: '%s'), reset value to '%s'.",
+	LOG_PARAM_REST = "Restore param (key: '%s') to value '%s'.",
 	LOG_PSET_SAVED = "File 'presets/%s.lua' was saved successfully.",
 	LOG_PSET_UPD = "The preset '%s' has been updated.",
 	LOG_PSETS_RLD = "Presets have been reloaded.",
 	LOG_REST_ALL = "Restored all default presets.",
 	LOG_REST_PSET = "Preset for ID '%s' has been restored.",
 	LOG_REST_PSETS = "Restored %d/%d changed preset(s).",
+	LOG_ADD_DEF = "Default preset '%s' has been added.",
 
 	--LOG: ⚠️ Warnings
 	LOG_BLANK_NAME = "The new preset name cannot be blank.",
@@ -90,11 +91,11 @@ return {
 	LOG_CLEAR_NPSETS = "Cleared %d loaded camera offset presets whose keys started with '%s'.",
 	LOG_CLEAR_PSETS = "Cleared all loaded camera offset presets.",
 	LOG_FILE_EXIST = "File '%s' already exists, and overwrite is disabled.",
+	LOG_MISS_DEF = "Default preset '%s' could not be found.",
 	LOG_NAME_MISM = "The new preset name must be '%s' or a prefix of it; otherwise, it will not be applied and will be ignored.",
 	LOG_NAMES_MISM = "The new preset name must be '%s', '%s', or a prefix of one of them; otherwise, it will not be applied and will be ignored.",
 	LOG_NO_PLAYER = "No player detected.",
 	LOG_NO_PSET_FOUND = "No preset found for '%s'.",
-	LOG_NO_VEH = "Player not inside any vehicle.",
 	LOG_PSET_NOT_CHANGED = "No changes were made to preset '%s' compared to the default preset '%s'.",
 	LOG_PSET_NOT_SAVED = "File 'presets/%s.lua' could not be saved.",
 	LOG_SKIP_PSET = "Skipping already loaded preset: '%s' ('%s/%s').",
@@ -106,14 +107,13 @@ return {
 	LOG_DIR_NOT_EXIST = "You cannot delete the entire directory under '%s'.",
 	LOG_FAIL_APPLY = "Could not apply preset: incomplete parameters.",
 	LOG_FAIL_LOAD = "Failed to load preset '%s/%s': '%s'.",
-	LOG_MISS_DEF = "Default preset '%s' could not be found.",
 	LOG_MOVE_FAILURE = "Failed to rename preset '%s' to '%s'. %s",
 	LOG_NO_APP = "The vehicle's appearance could not be found.",
 	LOG_NO_CAM_OSET = "Could not retrieve camera offset: '%s'.",
 	LOG_NO_ID = "Vehicle camera ID missing.",
-	LOG_NO_RECID = "Vehicle record ID missing.",
-	LOG_NO_RECN = "Vehicle record name missing.",
 	LOG_NO_KEY = "Unable to define the vehicle's preset key.",
 	LOG_NO_NAME = "Vehicle name not found.",
 	LOG_NO_PSET_FOR_LVL = "No preset provided for level '%s'.",
+	LOG_NO_RECID = "Vehicle record ID missing.",
+	LOG_NO_RECN = "Vehicle record name missing."
 }
