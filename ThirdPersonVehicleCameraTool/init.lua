@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-10-03, 13:46 UTC+01:00 (MEZ)
+Version: 2025-10-05, 12:22 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -33,8 +33,10 @@ Examples:
  - i, x, v                   (local single-character variables)
 
 Development Environment:
- - Editor: Visual Studio Code
- - Lua Extension: sumneko.lua
+ - Editor:    Visual Studio Code
+ - Extension: sumneko.lua
+   - Set `Lua.codeLens.enable = true` in `settings.json`.
+   - Make sure to open the entire project folder.
 --]]
 
 
@@ -101,7 +103,7 @@ Development Environment:
 ---@class IOptionData
 ---@field DisplayName string # The display name.
 ---@field Value any # The current value.
----@field Default any # The game's default value.
+---@field Default boolean|number # The game's default value.
 ---@field Min number? # The minimum value.
 ---@field Max number? # The maximum value.
 ---@field IsDefaultParam boolean? # Determines whether this is treated as TweakDB default parameter of the game.
@@ -242,61 +244,67 @@ local ExplorerCommands = {
 	VANILLA = ":vanilla"
 }
 
----Default parameters including TweakDB keys and variable names.
----@type table<string, string[]>
+---Default parameters, including TweakDB keys, variables, and their values.
 local DefaultParams = {
+	---Indexed TweakDB keys where the first entry applies to four-wheeled vehicles and the second to two-wheeled vehicles.
+	---@type table<integer, string>
 	Keys = {
-		"Camera.VehicleTPP_DefaultParams",
-		"Camera.VehicleTPP_2w_DefaultParams"
+		[1] = "Camera.VehicleTPP_DefaultParams",
+		[2] = "Camera.VehicleTPP_2w_DefaultParams"
 	},
+
+	---The string represents the variable name, and their value is usually a boolean or a number.
+	---However, it can also be a table containing the actual values, separated for four-wheeled and two-wheeled vehicles.
+	---@type table<string, any>
 	Vars = {
-		"airFlowDistortion",
-		"autoCenterMaxSpeedThreshold",
-		"autoCenterSpeed",
-		"cameraBoomExtensionSpeed",
-		"cameraMaxPitch",
-		"cameraMinPitch",
-		"cameraSphereRadius",
-		"collisionDetection",
-		"drivingDirectionCompensation",
-		"drivingDirectionCompensationAngle",
-		"drivingDirectionCompensationAngleSmooth",
-		"drivingDirectionCompensationAngularVelocityMin",
-		"drivingDirectionCompensationSpeedCoef",
-		"drivingDirectionCompensationSpeedMax",
-		"drivingDirectionCompensationSpeedMin",
-		"elasticBoomAcceleration",
-		"elasticBoomAccelerationExpansionLength",
-		"elasticBoomForwardAccelerationCoef",
-		"elasticBoomSpeedExpansionLength",
-		"elasticBoomSpeedExpansionSpeedMax",
-		"elasticBoomSpeedExpansionSpeedMin",
-		"elasticBoomVelocity",
-		"fov",
-		"headLookAtCenterYawThreshold",
-		"headLookAtMaxPitchDown",
-		"headLookAtMaxPitchUp",
-		"headLookAtMaxYaw",
-		"headLookAtRotationSpeed",
-		"inverseCameraInputBreakThreshold",
-		"lockedCamera",
-		"slopeAdjustement",
-		"slopeCorrectionInAirDampFactor",
-		"slopeCorrectionInAirFallCoef",
-		"slopeCorrectionInAirPitchMax",
-		"slopeCorrectionInAirPitchMin",
-		"slopeCorrectionInAirRaiseCoef",
-		"slopeCorrectionInAirSpeedMax",
-		"slopeCorrectionInAirStrength",
-		"slopeCorrectionOnGroundPitchMax",
-		"slopeCorrectionOnGroundPitchMin",
-		"slopeCorrectionOnGroundStrength"
+		airFlowDistortion                              = true,
+		autoCenterMaxSpeedThreshold                    = 20,
+		autoCenterSpeed                                = 5,
+		cameraBoomExtensionSpeed                       = 3,
+		cameraMaxPitch                                 = 80,
+		cameraMinPitch                                 = -28,
+		cameraSphereRadius                             = 1,
+		collisionDetection                             = true,
+		drivingDirectionCompensation                   = true,
+		drivingDirectionCompensationAngle              = 100,
+		drivingDirectionCompensationAngleSmooth        = 70,
+		drivingDirectionCompensationAngularVelocityMin = 150,
+		drivingDirectionCompensationSpeedCoef          = 1,
+		drivingDirectionCompensationSpeedMax           = 120,
+		drivingDirectionCompensationSpeedMin           = 4,
+		elasticBoomAcceleration                        = true,
+		elasticBoomAccelerationExpansionLength         = 0.5,
+		elasticBoomForwardAccelerationCoef             = 10,
+		elasticBoomSpeedExpansionLength                = 0.5,
+		elasticBoomSpeedExpansionSpeedMax              = 20,
+		elasticBoomSpeedExpansionSpeedMin              = 10,
+		elasticBoomVelocity                            = true,
+		fov                                            = 69,
+		headLookAtCenterYawThreshold                   = { [1] = 100, [2] = 140 },
+		headLookAtMaxPitchDown                         = { [1] = 40, [2] = 10 },
+		headLookAtMaxPitchUp                           = { [1] = 0, [2] = 30 },
+		headLookAtMaxYaw                               = { [1] = 70, [2] = 100 },
+		headLookAtRotationSpeed                        = { [1] = 0.8, [2] = 2 },
+		inverseCameraInputBreakThreshold               = 30,
+		lockedCamera                                   = false,
+		slopeAdjustement                               = true,
+		slopeCorrectionInAirDampFactor                 = 0.1,
+		slopeCorrectionInAirFallCoef                   = 2,
+		slopeCorrectionInAirPitchMax                   = 30,
+		slopeCorrectionInAirPitchMin                   = -30,
+		slopeCorrectionInAirRaiseCoef                  = 0.5,
+		slopeCorrectionInAirSpeedMax                   = 10,
+		slopeCorrectionInAirStrength                   = 20,
+		slopeCorrectionOnGroundPitchMax                = 30,
+		slopeCorrectionOnGroundPitchMin                = -30,
+		slopeCorrectionOnGroundStrength                = 4
 	}
 }
 
 ---Camera-related metadata including levels and variable names.
 ---@type table<string, string[]>
 local CameraData = {
+	---All camera levels, e.g. `High_Close`, `High_DriverCombatMedium`, `Low_Far`, and so on.
 	Levels = {
 		"High_Close",
 		"High_Medium",
@@ -311,6 +319,7 @@ local CameraData = {
 		"Low_DriverCombatMedium",
 		"Low_DriverCombatFar"
 	},
+	---All camera variable names, e.g. `boomLengthOffset`, `height`, `lookAtOffset`, and so on.
 	Vars = {
 		"airFlowDistortionSizeHorizontal",
 		"airFlowDistortionSizeVertical",
@@ -379,10 +388,10 @@ local CameraDataInvalidLevelMap = {
 ---Contains base camera levels and corresponding offset keys for presets.
 ---@type table<string, string[]>
 local PresetInfo = {
-	---Constant array of base camera levels.
+	---Constant array of base camera levels (`Close`, `Medium`, and `Far`).
 	Levels = { "Close", "Medium", "Far" },
 
-	---Constant array of `IOffsetData` keys.
+	---Constant array of `IOffsetData` keys (`a`, `x`, `y`, `z`, and `d`).
 	Offsets = { "a", "x", "y", "z", "d" }
 }
 
@@ -449,7 +458,7 @@ local config = {
 		---Game option: adjusts the field of view via `DefaultParams`.
 		fov = {
 			DisplayName = Text.GUI_GOPT_FOV,
-			Default = 69,
+			Default = DefaultParams.Vars["fov"],
 			Min = 10,
 			Max = 150,
 			IsDefaultParam = true
@@ -458,7 +467,7 @@ local config = {
 		---Game option: toggles automatic camera reset in `DefaultParams`.
 		lockedCamera = {
 			DisplayName = Text.GUI_GOPT_NAC,
-			Default = false,
+			Default = DefaultParams.Vars["lockedCamera"],
 			IsDefaultParam = true
 		}
 	},
@@ -507,6 +516,10 @@ local gui = {
 	---Used to trigger `ImGui.BeginDisabled(true)` in frames where no user interaction
 	---is allowed, e.g., during loading sequences or pending asynchronous operations.
 	isOverlayLocked = false,
+
+	---Indicates whether the overlay is currently suppressed by an
+	---in-game menu, so it can't be visible if CET isn't open either.
+	isOverlaySuppressed = false,
 
 	---Determines whether the CET overlay is open.
 	isOverlayOpen = false,
@@ -794,6 +807,17 @@ local function areNumeric(...)
 	return true
 end
 
+---Ensures the input is returned as a table.
+---If the input is already a table, it is returned as-is.
+---If the input is `nil`, returns an empty table.
+---Otherwise, wraps the input in a new table.
+---@param x any? # The value to cast into a table.
+---@return table # The resulting table.
+local function castTable(x)
+	if x == nil then return {} end
+	return isTable(x) and x or { x }
+end
+
 ---Compares two values as alphanumeric strings.
 ---Strings are compared alphabetically, but numeric substrings are
 ---compared as numbers to ensure natural ordering.
@@ -985,6 +1009,17 @@ local function trimLuaExt(s)
 	return hasLuaExt(s) and s:sub(1, -5) or s
 end
 
+---Capitalizes the first letter of each word in a string.
+---@param s string? # The input string to process.
+---@return string # The string with each word's first letter capitalized.
+local function capitalizeWords(s)
+	if not s then return "" end
+	s = tostring(s)
+	return s:gsub("(%w)([%w']*)", function(first, rest)
+		return first:upper() .. rest:lower()
+	end) or s
+end
+
 ---Splits a string into a list of substrings using a specified separator.
 ---@param s string? # The input string to split. If nil, returns an empty table.
 ---@param sep string? # The separator to split by (default: ",").
@@ -1036,8 +1071,7 @@ local function chopUnderscoreParts(s)
 	for p in s:gmatch("[^_]+") do
 		insert(t, p)
 	end
-	local n = floor(#t / 2)
-	n = n < 2 and n + 1 or n
+	local n = floor(#t / 1.25)
 	return concat(t, "_", 1, n)
 end
 
@@ -1200,6 +1234,24 @@ local function serialize(x, pretty, hexNums, indent)
 	return "{}"
 end
 
+---Deserializes a string or a Lua file into a function without executing it.
+---Returns a callable function representing the code and an optional error message.
+---@param x string # A Lua code string or a path to a Lua file.
+---@param isFile boolean? # Whether `x` is a path to a Lua file.
+---@return function? # Callable function that executes the code when called.
+---@return string? # Error message if the code could not be loaded.
+local function deserialize(x, isFile)
+	if not isStringValid(x) then return nil, nil end
+
+	if isFile then
+		return loadfile(x)
+	end
+
+	local str = x:match("^%s*return") and x or "return " .. x
+	---@diagnostic disable-next-line
+	return loadstring(str)
+end
+
 ---Computes an Adler-53 checksum over one or more values without allocating a new table.
 ---
 ---This function implements a custom 53-bit variant of the Adler checksum algorithm,
@@ -1223,8 +1275,7 @@ end
 local function checksum(...)
 	local prime = 0x3fffffb
 	local a, b = 1, 0
-	local len = select('#', ...)
-	for i = 1, len do
+	for i = 1, select("#", ...) do
 		local v = select(i, ...)
 		local s = serialize(v)
 		for j = 1, #s do
@@ -1332,14 +1383,10 @@ local function getRecordName(data)
 	if not data then return nil end
 
 	local ok, result = pcall(TDBID.ToStringDEBUG, data)
-	if ok then return result end
+	if ok then return isStringValid(result) and result or nil end
 
 	local str = (tostring(data):match("%-%-%[%[(.-)%-%-%]%]") or ""):match("^%s*(.-)%s*$")
-	if isStringValid(str) then
-		return str
-	end
-
-	return nil
+	return isStringValid(str) and str or nil
 end
 
 ---Initializes a table in the database.
@@ -1368,19 +1415,16 @@ local function sqliteVacuum()
 	return db:exec("VACUUM;")
 end
 
----Retrieves rows from a table with optional columns.
----@param tableName string # Name of the table
----@param ... string # Optional column names to select, defaults to "*"
----@return table # Array of rows, each row is an array of values
+---Returns an iterator over the rows of a table.
+---Each yielded row is an array (table) of column values.
+---@param tableName string # Name of the table.
+---@param ... string # Optional column names to select, defaults to `*`.
+---@return (fun(): table)? # Iterator returning a row table or `nil` when finished.
 local function sqliteRows(tableName, ...)
-	if not isStringValid(tableName) then return {} end
+	if not isStringValid(tableName) then return end
 	local columns = select("#", ...) > 0 and concat({ ... }, ", ") or "*"
 	local query = format("SELECT %s FROM %s;", columns, tableName)
-	local result = {}
-	for row in db:rows(query) do
-		insert(result, row)
-	end
-	return result
+	return db:rows(query)
 end
 
 ---Inserts or updates a row by primary key.
@@ -1394,7 +1438,7 @@ local function sqliteUpsert(tableName, keyColumn, colValPairs)
 	local fields, values, updates = {}, {}, {}
 	for c, v in pairs(colValPairs) do
 		insert(fields, c)
-		if isNumber(v) or isBoolean(v) then
+		if isBoolean(v) or isNumber(v) then
 			insert(values, tostring(v))
 		elseif isString(v) then
 			v = v:gsub("'", "''")
@@ -1451,7 +1495,6 @@ end
 ---@param persistent boolean? # Optional. If true, use persistent cache; defaults to transient.
 ---@return any # The stored value.
 local function setCache(id, value, persistent)
-	value = value or nil
 	assert(id, Text.THROW_CACHE_ID)
 	if not id then return value end
 	if persistent then
@@ -1651,9 +1694,7 @@ end
 ---@param tid TDBID # The TweakDB ID of the vehicle to look up.
 ---@return string? # The vehicle name if found and valid, otherwise nil.
 local function findVehicleName(tid)
-	if not tid then return nil end
-
-	local hash = tid.hash
+	local hash = tid and tid.hash
 	if not hash then return nil end
 
 	local cache = getCache(0xaad0) or {}
@@ -1688,16 +1729,11 @@ local function getVehicleApperances(name)
 	local cache = getCache(0x2bce) or {}
 	if cache[name] then return cache[name] end
 
-	local path = TweakDB:GetFlat(format("Vehicle.%s.entityTemplatePath", name))
-	if not path then return nil end
-
-	local depot = Game.GetResourceDepot()
-	if not depot then return nil end
-
-	local loader = depot:LoadResource(path)
-	if not loader then return nil end
-
-	local resource = loader:GetResource()
+	local key = format("Vehicle.%s.entityTemplatePath", name)
+	local path = TweakDB:GetFlat(key)
+	local depot = path and Game.GetResourceDepot()
+	local loader = depot and depot:LoadResource(path)
+	local resource = loader and loader:GetResource()
 	if not resource then return nil end
 
 	local result = resource.appearances
@@ -1728,19 +1764,17 @@ local function getAllUniqueVehicleIdentifiers(customOnly)
 	local amount = 0
 	for i = start, length do
 		local name = getRecordName(vehicles[i])
-		if nilOrEmpty(name) then goto continue end ---@cast name string
-
-		name = name:gsub("^Vehicle%.", "")
-		if nilOrEmpty(name) or result[name] then goto continue end
+		name = name and name:gsub("^Vehicle%.", "")
+		if not name or result[name] then goto continue end
 
 		result[name] = true
 		amount = amount + 1
 
 		local apps = getVehicleApperances(name)
-		if nilOrEmpty(apps) then goto continue end ---@cast apps table
+		if not apps then goto continue end
 
 		for _, raw in ipairs(apps) do
-			local cname = raw and raw.name or nil
+			local cname = raw and raw.name
 			if cname then
 				local appName = Game.NameToString(cname)
 				if not result[appName] then
@@ -1771,7 +1805,7 @@ local function getMountedVehicle()
 	if isUserdata(cache) then return cache end
 
 	local player = Game.GetPlayer()
-	if not player then
+	if not player then --Can happen on creepy old CET.
 		logIf(DevLevels.ALERT, LogLevels.WARN, 0xecd7, Text.LOG_PLAYER_UNDEFINED)
 		return nil
 	end
@@ -1781,7 +1815,7 @@ end
 
 ---Determines the status of a mounted vehicle.
 ---@return integer # Vehicle status code:
---- - -1: No valid vehicle found (missing TDBID or lookup failed)
+--- - -1: No valid vehicle found (missing TDBID)
 --- - 0: Crowd vehicle (vanilla, but not part of the player vehicle list)
 --- - 1: Player vanilla vehicle (index <= 105, or <= 85 on game version <= 2.20)
 --- - 2: Custom/modded vehicle (index above threshold)
@@ -1789,22 +1823,20 @@ local function getVehicleStatus()
 	local cache = getCache(0xddf2)
 	if cache then return cache end
 
-	local result = -1
-	local vehicle = getMountedVehicle()
-	if vehicle then
-		local tid = vehicle:GetTDBID()
-		if tid then
-			for i, v in ipairs(getPlayerVehicles()) do
-				if v.hash == tid.hash then
-					result = i <= getVanillaVehicleCount() and 1 or 2
-					break
-				end
+	local r = -1
+	local veh = getMountedVehicle()
+	local tid = veh and veh:GetTDBID()
+	if tid then
+		for i, v in ipairs(getPlayerVehicles()) do
+			if v.hash == tid.hash then
+				r = i <= getVanillaVehicleCount() and 1 or 2
+				break
 			end
-			result = result > 0 and result or 0
 		end
+		r = r > 0 and r or 0
 	end
 
-	return setCache(0xddf2, result)
+	return setCache(0xddf2, r)
 end
 
 ---Retrieves the list of third-person camera preset keys for the mounted vehicle.
@@ -1814,10 +1846,8 @@ local function getVehicleCameraKeys()
 	local cache = getCache(0xe98c)
 	if isTableValid(cache) then return cache end
 
-	local vehicle = getMountedVehicle()
-	if not vehicle then return nil end
-
-	local vid = vehicle:GetRecordID()
+	local veh = getMountedVehicle()
+	local vid = veh and veh:GetRecordID()
 	if not vid then
 		logIf(DevLevels.ALERT, LogLevels.ERROR, 0xe98c, Text.LOG_VEH_REC_ID_MISS)
 		return nil
@@ -1949,15 +1979,9 @@ local function getVehicleCameraMap()
 	local map = {}
 	for _, v in pairs(keys) do
 		local height = TweakDB:GetFlat(v .. ".height")
-		if not height then goto continue end
-
-		local heightName = getRecordName(height)
-		if not heightName then goto continue end
-
-		local distance = TweakDB:GetFlat(v .. ".distance")
-		if not distance then goto continue end
-
-		local distanceName = getRecordName(distance)
+		local heightName = height and getRecordName(height)
+		local distance = heightName and TweakDB:GetFlat(v .. ".distance")
+		local distanceName = distance and getRecordName(distance)
 		if not distanceName then goto continue end
 
 		--Workaround for mislabeled Low/High YAML tweaks.
@@ -1981,10 +2005,8 @@ local function getVehicleName()
 	local cache = getCache(0x3ae2)
 	if isString(cache) then return cache end
 
-	local vehicle = getMountedVehicle()
-	if not vehicle then return nil end
-
-	local tid = vehicle:GetTDBID()
+	local veh = getMountedVehicle()
+	local tid = veh and veh:GetTDBID()
 	if not tid then return nil end
 
 	local str = findVehicleName(tid)
@@ -1994,13 +2016,9 @@ end
 ---Attempts to retrieve the appearance name of the mounted vehicle.
 ---@return string? # The resolved vehicle name as a string, or `nil` if it could not be determined.
 local function getVehicleAppearanceName()
-	local vehicle = getMountedVehicle()
-	if not vehicle then return nil end
-
-	local cname = vehicle:GetCurrentAppearanceName()
-	if cname then
-		return Game.NameToString(cname)
-	end
+	local veh = getMountedVehicle()
+	local cname = veh and veh:GetCurrentAppearanceName()
+	return cname and Game.NameToString(cname) or nil
 end
 
 ---Retrieves the display name of the currently mounted vehicle.
@@ -2009,69 +2027,78 @@ local function getVehicleDisplayName()
 	local cache = getCache(0x05b4)
 	if isStringValid(cache) then return cache end
 
-	local vehicle = getMountedVehicle()
-	if not vehicle then return nil end
-
-	local name = vehicle:GetDisplayName()
-	if not name then return nil end
-
-	return setCache(0x05b4, name:gsub("„", '"'):gsub("“", '"'))
+	local veh = getMountedVehicle()
+	local name = veh and veh:GetDisplayName()
+	return name and setCache(0x05b4, name:gsub("„", '"'):gsub("“", '"')) or nil
 end
 
 --#endregion
 
 --#region 🧬 Tweak Accessors
 
----Update the global default parameter values in TweakDB.
----Iterates over all entries in `config.options` and applies clamping,
----default assignment, type coercion and optional restoring.
----@param restore boolean? # If true, values are reset to their default.
-local function updateDefaultParams(restore)
-	if not areTableValid(DefaultParams.Keys, config.options) then return end
+---Updates a single default parameter in the configuration and optionally in the game.
+---@param name string # The name of the option to update.
+---@param value any # The new value to assign.
+---@param updateConfig boolean? # If true, the related `config.options` entry is updated as well.
+local function updateConfigDefaultParam(name, value, updateConfig)
+	local option = name and config.options[name]
+	if not option then return end
 
-	for varName, data in pairs(config.options) do
-		if not data.IsDefaultParam then
-			data.Value = data.Value or data.Default
-			goto continue
+	local isRestore = value == option.Default
+	if value and not isRestore then
+		if type(value) ~= type(option.Default) then return end
+
+		local minimum, maximum = option.Min, option.Max
+		if areNumber(value, minimum, maximum) then ---@cast value number
+			value = min(max(value, minimum), maximum)
 		end
+	else
+		isRestore = true
+		value = option.Default
+	end
 
-		for _, baseKey in ipairs(DefaultParams.Keys) do
-			local key = format("%s.%s", baseKey, varName)
-			local current = TweakDB:GetFlat(key)
-			if current == nil then goto continue end
+	if updateConfig then
+		if not config.isUnsaved then
+			config.isUnsaved = option.Value ~= value
+		end
+		option.Value = value
+	end
 
-			local isNum = isNumber(current)
-			local hasMinMax = areNumber(data.Min, data.Max)
-			if isNum and hasMinMax then
-				current = min(max(current, data.Min), data.Max)
-			end
-			if data.Default == nil then
-				data.Default = current
-			end
-			if data.Value == nil then
-				data.Value = current
-			end
-			if type(current) ~= type(data.Value) then
-				data.Value = isNum and (data.Value and 1 or 0) or ((data.Value or 0) > 0)
-			end
+	if not option.IsDefaultParam or not isRestore and not isVehicleMounted() then return end
 
-			if restore then
-				if current ~= data.Default then
-					TweakDB:SetFlat(key, data.Default)
-					logIf(DevLevels.ALERT, LogLevels.INFO, 0x602e, Text.LOG_PARAM_REST, key, data.Default)
-				end
-				goto continue
-			end
-
-			if current == data.Value then goto continue end
-			local value = isNum and hasMinMax and min(max(data.Value, data.Min), data.Max) or data.Value
+	for _, baseKey in ipairs(DefaultParams.Keys) do
+		local key = format("%s.%s", baseKey, name)
+		local curVal = TweakDB:GetFlat(key)
+		if curVal ~= nil and not equals(curVal, value) then
 			TweakDB:SetFlat(key, value)
-			logIf(DevLevels.ALERT, LogLevels.INFO, 0x602e, Text.LOG_PARAM_SET, key, value)
-
-			::continue::
+			logIf(DevLevels.ALERT, LogLevels.INFO, 0xeef2,
+				isRestore and Text.LOG_PARAM_REST or Text.LOG_PARAM_SET, key, value)
 		end
+	end
 
-		::continue::
+	if name == "fov" then
+		local player = Game.GetPlayer()
+		local component = player and player:FindComponentByType("vehicleTPPCameraComponent")
+		if component then
+			component:SetFOV(value)
+		end
+	end
+end
+
+---Updates all default parameter in the configuration and applies them to the game if necessary.
+---@param doRestore boolean? # If true, values are reset to their default.
+local function updateConfigDefaultParams(doRestore)
+	for var, option in pairs(config.options) do
+		if not option.IsDefaultParam then
+			option.Value = option.Value or option.Default
+		else
+			if option.Value == nil then
+				local key = format("%s.%s", DefaultParams.Keys[1], var)
+				local value = TweakDB:GetFlat(key)
+				option.Value = option.Value or value or option.Default
+			end
+			updateConfigDefaultParam(var, doRestore and option.Default or option.Value)
+		end
 	end
 end
 
@@ -2125,17 +2152,14 @@ local function getCameraDefaultRotationPitch(preset, path)
 		v_utility4_militech_behemoth_Preset = { low = 05, high = 12 },
 		default                             = { low = 04, high = 11 }
 	}
-
 	local def = defaults[preset.ID] or defaults.default
 	local defVal = isLow and def.low or def.high
-
 	if not key then return defVal end
 
 	local value = tonumber(TweakDB:GetFlat(key))
 	if isLow and value ~= nil then
 		value = min(max(value - 7, -45), 90)
 	end
-
 	return value or defVal
 end
 
@@ -2265,42 +2289,35 @@ local function resetCustomDefaultParams(key)
 	cache[key] = true
 	setCache(0xf5d6, cache, true)
 
-	local vehicle = getMountedVehicle()
-	if not vehicle then return end
+	local veh = getMountedVehicle()
+	local vtid = veh and veh:GetTDBID()
+	local vname = vtid and getRecordName(vtid)
+	local cptid = vname and TweakDB:GetFlat(vname .. ".tppCameraParams")
+	local cparam = cptid and getRecordName(cptid)
+	if not cparam then return end
 
-	local vtid = vehicle:GetTDBID()
-	if not vtid then return end
+	local options = config.options
+	local i = contains(cparam:lower(), "_2w_") and 2 or 1
+	for var, value in pairs(DefaultParams.Vars) do
+		local curKey = format("%s.%s", cparam, var)
+		local curVal = TweakDB:GetFlat(curKey)
+		if not curVal then goto continue end
 
-	local vname = getRecordName(vtid)
-	if not vname then return end
-
-	local cptid = TweakDB:GetFlat(vname .. ".tppCameraParams")
-	if not cptid then return end
-
-	local cparam = getRecordName(cptid)
-	if not cparam or contains(DefaultParams.Keys, cparam) then return end
-
-	local baseKey = DefaultParams.Keys[contains(cparam:lower(), "_2w_") and 2 or 1]
-	for _, varName in ipairs(DefaultParams.Vars) do
-		local cKey = cparam .. "." .. varName
-		local val = TweakDB:GetFlat(cKey)
-		if not val then goto continue end
-
-		local rKey = baseKey .. "." .. varName
-		local ref = TweakDB:GetFlat(baseKey .. "." .. varName)
-		if not ref then
-			if not isBoolean(val) then goto continue end
-			ref = false
+		local defVal
+		if options[var] then
+			defVal = options[var].Value or options[var].Default
+		elseif isTable(value) then
+			defVal = value[i]
+		else
+			defVal = value
 		end
+		if equals(curVal, defVal) then goto continue end
 
-		if not equals(val, ref) then
-			if not presets.restoreParams[cKey] then
-				presets.restoreParams[cKey] = val
-			end
-
-			TweakDB:SetFlat(cKey, ref)
-			logF(DevLevels.BASIC, LogLevels.INFO, 0x460a, Text.LOG_PARAM_MANIP, cKey, val, ref, rKey)
+		if not presets.restoreParams[curKey] then
+			presets.restoreParams[curKey] = curVal
 		end
+		TweakDB:SetFlat(curKey, defVal)
+		logF(DevLevels.BASIC, LogLevels.INFO, 0x460a, Text.LOG_PARAM_MANIP, curKey, curVal, defVal)
 
 		::continue::
 	end
@@ -2378,13 +2395,19 @@ end
 ---@return string? # The matching key from `presets.collection `, or `nil` if no match was found.
 local function findPresetKey(...)
 	local id = getVehicleCameraID()
-	local length, result
-	for pass = 1, 2 do
-		if pass == 2 then
-			length = 0
-		end
-		for i = 1, select("#", ...) do
+	local seen = {
+		[1] = {},
+		[2] = {}
+	}
+	local size = select("#", ...)
+	local length = 0
+	local result
+	for pass = 1, #seen do
+		for i = 1, size do
 			local search = select(i, ...)
+			if not search or seen[pass][search] then goto continue end
+
+			seen[pass][search] = true
 			for key, preset in pairs(presets.collection) do
 				if preset.ID ~= id then goto continue end
 
@@ -2400,6 +2423,8 @@ local function findPresetKey(...)
 
 				::continue::
 			end
+
+			::continue::
 		end
 	end
 	return result
@@ -2476,9 +2501,7 @@ end
 ---@param preset ICameraPreset # The preset to search for a default version.
 ---@return ICameraPreset? # Returns the default preset if found, otherwise nil.
 local function getDefaultPreset(preset)
-	if not preset then return nil end
-
-	local id = preset.ID
+	local id = preset and preset.ID
 	if not id then return nil end
 
 	for _, item in pairs(presets.collection) do
@@ -2539,17 +2562,11 @@ end
 ---@param id string? # The camera ID of the mounted vehicle.
 local function applyPreset(preset, id)
 	if not preset then
-		local name = getVehicleName()
-		if not name then return end
-
-		local appName = getVehicleAppearanceName()
-		if not appName then return end
-
-		local key = name == appName and findPresetKey(name) or findPresetKey(name, appName)
-		if not key then return end
-
-		local cid = getVehicleCameraID()
-		if not cid then return end
+		local vNam = getVehicleName()
+		local aNam = vNam and getVehicleAppearanceName()
+		local key = aNam and findPresetKey(vNam, aNam)
+		local cid = key and getVehicleCameraID()
+		if not (key and cid) then return end
 
 		logIf(DevLevels.ALERT, LogLevels.INFO, 0x9583, Text.LOG_CAM_PSET, key)
 
@@ -2589,7 +2606,6 @@ local function applyPreset(preset, id)
 	for i, path in ipairs(CameraData.Levels) do
 		local level = PresetInfo.Levels[(i - 1) % 3 + 1]
 		local a, x, y, z, d = getOffsetData(preset, fallback, level)
-
 		setCameraDefaultRotationPitch(preset, path, a)
 		setCameraLookAtOffset(preset, path, x, y, z)
 		setCameraBoomLengthOffset(preset, path, d)
@@ -2887,7 +2903,7 @@ local function loadPresetFile(file, folder, count, vehicleNames)
 	end
 
 	local path = combine(folder, file)
-	local chunk, err = loadfile(path)
+	local chunk, err = deserialize(path, true)
 	if not chunk then
 		logF(DevLevels.BASIC, LogLevels.ERROR, 0x0305, Text.LOG_PSET_LOAD_FAIL, folder, file, err)
 		return count
@@ -3064,12 +3080,9 @@ local function savePresetUsage()
 		"Total INTEGER"
 	)
 
-	sqliteBegin()
-
 	--Load current DB values.
 	local database = {}
-	local rows = sqliteRows("PresetUsage", "Name, First, Last, Total")
-	for _, row in ipairs(rows) do
+	for row in sqliteRows("PresetUsage", "Name, First, Last, Total") do
 		local key, first, last, total = unpack(row)
 		database[key] = {
 			First = first,
@@ -3077,6 +3090,8 @@ local function savePresetUsage()
 			Total = total
 		}
 	end
+
+	sqliteBegin()
 
 	--Bulk delete outdated entries.
 	local doVacuum = false
@@ -3108,7 +3123,7 @@ local function savePresetUsage()
 	end
 end
 
----Loads preset usage statistics from `db.sqlite3`.
+---Loads `presets.usage` table from `db.sqlite3`.
 local function loadPresetUsage()
 	--OBSOLETE - START
 	--This code block will be removed in future.
@@ -3120,22 +3135,26 @@ local function loadPresetUsage()
 	}
 	local loaded = false
 	for _, path in ipairs(paths) do
-		if not loaded and fileExists(path) then
-			local chunk = loadfile(path)
+		if not fileExists(path) then goto continue end
+
+		if not loaded then
+			local chunk = deserialize(path, true)
 			if chunk then
 				local ok, data = pcall(chunk)
 				if ok and isTable(data) then
 					presets.usage = data
+					loaded = true
 				end
-				pcall(os.remove, path)
 			end
-			presets.isUsageUnsaved = true
-			savePresetUsage()
 		end
 
-		if loaded then
-			pcall(os.remove, path)
-		end
+		pcall(os.remove, path)
+
+		::continue::
+	end
+	if loaded then
+		presets.isUsageUnsaved = true
+		savePresetUsage()
 	end
 	--OBSOLETE - END
 
@@ -3149,8 +3168,7 @@ local function loadPresetUsage()
 
 	--Load DB values.
 	presets.usage = {}
-	local rows = sqliteRows("PresetUsage", "Name, First, Last, Total")
-	for _, row in ipairs(rows) do
+	for row in sqliteRows("PresetUsage", "Name, First, Last, Total") do
 		local key, first, last, total = unpack(row)
 		presets.usage[key] = {
 			First = first,
@@ -3160,66 +3178,110 @@ local function loadPresetUsage()
 	end
 end
 
----Saves the `config.options` table to `.globals.lua` on disk.
+---Saves the `config.options` values to `db.sqlite3` on disk.
 local function saveGlobalOptions()
 	if not config.isUnsaved then return end
 	config.isUnsaved = false
 
 	if not isTable(config.options) then return end
 
-	local path = ".globals.json"
-	if not isTableValid(config.options) then
-		if fileExists(path) then
-			pcall(os.remove, path)
-		end
-		return
+	restoreAllCustomCameraData()
+
+	sqliteInit(
+		"GlobalOptions",
+		"Name TEXT PRIMARY KEY",
+		"Value TEXT"
+	)
+
+	--Load current DB values.
+	local database = {}
+	for row in sqliteRows("GlobalOptions", "Name, Value") do
+		local key, rawVal = unpack(row)
+		database[key] = rawVal
 	end
 
-	local relevantData = {}
-	for varName, data in pairs(config.options) do
-		if not equals(data.Value, data.Default) then
-			relevantData[varName] = {
-				Value = data.Value
-			}
+	sqliteBegin()
+
+	--Update only changed entries.
+	for name, option in pairs(config.options) do
+		local previous = database[name]
+		local current = serialize(option.Value or option.Default)
+		if not equals(previous, current) then
+			sqliteUpsert("GlobalOptions", "Name", {
+				Name = name,
+				Value = current
+			})
 		end
 	end
 
-	--No need to save a file if everything is set to default.
-	if nilOrEmpty(relevantData) then
-		if fileExists(path) then
-			pcall(os.remove, path)
-		end
-		return
-	end
-
-	--Save changes to file.
-	local file = io.open(path, "w")
-	if file then
-		file:write(json.encode(relevantData))
-		file:close()
-	end
+	sqliteCommit()
 end
 
----Loads settings from a JSON file and applies them.
----@param path string? Optional file path.
-local function loadGlobalOptions(path)
-	path = isStringValid(path) and path or ".globals.json"
+---Loads `config.options` values from `db.sqlite3`.
+local function loadGlobalOptions()
+	--OBSOLETE - START
+	--This code block will be removed in future.
+	local paths = {
+		".globals.json",
+		".globals.json.bak"
+	}
+	local loaded = false
+	for _, path in ipairs(paths) do
+		if not fileExists(path) then goto continue end
 
-	local file = io.open(path, "r")
-	if not file then return end
-
-	local content = file:read("*a")
-	file:close()
-	if nilOrEmpty(content) then return end
-
-	local ok, result = pcall(json.decode, content)
-	if not ok or not isTableValid(result) then return end
-
-	for varName, data in pairs(config.options) do
-		local item = result[varName]
-		if item and item.Value then
-			data.Value = item.Value
+		if not loaded then
+			local content
+			local file = io.open(path, "r")
+			if file then
+				content = file:read("*a")
+				file:close()
+			end
+			if content then
+				local ok, data = pcall(json.decode, content)
+				if ok and isTable(data) then
+					for varName, option in pairs(config.options) do
+						local item = data[varName]
+						if item and item.Value then
+							option.Value = item.Value
+						end
+					end
+					loaded = true
+				end
+			end
 		end
+
+		pcall(os.remove, path)
+
+		::continue::
+	end
+	if loaded then
+		config.isUnsaved = true
+		saveGlobalOptions()
+	end
+	--OBSOLETE - END
+
+	sqliteInit(
+		"GlobalOptions",
+		"Name TEXT PRIMARY KEY",
+		"Value TEXT"
+	)
+
+	--Load DB values.
+	local options = config.options
+	for row in sqliteRows("GlobalOptions", "Name, Value") do
+		local key, raw = unpack(row)
+		local chunk = deserialize(raw)
+		if not chunk then goto continue end
+
+		local ok, result = pcall(chunk)
+		if not ok then goto continue end
+
+		local option = options[key]
+		if type(result) == type(option.Default) then
+			option.Value = result
+		end
+
+		::continue::
 	end
 end
 
@@ -3243,11 +3305,9 @@ end
 ---@return IEditorPreset # A table with fields: Preset, Key, Name, Token, IsPresent.
 local function getEditorPreset(preset, key, snapshot, verify)
 	local object = preset
-
 	if snapshot then
 		object = clone(object)
 	end
-
 	return {
 		Preset = object,
 		Key = key,
@@ -3460,22 +3520,15 @@ end
 ---@param cellHeight number? # Optional height of the cell for vertical centering. Ignored if `x` is a number.
 local function alignNext(x, hAlign, vAlign, cellHeight)
 	if isNumber(x) then ---@cast x number
-		if hAlign then
-			hAlign = false
-		end
+		hAlign = false
 		cellHeight = x
 	elseif isString(x) then
-		if not isBoolean(hAlign) then
-			hAlign = true
-		end
+		hAlign = hAlign == nil and true or hAlign
 	else
 		return
 	end
 
-	if vAlign == nil then
-		vAlign = true
-	end
-
+	vAlign = vAlign == nil and true or vAlign
 	local style = ImGui.GetStyle()
 	local fh = ImGui.GetFontSize()
 
@@ -3526,7 +3579,6 @@ local function getThreeColorsFrom(idx, base)
 	local alpha = idx == ImGuiCol.Button and 0xff or 0
 	local hover = adjustColor(base, alpha, 32, 32, 32)
 	local active = adjustColor(base, alpha, 64, 64, 64)
-
 	return base, hover, active
 end
 
@@ -3784,8 +3836,7 @@ local function openGlobalOptionsWindow(scale, contentWidth, controlPadding, heig
 		if isBoolean(data.Value) then
 			local value = ImGui.Checkbox("##" .. key, data.Value)
 			if value ~= data.Value then
-				config.isUnsaved = true
-				data.Value = value
+				updateConfigDefaultParam(key, value, true)
 			end
 		elseif isNumber(data.Value) then
 			local label = "##" .. key
@@ -3793,16 +3844,17 @@ local function openGlobalOptionsWindow(scale, contentWidth, controlPadding, heig
 				ImGui.PushItemWidth(floor(24 * scale) * #tostring(data.Max) / 2)
 				local value = ImGui.DragFloat(label, data.Value, 0.1, data.Min, data.Max, "%.0f")
 				if value ~= data.Value then
-					config.isUnsaved = true
-					data.Value = value
+					updateConfigDefaultParam(key, value, true)
 				end
 			else
 				--Fallback.
 				local before = tostring(data.Value)
 				local after = ImGui.InputText(label, before)
-				if before ~= after and isNumeric(after) then
-					config.isUnsaved = true
-					data.Value = tonumber(after)
+				if before ~= after then
+					local value = tonumber(after)
+					if value then
+						updateConfigDefaultParam(key, value, true)
+					end
 				end
 			end
 		else
@@ -3824,11 +3876,8 @@ local function openGlobalOptionsWindow(scale, contentWidth, controlPadding, heig
 	ImGui.Dummy(0, heightPadding)
 
 	if ImGui.Button(Text.GUI_RESET, contentWidth - ImGui.GetScrollMaxY(), buttonHeight) then
-		for _, data in pairs(config.options) do
-			if not equals(data.Value, data.Default) then
-				config.isUnsaved = true
-			end
-			data.Value = data.Default
+		for key, option in pairs(config.options) do
+			updateConfigDefaultParam(key, option.Default, true)
 		end
 	end
 
@@ -4114,7 +4163,7 @@ end
 ---It loads all preset files, usage data, and applies the current camera preset.
 local function onInit()
 	loadGlobalOptions()
-	updateDefaultParams()
+	updateConfigDefaultParams()
 	loadPresetUsage()
 
 	local task = presets.loaderTask
@@ -4146,7 +4195,7 @@ local function onUnmount(force)
 	savePresetUsage()
 
 	restoreModifiedPresets()
-	updateDefaultParams(true)
+	updateConfigDefaultParams(true)
 
 	clearLastEditorBundle()
 
@@ -4159,7 +4208,7 @@ end
 local function onShutdown()
 	restoreAllPresets()
 	restoreAllCustomCameraData()
-	updateDefaultParams(true)
+	updateConfigDefaultParams(true)
 end
 
 --[[
@@ -4253,7 +4302,7 @@ registerForEvent("onInit", function()
 			return
 		end
 		logIf(DevLevels.ALERT, LogLevels.INFO, 0x0f9b, Text.LOG_EVNT_MNT)
-		updateDefaultParams()
+		updateConfigDefaultParams()
 		applyPreset()
 	end)
 
@@ -4323,27 +4372,48 @@ registerForEvent("onInit", function()
 	end)
 
 	--Registers menu event observers and maps them to GUI state updates.
-	local function lockOverlay() gui.isOverlayLocked = true end
-	local function unlockOverlay() gui.isOverlayLocked = false end
+	local function suppressOverlay() gui.isOverlaySuppressed = true end
+	local function releaseOverlay() gui.isOverlaySuppressed = false end
+	local function autoToggleOverlay(a, b) gui.isOverlaySuppressed = not isBoolean(b) and a or b end
 	local function resetMetrics() gui.doMetricsReset = true end
 	local menuObservers = {
-		gameuiPhotoModeMenuController = {
-			OnShow = lockOverlay,
-			OnHide = unlockOverlay
+		[suppressOverlay] = {
+			OnEnterScenario  = {
+				"MenuScenario_ArcadeMinigame",
+				"MenuScenario_BenchmarkResults",
+				"MenuScenario_CharacterCustomization",
+				"MenuScenario_CharacterCustomizationMirror",
+				"MenuScenario_NetworkBreach",
+				"MenuScenario_PreGameSubMenu"
+			},
+			OnLeaveScenario  = "MenuScenario_Idle",
+			OnSelectMenuItem = "MenuScenario_HubMenu",
+			OnLoadGame       = "MenuScenario_SingleplayerMenu",
+			OnShow           = "gameuiPhotoModeMenuController"
 		},
-		MenuScenario_Settings = {
-			OnSettingsBack = resetMetrics
+		[releaseOverlay] = {
+			OnLeaveScenario = "MenuScenario_BaseMenu",
+			OnCloseHubMenu  = "MenuScenario_HubMenu",
+			OnHide          = "gameuiPhotoModeMenuController"
 		},
-		MenuScenario_PauseMenu = {
-			GoBack = resetMetrics
+		[autoToggleOverlay] = {
+			OnIsActiveUpdated           = "BraindanceGameController",
+			OnQuickHackUIVisibleChanged = "HUDManager"
 		},
-		MenuScenario_DeathMenu = {
-			GoBack = resetMetrics
+		[resetMetrics] = {
+			GoBack = {
+				"MenuScenario_PauseMenu",
+				"MenuScenario_DeathMenu"
+			},
+			OnSettingsBack = "MenuScenario_Settings"
 		}
 	}
-	for scenario, events in pairs(menuObservers) do
-		for event, handler in pairs(events) do
-			Observe(scenario, event, handler)
+	for handler, events in pairs(menuObservers) do
+		for event, scenarios in pairs(events) do
+			scenarios = castTable(scenarios)
+			for _, scenario in ipairs(scenarios) do
+				Observe(scenario, event, handler)
+			end
 		end
 	end
 end)
@@ -4380,6 +4450,20 @@ registerForEvent("onDraw", function()
 	--Stop when CET overlay is hidden.
 	if not gui.isOverlayOpen and state.devMode < DevLevels.OVERLAY then return end
 
+	local isStillVisible = not gui.isOverlayOpen and state.devMode >= DevLevels.OVERLAY
+
+	--Stop if the window should remain visible but the GUI is suppressed.
+	if gui.isOverlaySuppressed and isStillVisible then return end
+
+	--If CET is closed but the window should stay visible, apply transparent styling.
+	if isStillVisible then
+		ImGui.PushStyleColor(ImGuiCol.WindowBg, 0x60000000)
+		ImGui.PushStyleColor(ImGuiCol.TitleBg, 0x60000000)
+		ImGui.PushStyleColor(ImGuiCol.TitleBgActive, 0x60000000)
+		ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, 0x40000000)
+		ImGui.PushStyleColor(ImGuiCol.FrameBg, 0x20000000)
+	end
+
 	--Main window begins.
 	local flags = ImGuiWindowFlags.AlwaysAutoResize
 	if not gui.isOverlayOpen then
@@ -4387,8 +4471,8 @@ registerForEvent("onDraw", function()
 	end
 	if not ImGui.Begin(Text.GUI_TITL, flags) then return end
 
-	local locked = gui.isOverlayLocked
-	if locked or presets.loaderTask.IsActive then
+	local isLocked = gui.isOverlayLocked
+	if isLocked or presets.loaderTask.IsActive then
 		ImGui.BeginDisabled(true)
 	end
 
@@ -4411,91 +4495,95 @@ registerForEvent("onDraw", function()
 	--Minimum window width and height padding.
 	ImGui.Dummy(baseContentWidth, heightPadding)
 
-	--Warning for outdated versions.
-	if (not state.isGameMinVersion or not state.isRuntimeMinVersion) and state.devMode <= DevLevels.DISABLED then
-		local gameVer, cetVer = serialize(getGameVersion()), serialize(getRuntimeVersion())
-		ImGui.Dummy(0, 0)
+	--Create top controls only if CET is open.
+	if not isStillVisible then
+		--Warning for outdated versions.
+		if (not state.isGameMinVersion or not state.isRuntimeMinVersion) and state.devMode <= DevLevels.DISABLED then
+			local gameVer, cetVer = serialize(getGameVersion()), serialize(getRuntimeVersion())
+			ImGui.Dummy(0, 0)
+			ImGui.SameLine()
+			ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(Colors.GARNET, 0xff))
+			addTextCenterWrap(format(Text.GUI_OLD_VER, gameVer, cetVer), contentWidth)
+			ImGui.PopStyleColor()
+			ImGui.Dummy(0, doubleHeightPadding)
+		end
+
+		--Checkbox to toggle mod functionality and handle enable/disable logic.
+		ImGui.Dummy(controlPadding, 0)
 		ImGui.SameLine()
-		ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(Colors.GARNET, 0xff))
-		addTextCenterWrap(format(Text.GUI_OLD_VER, gameVer, cetVer), contentWidth)
-		ImGui.PopStyleColor()
+		local isEnabled = ImGui.Checkbox(Text.GUI_TGL_MOD, state.isModEnabled)
+		addTooltip(scale, Text.GUI_TGL_MOD_TIP)
+		if isEnabled ~= state.isModEnabled then
+			state.isModEnabled = isEnabled
+			if isEnabled then
+				onInit()
+				logF(DevLevels.ALERT, LogLevels.INFO, 0xcb3d, Text.LOG_MOD_ON)
+			else
+				onUnmount(true)
+				onShutdown()
+				purgePresets()
+
+				editor.bundles = {}
+				presets.usage = {}
+				state.devMode = DevLevels.DISABLED
+
+				logF(DevLevels.ALERT, LogLevels.INFO, 0xcb3d, Text.LOG_MOD_OFF)
+
+				resetCache(false)
+				resetCache(true)
+			end
+		end
+		ImGui.Dummy(0, halfHeightPadding)
+		if not state.isModEnabled then
+			--Mod is disabled — nothing left to add.
+			ImGui.End()
+			return
+		end
+
+		--Button to open the global Default Parameters window.
+		local globalBtnWidth = floor(192 * scale)
+		local dpx, dpy, dpw, dph = addGlobalOptionsButton(controlPadding, halfHeightPadding, globalBtnWidth, buttonHeight)
+		openGlobalOptionsWindow(scale, contentWidth, controlPadding, heightPadding, buttonHeight, dpx, dpy, dpw, dph)
+
+		--The button that reloads all presets.
+		ImGui.Dummy(controlPadding, 0)
+		ImGui.SameLine()
+		if ImGui.Button(Text.GUI_PSETS_RLD, globalBtnWidth, buttonHeight) then
+			state.isLogSuspend = false
+			editor.bundles = {}
+			resetCache()
+			restoreAllPresets()
+			loadPresets(true)
+			applyPreset()
+		end
+		addTooltip(scale, Text.GUI_PSETS_RLD_TIP)
+		ImGui.Dummy(0, halfHeightPadding)
+
+		--Slider to set the developer mode level.
+		local sliderWidth = floor(77 * scale)
+		ImGui.Dummy(controlPadding, 0)
+		ImGui.SameLine()
+		ImGui.PushItemWidth(sliderWidth)
+		local devMode = ImGui.SliderInt(Text.GUI_DMODE, state.devMode, DevLevels.DISABLED, DevLevels.FULL)
+		if devMode ~= state.devMode then
+			state.devMode = min(max(devMode, DevLevels.DISABLED), DevLevels.FULL)
+			if state.devMode == DevLevels.DISABLED then
+				gui.doMetricsReset = true
+				resetCache(true)
+			end
+		end
+		gui.isPaddingLocked = ImGui.IsItemActive()
+		addTooltip(scale, Text.GUI_DMODE_TIP)
+		ImGui.PopItemWidth()
 		ImGui.Dummy(0, doubleHeightPadding)
 	end
-
-	--Checkbox to toggle mod functionality and handle enable/disable logic.
-	ImGui.Dummy(controlPadding, 0)
-	ImGui.SameLine()
-	local isEnabled = ImGui.Checkbox(Text.GUI_TGL_MOD, state.isModEnabled)
-	addTooltip(scale, Text.GUI_TGL_MOD_TIP)
-	if isEnabled ~= state.isModEnabled then
-		state.isModEnabled = isEnabled
-		if isEnabled then
-			onInit()
-			logF(DevLevels.ALERT, LogLevels.INFO, 0xcb3d, Text.LOG_MOD_ON)
-		else
-			onUnmount(true)
-			onShutdown()
-			purgePresets()
-
-			editor.bundles = {}
-			presets.usage = {}
-			state.devMode = DevLevels.DISABLED
-
-			logF(DevLevels.ALERT, LogLevels.INFO, 0xcb3d, Text.LOG_MOD_OFF)
-
-			resetCache(false)
-			resetCache(true)
-		end
-	end
-	ImGui.Dummy(0, halfHeightPadding)
-	if not state.isModEnabled then
-		--Mod is disabled — nothing left to add.
-		ImGui.End()
-		return
-	end
-
-	--Button to open the global Default Parameters window.
-	local globalBtnWidth = floor(192 * scale)
-	local dpx, dpy, dpw, dph = addGlobalOptionsButton(controlPadding, halfHeightPadding, globalBtnWidth, buttonHeight)
-	openGlobalOptionsWindow(scale, contentWidth, controlPadding, heightPadding, buttonHeight, dpx, dpy, dpw, dph)
-
-	--The button that reloads all presets.
-	ImGui.Dummy(controlPadding, 0)
-	ImGui.SameLine()
-	if ImGui.Button(Text.GUI_PSETS_RLD, globalBtnWidth, buttonHeight) then
-		state.isLogSuspend = false
-		editor.bundles = {}
-		resetCache()
-		restoreAllPresets()
-		loadPresets(true)
-		applyPreset()
-	end
-	addTooltip(scale, Text.GUI_PSETS_RLD_TIP)
-	ImGui.Dummy(0, halfHeightPadding)
-
-	--Slider to set the developer mode level.
-	local sliderWidth = floor(77 * scale)
-	ImGui.Dummy(controlPadding, 0)
-	ImGui.SameLine()
-	ImGui.PushItemWidth(sliderWidth)
-	local devMode = ImGui.SliderInt(Text.GUI_DMODE, state.devMode, DevLevels.DISABLED, DevLevels.FULL)
-	if devMode ~= state.devMode then
-		state.devMode = min(max(devMode, DevLevels.DISABLED), DevLevels.FULL)
-		if state.devMode == DevLevels.DISABLED then
-			resetCache(true)
-		end
-	end
-	gui.isPaddingLocked = ImGui.IsItemActive()
-	addTooltip(scale, Text.GUI_DMODE_TIP)
-	ImGui.PopItemWidth()
-	ImGui.Dummy(0, doubleHeightPadding)
 
 	--Table showing vehicle name, camera ID and more — if certain conditions are met.
 	local cache = getCache(0xcb3d) or {}
 	local vehicle, name, appName, id, key, displayName, status, statusText
 	local steps = {
 		function()
-			return not locked and state.devMode > DevLevels.DISABLED
+			return not isLocked and state.devMode > DevLevels.DISABLED
 		end,
 		function()
 			vehicle = getMountedVehicle()
@@ -4575,10 +4663,10 @@ registerForEvent("onDraw", function()
 	if failed then
 		state.isLogSuspend = true
 		if state.devMode > DevLevels.DISABLED then
-			if not locked and not vehicle then
+			if not isLocked and not vehicle then
 				addText(Text.GUI_NO_VEH, Colors.CARAMEL, halfHeightPadding, contentWidth, itemSpacing)
 			end
-		elseif not locked and isVehicleMounted() then
+		elseif not isLocked and isVehicleMounted() then
 			local text, color
 			if presets.isAnyActive then
 				text = Text.GUI_PRE_ON
@@ -4590,10 +4678,16 @@ registerForEvent("onDraw", function()
 			addText(text, color, halfHeightPadding, contentWidth, itemSpacing)
 		end
 
+		--Create Preset File Explorer button only if CET is open.
+		if isStillVisible then
+			ImGui.End()
+			return
+		end
+
 		--Button to open the Preset File Explorer.
 		local x, y, w, h = addFileExplorerButton(contentWidth, heightPadding, halfHeightPadding, buttonHeight)
 
-		if locked then
+		if isLocked then
 			ImGui.EndDisabled()
 		end
 
@@ -4644,7 +4738,7 @@ registerForEvent("onDraw", function()
 				isCustomID = isStringValid(customID)
 			},
 			{
-				label      = "\u{f1952}",
+				label      = "\u{f1668}",
 				tip        = Text.GUI_TBL_LABL_PSET_TIP,
 				value      = presetName,
 				valTip     = equNames and Text.GUI_TBL_VAL_PSET_TIP2 or Text.GUI_TBL_VAL_PSET_TIP1,
@@ -4765,9 +4859,11 @@ registerForEvent("onDraw", function()
 
 				ImGui.Text(value)
 				if rawValue ~= value then
-					addTooltip(scale, rawValue)
+					local newTip = format("%s\n%s", capitalizeWords(row.tip), rawValue)
+					addTooltip(scale, newTip)
+				else
+					addTooltip(scale, row.valTip or row.tip)
 				end
-				addTooltip(scale, row.valTip)
 			end
 
 			::continue::
@@ -4864,6 +4960,12 @@ registerForEvent("onDraw", function()
 
 		ImGui.EndTable()
 		ImGui.Dummy(0, halfHeightPadding)
+	end
+
+	--Create bottom controls only if CET is open
+	if isStillVisible then
+		ImGui.End()
+		return
 	end
 
 	if tasks.Validate then
@@ -4975,7 +5077,7 @@ local function findVehicleApperance(name, key)
 	end ---@cast apps VehicleAppearance[]
 
 	for _, app in ipairs(apps) do
-		local cname = app and app.name or nil
+		local cname = app and app.name
 		if cname then
 			local str = Game.NameToString(cname)
 			if startsWith(str, key) then
@@ -5045,7 +5147,7 @@ local function repairVanillaPresetFilesAsyncTask()
 				name = name:gsub("^Vehicle%.", "")
 				if startsWith(name, key) or findVehicleApperance(name, key) ~= nil then
 					local path = getPresetFilePath(key, 2)
-					local chunk, _ = loadfile(path)
+					local chunk = deserialize(path, true)
 					if not chunk then break end
 
 					local ok, result = pcall(chunk)
@@ -5080,18 +5182,18 @@ return {
 		print(" ")
 		print(format("%s commands:", name))
 		print("  RepairVanillaPresets: Moves vanilla preset files to the correct folder and updates their metadata.")
-		print("  ShowPermCache: Displays the persistent cache contents in a readable format.")
-		print("  ShowTempCache: Displays the transient (temporary) cache contents in a readable format.")
+		print("  ShowPCache: Displays the persistent cache contents in a readable format.")
+		print("  ShowTCache: Displays the transient (temporary) cache contents in a readable format.")
 		print(" ")
 		print("Usage example:")
 		print(format("  GetMod('%s').RepairVanillaPresets()", name))
-		print(format("  GetMod('%s').ShowPermCache()", name))
-		print(format("  GetMod('%s').ShowTempCache()", name))
+		print(format("  GetMod('%s').ShowPCache()", name))
+		print(format("  GetMod('%s').ShowTCache()", name))
 		print(" ")
 	end,
 	RepairVanillaPresets = repairVanillaPresetFilesAsyncTask,
-	ShowPermCache = function() print(serialize(caches.persistent, true)) end,
-	ShowTempCache = function() print(serialize(caches.transient, true)) end
+	ShowPCache = function() print(serialize(caches.persistent, true)) end,
+	ShowTCache = function() print(serialize(caches.transient, true)) end
 }
 
 --#endregion

@@ -13,7 +13,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-10-03, 13:46 UTC+01:00 (MEZ)
+Version: 2025-10-05, 10:34 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -77,10 +77,10 @@ ImGui = ImGui
 
 ---Flags used to configure ImGui window behavior and appearance.
 ---@class ImGuiWindowFlags
----@field AlwaysAutoResize integer # Automatically resizes the window to fit its content each frame.
----@field NoCollapse integer # Disables the ability to collapse the window.
 ---@field NoResize integer # Disables window resizing.
 ---@field NoMove integer # Disables window moving.
+---@field NoCollapse integer # Disables the ability to collapse the window.
+---@field AlwaysAutoResize integer # Automatically resizes the window to fit its content each frame.
 ---@field NoFocusOnAppearing integer # Prevents the window from taking focus when it appears.
 ---@field NoInputs integer # Disables all inputs (mouse, keyboard, etc.) for the window.
 ImGuiWindowFlags = ImGuiWindowFlags
@@ -94,20 +94,20 @@ ImGuiTableFlags = ImGuiTableFlags
 
 ---Flags to customize individual columns within a table.
 ---@class ImGuiTableColumnFlags
----@field WidthFixed integer # Makes the column have a fixed width.
 ---@field WidthStretch integer # Makes the column stretch to fill available space.
+---@field WidthFixed integer # Makes the column have a fixed width.
 ImGuiTableColumnFlags = ImGuiTableColumnFlags
 
 ---UI color indices used for styling via ImGui.PushStyleColor().
 ---Each index refers to a specific UI element's color.
 ---@class ImGuiCol
 ---@field Text integer # Color of text.
----@field Button integer # Color of button.
----@field ButtonHovered integer # Color of hovered button.
----@field ButtonActive integer # Color of pressed button.
+---@field WindowBg number # The background color of a window. Default is an opaque dark background.
 ---@field FrameBg integer # Background color of widgets with a frame (e.g., InputText, DragFloat, etc.) when idle.
----@field FrameBgHovered integer # Background color of framed widgets when hovered by the mouse.
----@field FrameBgActive integer # Background color of framed widgets when active (being edited or held).
+---@field TitleBg number # The background color of a window's title bar when inactive (not focused).
+---@field TitleBgActive number # The background color of a window's title bar when active (focused).
+---@field Button integer # Color of button.
+---@field TableHeaderBg number # The background color of a table's header row.
 ImGuiCol = ImGuiCol
 
 ---Represents the current ImGui style configuration, controlling layout, spacing, padding, rounding, and more.
@@ -176,6 +176,7 @@ TDBID = TDBID
 
 ---Represents the player character in the game, providing functions to interact with the player instance.
 ---@class Player
+---@field FindComponentByType fun(self: Player, typeName: string): any # Finds and returns a component of the specified type attached to the player, or nil if not found.
 ---@field SetWarningMessage fun(self: Player, message: string, duration: number) # Displays a warning message on the player's screen for a specified duration.
 
 ---Represents a vehicle entity within the game, providing functions to interact with it, such as getting the appearance name.

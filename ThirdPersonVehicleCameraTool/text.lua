@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-10-02, 08:14 UTC+01:00 (MEZ)
+Version: 2025-10-05, 10:34 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -28,15 +28,15 @@ return {
 	GUI_TITL = "Third-Person Vehicle Camera Tool",
 	GUI_OLD_VER = "\u{f0026} This mod requires game version 2.21 or higher and CET version 1.35 or higher. You are using at least one outdated version (game: %s; CET: %s), which may cause issues. Any use is at your own risk. Please do not report any problems unless you meet the minimum requirements.",
 	GUI_TGL_MOD = "Toggle Mod Functionality",
-	GUI_TGL_MOD_TIP = "Enables or disables the mod functionality.",
+	GUI_TGL_MOD_TIP = "Enables or disables the mod functionality",
 	GUI_GSETS = "\u{F1064} Global Settings ",
 	GUI_PSETS_RLD = "\u{f054d} Reload Presets ",
 	GUI_PSETS_RLD_TIP = "Reloads all preset data. Use this to reset unsaved changes, after enabling or disabling vanilla presets, or when you have changed or added preset files outside of the game.\n\nKeep in mind that changes only take effect after exiting and re-entering the vehicle",
 	GUI_DMODE = "Developer Mode",
-	GUI_DMODE_TIP = "Enables a feature that allows you to create, test, and save your own presets.\n\nAlso controls debug output and overlay visibility:\n\u{f0b39}\u{f00a0} Disabled - running in performance mode.\n\u{f0b3a}\u{f018d} Logs basic info to the CET console.\n\u{f0b3b}\u{f05b2} Like 1, but keeps the overlay always visible.\n\u{f0b3c}\u{f0369} Like 2, plus in-game pop-up notifications.\n\u{f0b3d}\u{f1272} Like 3, plus extended debug info and log file output.",
-	GUI_NO_VEH = "\u{f02fd} Please enter a vehicle first!",
-	GUI_PRE_ON = "\u{f1952} Preset loaded and active!",
-	GUI_PRE_OFF = "\u{f11be} No preset available!",
+	GUI_DMODE_TIP = "Enables a feature that allows you to create, test, and save your own presets.\n\nAlso controls debug output and overlay visibility:\n\u{f0b39}\u{f00a0} Disabled - running in performance mode\n\u{f0b3a}\u{f018d} Logs basic info to the CET console\n\u{f0b3b}\u{f05b2} Like 1, but keeps the overlay always visible\n\u{f0b3c}\u{f0369} Like 2, plus in-game pop-up notifications\n\u{f0b3d}\u{f1272} Like 3, plus extended debug info and log file output",
+	GUI_NO_VEH = "\u{f02fd} Please enter a vehicle first",
+	GUI_PRE_ON = "\u{f1668} Preset loaded and active",
+	GUI_PRE_OFF = "\u{f11be} No preset available",
 	GUI_APPLY = "\u{f044f} Apply ",
 	GUI_APPLY_TIP = "Applies the configured values without saving them permanently.\n\nThe vehicle must be exited and re-entered for the changes to become active.",
 	GUI_SAVE = "\u{f0193} Save ",
@@ -46,24 +46,24 @@ return {
 	GUI_FEXP = "\u{f12e3} Preset File Explorer ",
 
 	--GUI: 📋 Table Label Tooltips
-	GUI_TBL_LABL_DNAME_TIP = "The vehicle's display name.",
-	GUI_TBL_LABL_STATUS_TIP = "The vehicle's player status.",
-	GUI_TBL_LABL_VEH_TIP = "The vehicle's name.",
-	GUI_TBL_LABL_APP_TIP = "The vehicle's appearance name.",
-	GUI_TBL_LABL_CAMID_TIP = "The vehicle's camera identifier.",
-	GUI_TBL_LABL_CCAMID_TIP = "The vehicle's custom camera identifier.",
-	GUI_TBL_LABL_PSET_TIP = "The vehicle's active camera preset.",
-	GUI_TBL_LABL_CLO_TIP = "Camera Distance: Close",
-	GUI_TBL_LABL_MID_TIP = "Camera Distance: Medium",
-	GUI_TBL_LABL_FAR_TIP = "Camera Distance: Far",
+	GUI_TBL_LABL_DNAME_TIP = "\u{f0208} Vehicle's display name",
+	GUI_TBL_LABL_STATUS_TIP = "\u{f1975} Vehicle's player status",
+	GUI_TBL_LABL_VEH_TIP = "\u{f010b} Vehicle's name",
+	GUI_TBL_LABL_APP_TIP = "\u{f07ac} Vehicle's appearance name",
+	GUI_TBL_LABL_CAMID_TIP = "\u{f0567} Vehicle's camera identifier",
+	GUI_TBL_LABL_CCAMID_TIP = "\u{f0569} Vehicle's custom camera identifier",
+	GUI_TBL_LABL_PSET_TIP = "\u{f1668} Vehicle's active camera preset",
+	GUI_TBL_LABL_CLO_TIP = "\u{f0623} Close camera distance",
+	GUI_TBL_LABL_MID_TIP = "\u{f0622} Medium camera distance",
+	GUI_TBL_LABL_FAR_TIP = "\u{f0621} Far camera distance",
 
 	--GUI: 💶 Table Values and Tooltips
 	GUI_TBL_VAL_STATUS_0 = "Vanilla Crowd Vehicle",
 	GUI_TBL_VAL_STATUS_1 = "Vanilla Player Vehicle",
 	GUI_TBL_VAL_STATUS_2 = "Custom Player Vehicle",
 	GUI_TBL_VAL_CCAMID_TIP = "\u{f1980} Camera Access Map| |Distance Level:|Database Access Path:",
-	GUI_TBL_VAL_PSET_TIP1 = "When saving, the name \"%s\" is used. The new name must exactly match the value of \u{f010b} or \u{f07ac}, or be at least a prefix of one of them.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each variation.\n\nMatching Priorities (first match is used):\n\u{f0b3a}\u{f010b} (e.g. \"%s\")\n\u{f0b3b}\u{f07ac} (e.g. \"%s\")\n\u{f0b3c}Prefix of \u{f010b} (e.g. \"%s\")\n\u{f0b3d}Prefix of \u{f07ac} (e.g. \"%s\")\n\nPlease ensure that your new preset name has the correct priority. It is recommended to make prefixes as long as possible to avoid conflicts in the future. Take a look at the Preset File Explorer to delete presets, if necessary.",
-	GUI_TBL_VAL_PSET_TIP2 = "When saving, the name \"%s\" is used. The new name must exactly match the value of \u{f010b}, or at least be its prefix.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each variation.\n\nMatching Priorities (first match is used):\n\u{f0b3a}\u{f010b} (e.g. \"%s\")\n\u{f0b3b}Prefix of \u{f010b} (e.g. \"%s\")\n\nPlease ensure that your new preset name has the correct priority. It is recommended to make prefixes as long as possible to avoid conflicts in the future. Take a look at the Preset File Explorer to delete presets, if necessary.",
+	GUI_TBL_VAL_PSET_TIP1 = "\u{f1668} Active Camera Preset\n\nWhen saving, the name \"%s\" is used. The new name must exactly match the value of \u{f010b} or \u{f07ac}, or be at least a prefix of one of them.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each variation.\n\nMatching Priorities (first match is used):\n\u{f0b3a}\u{f010b} (e.g. \"%s\")\n\u{f0b3b}\u{f07ac} (e.g. \"%s\")\n\u{f0b3c}Prefix of \u{f010b} (e.g. \"%s\")\n\u{f0b3d}Prefix of \u{f07ac} (e.g. \"%s\")\n\nPlease ensure that your new preset name has the correct priority. It is recommended to make prefixes as long as possible to avoid conflicts in the future. Take a look at the Preset File Explorer to delete presets, if necessary.",
+	GUI_TBL_VAL_PSET_TIP2 = "\u{f1668} Active Camera Preset\n\nWhen saving, the name \"%s\" is used. The new name must exactly match the value of \u{f010b}, or at least be its prefix.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each variation.\n\nMatching Priorities (first match is used):\n\u{f0b3a}\u{f010b} (e.g. \"%s\")\n\u{f0b3b}Prefix of \u{f010b} (e.g. \"%s\")\n\nPlease ensure that your new preset name has the correct priority. It is recommended to make prefixes as long as possible to avoid conflicts in the future. Take a look at the Preset File Explorer to delete presets, if necessary.",
 	GUI_TBL_VAL_ANG_TIP = "\u{f10f3} Angles (°)| |Default:|%d|Min:|%d|Max:|%d|In Use:|%d",
 	GUI_TBL_VAL_DIST_TIP = "\u{f054e} Distance| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Closer|Increase:|Farther",
 	GUI_TBL_VAL_X_TIP = "\u{f0d4c} X-Offset| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Left|Increase:|Right",
@@ -75,7 +75,7 @@ return {
 	GUI_GOPT_NAC = "No Auto-Centering",
 	GUI_GOPT_NVAN = "No Vanilla Presets",
 	GUI_GOPT_NVAN_TIP = "Some vanilla vehicles have unusual camera settings that this mod corrects. Enable this option to leave vanilla vehicles untouched.\n\nKeep in mind that changes only take effect after exiting and re-entering the vehicle.",
-	GUI_GOPT_TIP = "Keep in mind that changes only take effect after exiting and re-entering the vehicle.\n\nFor certain vehicles, you may also need to disable and re-enable the mod via the checkbox—while not sitting in any vehicle—to apply your changes.",
+	GUI_GOPT_TIP = "Keep in mind that some changes only take effect after exiting and re-entering the vehicle.",
 
 	--GUI: 🗂️ Preset File Explorer
 	GUI_FEXP_DEL_CONFIRM = "Delete file \"%s\"?",
@@ -94,7 +94,7 @@ return {
 	LOG_MOD_ON = "Mod has been enabled!",
 	LOG_PARAM_BACKUP = "Backup param (key: '%s'; value: '%s').",
 	LOG_PARAM_IS_LOW = "Param '%s' is low height.",
-	LOG_PARAM_MANIP = "Param manipulation detected (key: '%s'; value: '%s'), reset value to '%s' from key '%s'.",
+	LOG_PARAM_MANIP = "Param manipulation detected (key: '%s'; value: '%s'), reset value to '%s'.",
 	LOG_PARAM_REST = "Restore param (key: '%s') to value '%s'.",
 	LOG_PARAM_SET = "Set param (key: '%s') to value '%s'.",
 	LOG_PSET_DEF_FOUND = "Default preset '%s' found.",
