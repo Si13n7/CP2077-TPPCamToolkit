@@ -1,0 +1,1 @@
+return{Link="diablo_base"}

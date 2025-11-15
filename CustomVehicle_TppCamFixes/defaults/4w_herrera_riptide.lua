@@ -1,0 +1,1 @@
+return{ID="4w_herrera_riptide",Close={y=0.5,z=1},Medium={y=0.5,z=1.25},Far={y=0.5,z=2.25},IsDefault=true}

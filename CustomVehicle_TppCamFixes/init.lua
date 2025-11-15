@@ -10,7 +10,7 @@ offsets for specific custom vehicles.
 ----------------------------------------------
 
 Filename: init.lua
-Version: 2025-03-31, 16:56 UTC+01:00 (MEZ)
+Version: 2025-04-01, 20:01 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -49,8 +49,6 @@ ______________________________________________
 ---@field EndTable fun(): nil -- Ends the creation of the current table. Must always be called after `ImGui.BeginTable()`.
 ---@field GetWindowSize fun(): number -- Returns the current width of the window as a floating-point number.
 ---@field CalcTextSize fun(text: string): number -- Calculates the width of a given text string as it would be displayed using the current font. Returns the width in pixels as a floating-point number.
----@field PushStyleColor fun(index: number, color: number): nil -- Pushes a style color onto the stack. The color should be specified as an `ImGuiCol` constant.
----@field PopStyleColor fun(count?: number): nil -- Pops one or more style colors from the stack. Defaults to popping one color if `count` is not specified.
 ImGui = ImGui
 
 --- ImGuiWindowFlags Definition
@@ -116,7 +114,7 @@ Observe = Observe
 --- registerForEvent Definition
 ---@class registerForEvent
 --- Allows the registration of functions to be executed when certain game events occur, such as initialization or shutdown.
----@field registerForEvent fun(eventName: string, callback: fun(...): nil) -- Registers a callback function for a specified event (e.g., 'onInit', 'onShutdown').
+---@field registerForEvent fun(eventName: string, callback: fun(...): nil) -- Registers a callback function for a specified event (e.g., 'onInit', 'onIsDefault').
 registerForEvent = registerForEvent
 
 --- spdlog Definition
@@ -139,95 +137,66 @@ dir = dir
 =======================================================]]
 
 
----@type string
+--- Info level for log messages.
+--- Used for general informational output.
+---@type integer
+Info = 0
+
+--- Warn level for log messages.
+--- Used for non-critical issues or unexpected behavior.
+---@type integer
+Warn = 1
+
+--- Error level for log messages.
+--- Used for critical failures or important errors that need attention.
+---@type integer
+Error = 2
+
 -- The window title.
+---@type string
 local _title = "Custom Vehicle - TPP Camera Fixes"
 
----@type boolean
 -- Determines whether the CET overlay is open.
+---@type boolean
 local _isOverlayOpen = false
 
----@type boolean
 -- Determines whether the mod is enabled.
+---@type boolean
 local _isEnabled = true
 
+-- The current debug mode level controlling logging and alerts: 0 = Disabled; 1 = Print; 2 = Print, and Alert; 3 = Print, Alert, and Log
 ---@type number
--- The current debug mode level controlling logging and alerts:
--- 0 = Disabled; 1 = Print; 2 = Print, and Alert; 3 = Print, Alert, and Log
 local _devMode = 0
 
----@type CameraOffsetPreset|nil
----The preset currently being edited.
-local _currentEntryEdit = nil
-
----@type table<string, CameraOffsetPreset>|nil
 ---Includes copies of the original camera presets for comparison with editing presets.
-local _originalEntries = nil
+---@type table<string, CameraOffsetPreset>
+local _originalEntries = {}
 
----@type string
 -- The template string for accessing camera lookAtOffset values in TweakDB.
+---@type string
 local _cameraPathTemplate = "Camera.VehicleTPP_%s_%s.lookAtOffset"
 
----@type string|nil
--- The currently mounted vehicle name.
-local _mountedVehicleName = nil
+-- Determines whether a vehicle is currently mounted.
+---@type boolean
+local _isVehicleMounted = false
 
----@type table<string>|nil
----The default camera IDs used for preloading.
-local _defaultVehicleCamIDs = {
-	"Default_Preset",
-	"2w_Preset",
-	"4w_911",
-	"4w_aerondight",
-	"4w_Alvarado_Preset",
-	"4w_Archer_Hella",
-	"4w_Archer_Quartz",
-	"4w_BMF",
-	"4w_caliburn",
-	"4w_Columbus",
-	"4w_Cortes_Preset",
-	"4w_Galena_Nomad",
-	"4w_Galena",
-	"4w_herrera_outlaw",
-	"4w_herrera_riptide",
-	"4w_Hozuki",
-	"4w_Limo_Thrax",
-	"4w_Mahir_Supron_Kurtz",
-	"4w_Makigai",
-	"4w_Medium_Preset",
-	"4w_mizutani_Preset",
-	"4w_Quadra",
-	"4w_Quadra66_Nomad",
-	"4w_Quadra66",
-	"4w_Shion_Nomad",
-	"4w_Shion",
-	"4w_SubCompact_Preset",
-	"4w_Tanishi",
-	"4w_Thorton_Colby_Pickup_Kurtz",
-	"4w_Thorton_Colby_Pickup",
-	"4w_Thorton_Colby",
-	"4w_Truck_Preset",
-	"v_militech_basilisk_CameraPreset",
-	"v_standard25_mahir_supron_CameraPreset",
-	"v_utilitruck4_mainh_supron_CameraPreset",
-	"v_utility4_kaukaz_bratsk_Preset",
-	"v_utility4_kaukaz_zenya_Preset",
-	"v_utility4_zeya_behemoth_Preset"
-}
+--- The currently mounted vehicle camera preset for the editor.
+---@type CameraOffsetPreset|nil
+local _mountedVehicleEntry = nil
 
+---Contains all camera presets and linked vehicles.
 ---@class CameraOffsetPreset
 ---@field ID string|nil -- The camera ID used for the vehicle.
 ---@field Close table|nil -- The Y-offset for close camera view.
 ---@field Medium table|nil -- The Y-offset for medium camera view.
 ---@field Far table|nil -- The Y-offset for far camera view.
 ---@field Link string|nil -- The name of another vehicle appearance to link to (if applicable).
----@field Shutdown boolean|nil -- Whether to reset to default camera offsets on shutdown.
+---@field IsDefault boolean|nil -- Whether to reset to default camera offsets.
 ---@type table<string, CameraOffsetPreset>
----Contains all camera presets and linked vehicles.
 local _cameraOffsetPresets = {}
 
----@type string[]
 -- Paths corresponding to different camera positions.
+---@type string[]
 local _cameraOffsetPaths = {
 	"High_Close",
 	"High_Medium",
@@ -243,17 +212,25 @@ local _cameraOffsetPaths = {
 	"Low_DriverCombatFar"
 }
 
+--- Camera offset levels.
+---@type string[]
+local _cameraOffsetLevels = {
+	"Close",
+	"Medium",
+	"Far"
+}
+
+---Logs and displays messages based on the current `_devMode` level. Messages can be logged to the log file, printed to the console output, or shown as in-game alerts.
 ---@param level number -- Controls the logging level (0 = Info, 1 = Warning, 2 = Error).
 ---@param format string -- The format string for the message.
 ---@vararg any -- Additional arguments for formatting the message.
----Logs and displays messages based on the current `_devMode` level. Messages can be logged to the log file, printed to the console output, or shown as in-game alerts.
-local function log(level, format, ...)
+function Log(level, format, ...)
 	if _devMode < 1 then return end
 
 	local msg = "[CVTPPCF]  "
-	if level > 1 then
+	if level == Error then
 		msg = msg .. "[Error]  "
-	elseif level == 1 then
+	elseif level == Warn then
 		msg = msg .. "[Warn]  "
 	else
 		msg = msg .. "[Info]  "
@@ -261,18 +238,14 @@ local function log(level, format, ...)
 	msg = msg .. format
 
 	local args = { ... }
-	if #args > 0 then
-		for i = 1, #args do
-			args[i] = tostring(args[i])
-		end
-		msg = string.format(msg, table.unpack(args))
+	local ok, formatted = pcall(string.format, msg, table.unpack(args))
+	if ok then
+		msg = formatted
 	end
 
 	if _devMode > 2 then
-		if level > 1 then
+		if level == Error then
 			spdlog.error(msg)
-		elseif level > 0 then
-			spdlog.info(msg)
 		else
 			spdlog.info(msg)
 		end
@@ -286,6 +259,19 @@ local function log(level, format, ...)
 	if _devMode > 0 then
 		print(msg)
 	end
+end
+
+---Forces a log message to be emitted using a temporary `_devMode` override. This is useful for emitting output regardless of the current developer mode setting. Internally calls `log()` with the specified parameters, then restores the previous `_devMode`.
+---@param mode integer -- The temporary debug mode to use (e.g., 1 = print, 2 = print + alert, 3 = print + alert + log).
+---@param level integer -- The log level to pass to `log()` (0 = Info, 1 = Warn, 2 = Error).
+---@param format string -- The format string for the message.
+---@vararg any -- Optional format arguments to inject into the message.
+function LogF(mode, level, format, ...)
+	if mode < 1 then return end
+	local previous = _devMode
+	_devMode = mode
+	Log(level, format, ...)
+	_devMode = previous
 end
 
 ---Creates a deep copy of a table, including all nested tables.
@@ -303,14 +289,6 @@ local function tableDeepCopy(original)
 	return copy
 end
 
----@param str string    -- The string to check.
----@param prefix string -- The prefix to look for.
----@return boolean      -- True if the string starts with the prefix, false otherwise.
----Checks if a given string begins with the specified prefix.
-local function stringStartsWith(str, prefix)
-	return #prefix <= #str and str:sub(1, #prefix) == prefix
-end
-
 --- Checks if a string ends with a specified suffix.
 ---@param str string The string to check.
 ---@param suffix string The suffix to look for.
@@ -319,40 +297,20 @@ local function stringEndsWith(str, suffix)
 	return #suffix <= #str and str:sub(- #suffix) == suffix
 end
 
+---Fetches the current camera offset from 'TweakDB' based on the specified ID and path.
 ---@param id string -- The camera ID.
 ---@param path string -- The camera path to retrieve the offset for.
 ---@return Vector3|nil -- The camera offset as a Vector3.
----Fetches the current camera offset from 'TweakDB' based on the specified ID and path.
 local function getCameraLookAtOffset(id, path)
 	return TweakDB:GetFlat(string.format(_cameraPathTemplate, id, path))
 end
 
----@param id string -- The camera ID.
----@param path string -- The camera path to set the offset for.
----@param x number -- The X-coordinate of the camera position.
----@param y number -- The Y-coordinate of the camera position.
----@param z number -- The Z-coordinate of the camera position.
----Sets a camera offset in 'TweakDB' to the specified position values.
-local function setCameraLookAtOffset(id, path, x, y, z)
-	TweakDB:SetFlat(string.format(_cameraPathTemplate, id, path), Vector3.new(x, y, z))
-end
-
----@param id string -- The camera ID.
----@param path string -- The camera path to update.
----@param y number -- The new Y-coordinate value.
----@param z number|nil -- The optional Z-coordinate value.
----Updates the Y (and optionally Z) offset of a camera path in 'TweakDB'.
-local function setCameraLookAtOffsetYZ(id, path, y, z)
-	local vec3 = getCameraLookAtOffset(id, path)
-	if vec3 then
-		setCameraLookAtOffset(id, path, vec3.x, y, z or vec3.z)
-	end
-end
-
+---Retrieves the current camera offset data for the specified camera ID from 'TweakDB' and returns it as a 'CameraOffsetPreset' table.
 ---@param id string -- The camera ID.
 ---@return CameraOffsetPreset|nil -- The camera offset data retrieved from 'TweakDB'.
----Retrieves the current camera offset data for the specified camera ID from 'TweakDB' and returns it as a 'CameraOffsetPreset' table.
 local function getCurrentCameraOffset(id)
+	if not id then return nil end
+
 	local entry = { ID = id }
 	for i, path in ipairs(_cameraOffsetPaths) do
 		local vec3 = getCameraLookAtOffset(id, path)
@@ -369,96 +327,126 @@ local function getCurrentCameraOffset(id)
 		end
 
 		if entry.Far and entry.Medium and entry.Close then
+			if _devMode > 2 then
+				Log(Info, "Found current camera offset for '%s'.", id)
+			end
 			return entry
 		end
 	end
+
+	Log(Warn, "Could not retrieve current camera offset for '%s'.", id)
 	return nil
 end
 
----Loads or updates all custom camera offset presets from files in the 'presets' directory.
----@param reload boolean|nil -- If true, existing entries will be overwritten. Defaults to false.
-local function loadCustomCameraOffsetPresets(reload)
-	if reload == nil then reload = false end
+---Sets a camera offset in 'TweakDB' to the specified position values.
+---@param id string -- The camera ID.
+---@param path string -- The camera path to set the offset for.
+---@param x number -- The X-coordinate of the camera position.
+---@param y number -- The Y-coordinate of the camera position.
+---@param z number -- The Z-coordinate of the camera position.
+local function setCameraLookAtOffset(id, path, x, y, z)
+	TweakDB:SetFlat(string.format(_cameraPathTemplate, id, path), Vector3.new(x, y, z))
+end
 
-	if reload then
-		for key, entry in pairs(_cameraOffsetPresets) do
-			if not entry.Shutdown then
-				_cameraOffsetPresets[key] = nil
+---Updates the Y (and optionally Z) offset of a camera path in 'TweakDB'.
+---@param id string -- The camera ID.
+---@param path string -- The camera path to update.
+---@param y number -- The new Y-coordinate value.
+---@param z number|nil -- The optional Z-coordinate value.
+local function setCameraLookAtOffsetYZ(id, path, y, z)
+	local fallback = getCameraLookAtOffset(id, path)
+	if fallback then
+		setCameraLookAtOffset(id, path, fallback.x, y or fallback.y, z or fallback.z)
+	end
+end
+
+--- Clears all currently loaded camera offset presets.
+local function purgeCameraOffsetPresets()
+	_cameraOffsetPresets = {}
+	Log(Warn, "Cleared all loaded camera offset presets.")
+end
+
+--- Loads all camera offset presets from the directories `./defaults/` (first) and `./presets/` (second). Each preset file must be a `.lua` file that returns a valid `CameraOffsetPreset` table with at least an `ID` field. Presets already loaded will be skipped unless `refresh` is set to true, in which case all existing presets are cleared before loading.
+---@param refresh boolean|nil -- If true, clears all previously loaded presets before loading. Defaults to false.
+local function loadCameraOffsetPresets(refresh)
+	local function loadFrom(path)
+		local files = dir("./" .. path)
+		for _, file in ipairs(files) do
+			local name = file.name
+			if not name or not stringEndsWith(name, ".lua") then goto continue end
+
+			local key = name:sub(1, -5)
+			if _cameraOffsetPresets[key] then
+				Log(Warn, "Skipping already loaded preset: '%s' ('./%s/%s').", key, path, name)
+				goto continue
 			end
+
+			local chunk, err = loadfile(path .. "/" .. name)
+			if not chunk then
+				Log(Error, "Failed to load preset './%s/%s': %s", path, name, err)
+				goto continue
+			end
+
+			local ok, result = pcall(chunk)
+			if ok and type(result) == "table" and (type(result.ID) == "string" or type(result.Link) == "string") then
+				_cameraOffsetPresets[key] = result
+				Log(Info, "Loaded preset '%s' from './%s/%s'.", key, path, name)
+			else
+				Log(Error, "Invalid or failed preset './%s/%s'.", path, name)
+			end
+
+			::continue::
 		end
-		_currentEntryEdit = nil
-		_originalEntries = nil
 	end
 
-	local files = dir("./presets")
-	for _, file in ipairs(files) do
-		local name = file.name
-		if not stringEndsWith(name, ".lua") then goto continue end
-
-		local key = name:gsub("%.lua$", "")
-		if not reload and _cameraOffsetPresets[key] ~= nil then
-			goto continue
-		end
-
-		local chunk, err = loadfile("presets/" .. name)
-		if not chunk then
-			log(2, "Failed to load preset '%s': %s", name, err)
-			goto continue
-		end
-
-		local success, result = pcall(chunk)
-		if success and type(result) == "table" then
-			_cameraOffsetPresets[key] = result
-		else
-			log(2, "Failed to execute preset '%s'", name)
-		end
-
-		::continue::
+	if refresh then
+		purgeCameraOffsetPresets()
 	end
+
+	loadFrom("defaults")
+	loadFrom("presets")
 end
 
----Loads default camera offsets from TweakDB and stores them in '_cameraOffsetPresets'.
-local function loadDefaultCameraOffsetPresets()
-	if not _defaultVehicleCamIDs then return end
-
-	local vehicleIds = _defaultVehicleCamIDs
-	_defaultVehicleCamIDs = nil
-
-	for _, id in ipairs(vehicleIds) do
-		if _cameraOffsetPresets[id] then goto continue end
-
-		local entry = getCurrentCameraOffset(id)
-		if entry then
-			entry.Shutdown = true
-			_cameraOffsetPresets[id] = entry
+--- Applies a camera offset preset to the vehicle by updating values in TweakDB. If the preset contains a `Link` field, the function follows the link recursively until it reaches a final entry (up to 8 times to avoid infinite loops). Missing `y` or `z` values in the preset are replaced by fallback values from the default preset (if available).
+---@param entry CameraOffsetPreset -- The preset to apply. May contain a `Link` to another preset.
+---@param count number|nil -- Internal recursion counter to prevent infinite loops via `Link`. Should not be passed manually.
+local function applyCameraOffsetPreset(entry, count)
+	if entry and entry.Link then
+		count = (count or 0) + 1
+		if _devMode > 2 then
+			Log(Info, "Following linked preset (%d): '%s'", count, entry.Link)
 		end
-
-		::continue::
-	end
-end
-
----@param entry CameraOffsetPreset -- The camera offset data to apply.
--- Applies the specified camera offsets to the vehicle using 'TweakDB'.
-local function applyCameraOffsetPreset(entry)
-	if entry and entry.Link and _cameraOffsetPresets[entry.Link] then
 		entry = _cameraOffsetPresets[entry.Link]
+		if entry and entry.Link and count < 8 then
+			applyCameraOffsetPreset(entry, count)
+			return
+		end
 	end
+
+	if not entry or not entry.ID then
+		Log(Error, "Failed to apply preset.")
+		return
+	end
+
+	local fallback = _cameraOffsetPresets[entry.ID] or {}
 	for i, path in ipairs(_cameraOffsetPaths) do
 		local p = (i - 1) % 3
 		local v = p == 0 and entry.Close or p == 1 and entry.Medium or entry.Far
-		if v and v.y then
-			setCameraLookAtOffsetYZ(entry.ID, path, v.y, v.z)
+		local f = p == 0 and fallback.Close or p == 1 and fallback.Medium or fallback.Far
+		if v and (v.y or v.z) then
+			setCameraLookAtOffsetYZ(entry.ID, path, v.y or f.y, v.z or f.z)
 		end
 	end
 end
 
---- Restores default camera offsets for vehicles.
+--- Restores all default camera offsets for vehicles.
 local function applyDefaultCameraOffsetPresets()
 	for _, entry in pairs(_cameraOffsetPresets) do
-		if entry.Shutdown then
+		if entry.IsDefault then
 			applyCameraOffsetPreset(entry)
 		end
 	end
+	Log(Info, "Restored all default presets.")
 end
 
 ---Extracts the record name from a TweakDBID string representation.
@@ -469,11 +457,18 @@ local function getRecordName(data)
 	return tostring(data):match("%-%-%[%[(.-)%-%-%]%]"):match("^%s*(.-)%s*$")
 end
 
+--- Returns the vehicle the player is currently mounted in, if any. Internally fetches the player instance and queries their active vehicle.
+---@return Vehicle|nil -- The currently mounted vehicle instance, or nil if the player is not mounted.
 local function getMountedVehicle()
 	local player = Game.GetPlayer()
-	if not player then return end
-
-	return Game.GetMountedVehicle(player)
+	if not player then
+		_isVehicleMounted = false
+		_mountedVehicleEntry = nil
+		return nil
+	end
+	local vehicle = Game.GetMountedVehicle(player)
+	_isVehicleMounted = vehicle ~= nil
+	return vehicle
 end
 
 ---Attempts to retrieve the camera ID associated with a given vehicle.
@@ -520,45 +515,37 @@ local function autoApplyCameraOffsetPreset()
 	local name = getVehicleName(vehicle)
 	if not name then return end
 
-	if name == _mountedVehicleName then return end
-	_mountedVehicleName = name;
-
 	if _devMode > 1 then
-		log(0, "Mounted vehicle: '%s'", name)
+		Log(Info, "Mounted vehicle: '%s'", name)
 
 		local vehicleID = getVehicleCameraID(vehicle)
 		if vehicleID then
-			log(0, "Camera preset ID: '%s'", vehicleID)
+			Log(Info, "Camera preset ID: '%s'", vehicleID)
 		end
 	end
 
-	for pass = 1, 2 do
-		for key, entry in pairs(_cameraOffsetPresets) do
-			if pass == 1 and name == key or pass == 2 and stringStartsWith(name, key) then
-				log(0, "Apply camera preset: '%s'", entry.Link or name)
-				applyCameraOffsetPreset(entry)
-				return
-			end
+	for key, entry in pairs(_cameraOffsetPresets) do
+		if name == key then
+			Log(Info, "Apply camera preset: '%s'", entry.Link or name)
+			applyCameraOffsetPreset(entry)
+			return
 		end
 	end
 end
 
----Saves the current preset to 'presets/<name>.lua' only if the file does not already exist.
+---Saves the current preset to './presets/<name>.lua' only if the file does not already exist.
 ---@param name string -- The name of the preset.
 ---@param preset table -- The current preset to save.
----@param overwrite boolean|nil -- Whether to overwrite the file if it exists (default: false).
 ---@return boolean -- True if saved successfully or already exists, false if error occurred.
-local function savePreset(name, preset, overwrite)
+local function savePreset(name, preset)
 	if type(name) ~= "string" or type(preset) ~= "table" then return false end
 
 	local path = "presets/" .. name .. ".lua"
-	if not overwrite then
-		local check = io.open(path, "r")
-		if check then
-			check:close()
-			log(1, "File '%s' already exists, and overwrite is disabled.", path)
-			return false
-		end
+	local check = io.open(path, "r")
+	if check then
+		check:close()
+		Log(Warn, "File '%s' already exists, and overwrite is disabled.", path)
+		return false
 	end
 
 	local function isDifferent(a, b)
@@ -570,14 +557,14 @@ local function savePreset(name, preset, overwrite)
 	end
 
 	local function round(v)
-		return string.format("%.3f", v):gsub("(%..-%)0+$", "%1"):gsub("%.$", "")
+		return string.format("%.3f", v):gsub("0+$", ""):gsub("%.$", "")
 	end
 
 	local norm = _originalEntries and _originalEntries[name] or {}
 	local save = false
 	local parts = { "return{" }
 	table.insert(parts, string.format('ID=%q,', preset.ID))
-	for _, mode in ipairs({ "Close", "Medium", "Far" }) do
+	for _, mode in ipairs(_cameraOffsetLevels) do
 		local a = preset[mode]
 		local b = norm[mode]
 		local sub = {}
@@ -620,27 +607,32 @@ local function savePreset(name, preset, overwrite)
 	return true
 end
 
--- Initializes the mod by loading default camera offsets and setting up the observer for vehicle mounting events.
+-- Initializes the mod at game startup.
 registerForEvent("onInit", function()
-	loadCustomCameraOffsetPresets()
-	loadDefaultCameraOffsetPresets()
+	-- Load all saved presets from disk.
+	loadCameraOffsetPresets(true)
 
+	-- When the player mounts a vehicle, automatically apply the matching camera preset if available.
+	autoApplyCameraOffsetPreset()
 	Observe("VehicleComponent", "OnMountingEvent", function()
-		if not _isEnabled then return end
+		if not _isEnabled or _isVehicleMounted then return end
+		_mountedVehicleEntry = nil
 		autoApplyCameraOffsetPreset()
 	end)
 
+	-- When the player unmounts from a vehicle, reset to default camera offsets.
 	Observe("VehicleComponent", "OnUnmountingEvent", function()
 		if not _isEnabled then return end
-		_mountedVehicleName = nil
-		_currentEntryEdit = nil
+		_isVehicleMounted = false
+		_mountedVehicleEntry = nil
 		applyDefaultCameraOffsetPresets()
 	end)
 
-	-- Resets '_currentEntryEdit' when the player takes control of their character after loading a save.
+	-- Reset the current editor state when the player takes control of their character
+	-- (usually after loading a save game). This ensures UI does not persist stale data.
 	Observe("PlayerPuppet", "OnTakeControl", function(self)
-		if self:GetEntityID().hash ~= 1 then return end
-		_currentEntryEdit = nil
+		if self:GetEntityID().hash ~= 1 or not _isEnabled then return end
+		_isVehicleMounted = false
 	end)
 end)
 
@@ -677,21 +669,30 @@ registerForEvent("onDraw", function()
 	if not isEnabled then
 		if _isEnabled then
 			_isEnabled = false
-			_mountedVehicleName = nil
 			applyDefaultCameraOffsetPresets()
+			purgeCameraOffsetPresets()
+			LogF(2, Info, "Mod has been disabled!")
 		end
 		ImGui.End()
 		return
 	end
 
-	_isEnabled = true
-	autoApplyCameraOffsetPreset()
+	if isEnabled ~= _isEnabled then
+		_isEnabled = true
+		_mountedVehicleEntry = nil
+		loadCameraOffsetPresets()
+		autoApplyCameraOffsetPreset()
+		LogF(2, Info, "Mod has been enabled!")
+	end
+
 
 	ImGui.Dummy(padding, 0)
 	ImGui.SameLine()
 	if ImGui.Button("Reload All Presets", 192, 24) then
-		loadCustomCameraOffsetPresets(true)
-		log(0, "Presets have been reloaded!")
+		_mountedVehicleEntry = nil
+		loadCameraOffsetPresets(true)
+		autoApplyCameraOffsetPreset()
+		LogF(2, Info, "Presets have been reloaded!")
 	end
 	if ImGui.IsItemHovered() then
 		ImGui.BeginTooltip()
@@ -764,21 +765,20 @@ registerForEvent("onDraw", function()
 		ImGui.EndTable()
 	end
 
-	local entry
-	if not _currentEntryEdit then
-		_currentEntryEdit = getCurrentCameraOffset(id)
+	if not _mountedVehicleEntry then
+		_mountedVehicleEntry = getCurrentCameraOffset(id)
 	end
-	entry = _currentEntryEdit
+
+	local entry = _mountedVehicleEntry
 	if not entry then
+		Log(Warn, "No preset found.")
 		ImGui.End()
 		return
 	end
 
-	if not _originalEntries then
-		_originalEntries = {}
-	end
 	if not _originalEntries[name] then
-		_originalEntries[name] = tableDeepCopy(entry)
+		local original = getCurrentCameraOffset(entry.ID)
+		_originalEntries[name] = tableDeepCopy(original or entry)
 	end
 
 	if ImGui.BeginTable("CameraOffsetEditor", 3, ImGuiTableFlags.Borders) then
@@ -787,7 +787,7 @@ registerForEvent("onDraw", function()
 		ImGui.TableSetupColumn("Z Offset", ImGuiTableColumnFlags.WidthStretch)
 		ImGui.TableHeadersRow()
 
-		for _, key in ipairs({ "Close", "Medium", "Far" }) do
+		for _, key in ipairs(_cameraOffsetLevels) do
 			local offsets = entry[key]
 			if type(offsets) == "table" then
 				ImGui.TableNextRow()
@@ -795,26 +795,15 @@ registerForEvent("onDraw", function()
 				ImGui.TableSetColumnIndex(0)
 				ImGui.Text(key)
 
-				local original = _originalEntries[name] and _originalEntries[name][key] or {}
+				local original = _originalEntries[name][key] or {}
 				for i, axis in ipairs({ "y", "z" }) do
-					local current = offsets[axis] or 0.0
-					local changed = math.abs(current - (original[axis] or 0.0)) > 0.0001
-
 					ImGui.TableSetColumnIndex(i)
-
-					if changed then
-						ImGui.PushStyleColor(0, 0xff0080ff)
-					end
-
 					ImGui.PushItemWidth(102)
+					local curVal = offsets[axis] or original[axis] or 0.0
 					local minVal = i == 1 and -10 or 0
 					local maxVal = i == 1 and 10 or 32
-					local newVal = ImGui.SliderFloat(string.format("##%s_%s", key, axis), current, minVal, maxVal)
+					local newVal = ImGui.SliderFloat(string.format("##%s_%s", key, axis), curVal, minVal, maxVal)
 					ImGui.PopItemWidth()
-
-					if changed then
-						ImGui.PopStyleColor()
-					end
 
 					offsets[axis] = newVal
 				end
@@ -829,7 +818,7 @@ registerForEvent("onDraw", function()
 
 	if ImGui.Button("Apply Changes", width, 24) then
 		_cameraOffsetPresets[name] = entry
-		log(0, "The preset has been updated.", name)
+		LogF(2, Info, "The preset '%s' has been updated.", name)
 	end
 	if ImGui.IsItemHovered() then
 		ImGui.BeginTooltip()
@@ -841,14 +830,14 @@ registerForEvent("onDraw", function()
 
 	if ImGui.Button("Save Changes to File", width, 24) then
 		if savePreset(name, entry) then
-			log(0, "File 'presets/%s.lua' was saved successfully.", name)
+			LogF(2, Info, "File './presets/%s.lua' was saved successfully.", name)
 		else
-			log(1, "File 'presets/%s.lua' could not be saved.", name)
+			LogF(2, Warn, "File './presets/%s.lua' could not be saved.", name)
 		end
 	end
 	if ImGui.IsItemHovered() then
 		ImGui.BeginTooltip()
-		ImGui.Text(string.format("Saves the modified preset permanently under 'presets/%s.lua'.", name))
+		ImGui.Text(string.format("Saves the modified preset permanently under './presets/%s.lua'.", name))
 		ImGui.Text("Please note that overwriting existing presets is not allowed to prevent accidental loss.")
 		ImGui.Text("If you want to overwrite a preset, you must delete the existing file manually first.")
 		ImGui.EndTooltip()

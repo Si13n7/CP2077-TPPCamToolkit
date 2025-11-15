@@ -1,0 +1,1 @@
+return{ID="4w_Tanishi",Close={y=0.5,z=1.85},Medium={y=0.5,z=2.35},Far={y=0.5,z=2.85},IsDefault=true}

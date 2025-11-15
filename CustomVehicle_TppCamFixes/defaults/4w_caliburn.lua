@@ -1,0 +1,1 @@
+return{ID="4w_caliburn",Close={y=0,z=1.15},Medium={y=0,z=1.5},Far={y=0,z=2.25},IsDefault=true}

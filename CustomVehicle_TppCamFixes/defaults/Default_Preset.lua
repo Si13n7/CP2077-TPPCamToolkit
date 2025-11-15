@@ -1,0 +1,1 @@
+return{ID="Default_Preset",Close={y=0.5,z=1.2},Medium={y=0.5,z=1.2},Far={y=0.5,z=1.2},IsDefault=true}
