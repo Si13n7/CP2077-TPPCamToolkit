@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-05-11, 11:32 UTC+01:00 (MEZ)
+Version: 2025-05-15, 09:24 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -959,7 +959,7 @@ end
 ---@param fmt string # A format string for the message.
 ---@vararg any # Additional arguments for formatting the message.
 local function log(lvl, id, fmt, ...)
-	if log_suspend or dev_mode == DevLevels.DISABLED then return end
+	if log_suspend or dev_mode <= DevLevels.DISABLED then return end
 
 	if not isStringValid(fmt) then
 		lvl = LogLevels.ERROR
@@ -1036,10 +1036,11 @@ local function callEvery(interval, callback)
 	call_id_counter = call_id_counter + 1
 
 	local id = call_id_counter
+	local time = abs(interval)
 	call_timers[id] = {
-		interval = interval,
+		interval = time,
 		callback = callback,
-		time = interval,
+		time = time,
 		active = true
 	}
 
@@ -1173,7 +1174,7 @@ local function getCustomVehicleCameraID()
 		end
 	end
 
-	--Filter defaults.
+	--Filter vanilla defaults.
 	for _, p in pairs(camera_presets) do
 		if not p.IsDefault or p.IsJoined or not isString(p.ID) then
 			goto continue
@@ -1350,9 +1351,12 @@ local function getCameraDefaultRotationPitch(preset, path)
 
 	local isLow = startsWith(path, "Low", true)
 	local defaults = {
-		v_militech_basilisk_CameraPreset    = { low = 5, high = 5 },
-		v_utility4_militech_behemoth_Preset = { low = 5, high = 12 },
-		default                             = { low = 4, high = 11 },
+		["4w_aerondight"]                   = { low = 04, high = 12 },
+		["4w_Preset"]                       = { low = 04, high = 15 },
+		["4w_SubCompact_Preset"]            = { low = 12, high = 12 },
+		v_militech_basilisk_CameraPreset    = { low = 05, high = 05 },
+		v_utility4_militech_behemoth_Preset = { low = 05, high = 12 },
+		default                             = { low = 04, high = 11 }
 	}
 
 	local def = defaults[preset.ID] or defaults.default
@@ -1361,8 +1365,11 @@ local function getCameraDefaultRotationPitch(preset, path)
 	if not key then return defVal end
 
 	local value = tonumber(TweakDB:GetFlat(key))
-	if isLow and value and (value == 11 or value == 12) then
-		value = value - 7
+	if isLow and value ~= nil then
+		local lowValue = value - 7
+		if lowValue == abs(lowValue) then
+			value = lowValue
+		end
 	end
 
 	return value or defVal
@@ -1648,7 +1655,7 @@ local function getDefaultPreset(preset)
 	local fallback = getPreset(id)
 	if not fallback then return nil end
 
-	--Ensures unique keys to prevent conflicts.
+	--Ensures unique key to prevent conflicts.
 	local key = format("%08x_%s", checksum(id), id)
 
 	fallback.IsDefault = true
