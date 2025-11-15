@@ -1,0 +1,1 @@
+return{ID="4w_Galena",Close={y=0.35},Medium={y=0.45},Far={y=0.35}}
