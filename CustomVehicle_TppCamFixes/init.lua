@@ -3,14 +3,13 @@
 This file is distributed under the MIT License
 ==============================================
 
-Custom Vehicle - TPP Camera Fixes
+Custom Vehicle - TPP Camera Fixes and More
 
-Adjusts third-person perspective (TPP) camera
-offsets for specific custom vehicles.
-----------------------------------------------
+Adjusts third-person perspective (TPP)
+camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-01, 20:01 UTC+01:00 (MEZ)
+Version: 2025-04-02, 01:34 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -137,20 +136,91 @@ dir = dir
 =======================================================]]
 
 
---- Info level for log messages.
---- Used for general informational output.
----@type integer
-Info = 0
+---Developer mode levels used to control the verbosity and behavior of debug output.
+---@alias DevLevelType 0 | 1 | 2 | 3
+---@class DevLevelEnum
+---@field Disabled DevLevelType - No debug output.
+---@field Basic DevLevelType - Print only.
+---@field Alert DevLevelType - Print + alert.
+---@field Full DevLevelType - Print + alert + log.
+---@type DevLevelEnum
+DevLevel = {
+	Disabled = 0,
+	Basic = 1,
+	Alert = 2,
+	Full = 3
+}
 
---- Warn level for log messages.
---- Used for non-critical issues or unexpected behavior.
----@type integer
-Warn = 1
+-- The current debug mode level controlling logging and alerts: 0 = Disabled; 1 = Print; 2 = Print, and Alert; 3 = Print, Alert, and Log
+---@type DevLevelType
+DevMode = DevLevel.Disabled
 
---- Error level for log messages.
---- Used for critical failures or important errors that need attention.
----@type integer
-Error = 2
+---Log levels used to classify the severity of log messages.
+---@alias LogLevelType 0 | 1 | 2
+---@class LogLevelEnum
+---@field Info LogLevelType - General informational output.
+---@field Warn LogLevelType - Non-critical issues or unexpected behavior.
+---@field Error LogLevelType - Critical failures or important errors that need attention.
+---@type LogLevelEnum
+LogLevel = {
+	Info = 0,
+	Warn = 1,
+	Error = 2
+}
+
+---Logs and displays messages based on the current `DevMode` level. Messages can be logged to the log file, printed to the console output, or shown as in-game alerts.
+---@param level LogLevelType -- Controls the logging level (0 = Info, 1 = Warning, 2 = Error).
+---@param format string -- The format string for the message.
+---@vararg any -- Additional arguments for formatting the message.
+function Log(level, format, ...)
+	if DevMode == DevLevel.Disabled then return end
+
+	local msg = "[CVTPPCF]  "
+	if level >= LogLevel.Error then
+		msg = msg .. "[Error]  "
+	elseif level == LogLevel.Warn then
+		msg = msg .. "[Warn]  "
+	else
+		msg = msg .. "[Info]  "
+	end
+	msg = msg .. format
+
+	local args = { ... }
+	local ok, formatted = pcall(string.format, msg, table.unpack(args))
+	if ok then
+		msg = formatted
+	end
+
+	if DevMode >= DevLevel.Full then
+		if level == LogLevel.Error then
+			spdlog.error(msg)
+		else
+			spdlog.info(msg)
+		end
+	end
+	if DevMode >= DevLevel.Alert then
+		local player = Game.GetPlayer()
+		if player then
+			player:SetWarningMessage(msg, 5)
+		end
+	end
+	if DevMode >= DevLevel.Basic then
+		print(msg)
+	end
+end
+
+---Forces a log message to be emitted using a temporary `DevMode` override. This is useful for emitting output regardless of the current developer mode setting. Internally calls `Log()` with the specified parameters, then restores the previous `DevMode`.
+---@param mode DevLevelType -- The temporary debug mode to use (e.g., 1 = print, 2 = print + alert, 3 = print + alert + log).
+---@param level LogLevelType -- The log level to pass to `Log()` (0 = Info, 1 = Warn, 2 = Error).
+---@param format string -- The format string for the message.
+---@vararg any -- Optional format arguments to inject into the message.
+function LogF(mode, level, format, ...)
+	if mode < 1 then return end
+	local previous = DevMode
+	DevMode = mode
+	Log(level, format, ...)
+	DevMode = previous
+end
 
 -- The window title.
 ---@type string
@@ -163,10 +233,6 @@ local _isOverlayOpen = false
 -- Determines whether the mod is enabled.
 ---@type boolean
 local _isEnabled = true
-
--- The current debug mode level controlling logging and alerts: 0 = Disabled; 1 = Print; 2 = Print, and Alert; 3 = Print, Alert, and Log
----@type number
-local _devMode = 0
 
 ---Includes copies of the original camera presets for comparison with editing presets.
 ---@type table<string, CameraOffsetPreset>
@@ -219,60 +285,6 @@ local _cameraOffsetLevels = {
 	"Medium",
 	"Far"
 }
-
----Logs and displays messages based on the current `_devMode` level. Messages can be logged to the log file, printed to the console output, or shown as in-game alerts.
----@param level number -- Controls the logging level (0 = Info, 1 = Warning, 2 = Error).
----@param format string -- The format string for the message.
----@vararg any -- Additional arguments for formatting the message.
-function Log(level, format, ...)
-	if _devMode < 1 then return end
-
-	local msg = "[CVTPPCF]  "
-	if level == Error then
-		msg = msg .. "[Error]  "
-	elseif level == Warn then
-		msg = msg .. "[Warn]  "
-	else
-		msg = msg .. "[Info]  "
-	end
-	msg = msg .. format
-
-	local args = { ... }
-	local ok, formatted = pcall(string.format, msg, table.unpack(args))
-	if ok then
-		msg = formatted
-	end
-
-	if _devMode > 2 then
-		if level == Error then
-			spdlog.error(msg)
-		else
-			spdlog.info(msg)
-		end
-	end
-	if _devMode > 1 then
-		local player = Game.GetPlayer()
-		if player then
-			player:SetWarningMessage(msg, 5)
-		end
-	end
-	if _devMode > 0 then
-		print(msg)
-	end
-end
-
----Forces a log message to be emitted using a temporary `_devMode` override. This is useful for emitting output regardless of the current developer mode setting. Internally calls `log()` with the specified parameters, then restores the previous `_devMode`.
----@param mode integer -- The temporary debug mode to use (e.g., 1 = print, 2 = print + alert, 3 = print + alert + log).
----@param level integer -- The log level to pass to `log()` (0 = Info, 1 = Warn, 2 = Error).
----@param format string -- The format string for the message.
----@vararg any -- Optional format arguments to inject into the message.
-function LogF(mode, level, format, ...)
-	if mode < 1 then return end
-	local previous = _devMode
-	_devMode = mode
-	Log(level, format, ...)
-	_devMode = previous
-end
 
 ---Creates a deep copy of a table, including all nested tables.
 ---@param original table -- The table to copy.
@@ -327,14 +339,14 @@ local function getCurrentCameraOffset(id)
 		end
 
 		if entry.Far and entry.Medium and entry.Close then
-			if _devMode > 2 then
-				Log(Info, "Found current camera offset for '%s'.", id)
+			if DevMode >= DevLevel.Full then
+				Log(LogLevel.Info, "Found current camera offset for '%s'.", id)
 			end
 			return entry
 		end
 	end
 
-	Log(Warn, "Could not retrieve current camera offset for '%s'.", id)
+	Log(LogLevel.Warn, "Could not retrieve current camera offset for '%s'.", id)
 	return nil
 end
 
@@ -363,7 +375,7 @@ end
 --- Clears all currently loaded camera offset presets.
 local function purgeCameraOffsetPresets()
 	_cameraOffsetPresets = {}
-	Log(Warn, "Cleared all loaded camera offset presets.")
+	Log(LogLevel.Warn, "Cleared all loaded camera offset presets.")
 end
 
 --- Loads all camera offset presets from the directories `./defaults/` (first) and `./presets/` (second). Each preset file must be a `.lua` file that returns a valid `CameraOffsetPreset` table with at least an `ID` field. Presets already loaded will be skipped unless `refresh` is set to true, in which case all existing presets are cleared before loading.
@@ -377,22 +389,22 @@ local function loadCameraOffsetPresets(refresh)
 
 			local key = name:sub(1, -5)
 			if _cameraOffsetPresets[key] then
-				Log(Warn, "Skipping already loaded preset: '%s' ('./%s/%s').", key, path, name)
+				Log(LogLevel.Warn, "Skipping already loaded preset: '%s' ('./%s/%s').", key, path, name)
 				goto continue
 			end
 
 			local chunk, err = loadfile(path .. "/" .. name)
 			if not chunk then
-				Log(Error, "Failed to load preset './%s/%s': %s", path, name, err)
+				Log(LogLevel.Error, "Failed to load preset './%s/%s': %s", path, name, err)
 				goto continue
 			end
 
 			local ok, result = pcall(chunk)
 			if ok and type(result) == "table" and (type(result.ID) == "string" or type(result.Link) == "string") then
 				_cameraOffsetPresets[key] = result
-				Log(Info, "Loaded preset '%s' from './%s/%s'.", key, path, name)
+				Log(LogLevel.Info, "Loaded preset '%s' from './%s/%s'.", key, path, name)
 			else
-				Log(Error, "Invalid or failed preset './%s/%s'.", path, name)
+				Log(LogLevel.Error, "Invalid or failed preset './%s/%s'.", path, name)
 			end
 
 			::continue::
@@ -413,8 +425,8 @@ end
 local function applyCameraOffsetPreset(entry, count)
 	if entry and entry.Link then
 		count = (count or 0) + 1
-		if _devMode > 2 then
-			Log(Info, "Following linked preset (%d): '%s'", count, entry.Link)
+		if DevMode >= DevLevel.Full then
+			Log(LogLevel.Info, "Following linked preset (%d): '%s'", count, entry.Link)
 		end
 		entry = _cameraOffsetPresets[entry.Link]
 		if entry and entry.Link and count < 8 then
@@ -424,18 +436,21 @@ local function applyCameraOffsetPreset(entry, count)
 	end
 
 	if not entry or not entry.ID then
-		Log(Error, "Failed to apply preset.")
+		Log(LogLevel.Error, "Failed to apply preset.")
 		return
 	end
 
 	local fallback = _cameraOffsetPresets[entry.ID] or {}
 	for i, path in ipairs(_cameraOffsetPaths) do
 		local p = (i - 1) % 3
-		local v = p == 0 and entry.Close or p == 1 and entry.Medium or entry.Far
+
+		local e = p == 0 and entry.Close or p == 1 and entry.Medium or entry.Far
 		local f = p == 0 and fallback.Close or p == 1 and fallback.Medium or fallback.Far
-		if v and (v.y or v.z) then
-			setCameraLookAtOffsetYZ(entry.ID, path, v.y or f.y, v.z or f.z)
-		end
+
+		local y = e and e.y or f.y or 0
+		local z = e and e.z or f.z or 1.115
+
+		setCameraLookAtOffsetYZ(entry.ID, path, y, z)
 	end
 end
 
@@ -446,7 +461,7 @@ local function applyDefaultCameraOffsetPresets()
 			applyCameraOffsetPreset(entry)
 		end
 	end
-	Log(Info, "Restored all default presets.")
+	Log(LogLevel.Info, "Restored all default presets.")
 end
 
 ---Extracts the record name from a TweakDBID string representation.
@@ -515,18 +530,18 @@ local function autoApplyCameraOffsetPreset()
 	local name = getVehicleName(vehicle)
 	if not name then return end
 
-	if _devMode > 1 then
-		Log(Info, "Mounted vehicle: '%s'", name)
+	if DevMode >= DevLevel.Alert then
+		Log(LogLevel.Info, "Mounted vehicle: '%s'", name)
 
 		local vehicleID = getVehicleCameraID(vehicle)
 		if vehicleID then
-			Log(Info, "Camera preset ID: '%s'", vehicleID)
+			Log(LogLevel.Info, "Camera preset ID: '%s'", vehicleID)
 		end
 	end
 
 	for key, entry in pairs(_cameraOffsetPresets) do
 		if name == key then
-			Log(Info, "Apply camera preset: '%s'", entry.Link or name)
+			Log(LogLevel.Info, "Apply camera preset: '%s'", entry.Link or name)
 			applyCameraOffsetPreset(entry)
 			return
 		end
@@ -536,19 +551,21 @@ end
 ---Saves the current preset to './presets/<name>.lua' only if the file does not already exist.
 ---@param name string -- The name of the preset.
 ---@param preset table -- The current preset to save.
+---@param onlyIfChanged boolean|nil -- If true, the preset will only be saved if it differs from the original.
 ---@return boolean -- True if saved successfully or already exists, false if error occurred.
-local function savePreset(name, preset)
+local function savePreset(name, preset, onlyIfChanged)
 	if type(name) ~= "string" or type(preset) ~= "table" then return false end
 
 	local path = "presets/" .. name .. ".lua"
 	local check = io.open(path, "r")
 	if check then
 		check:close()
-		Log(Warn, "File '%s' already exists, and overwrite is disabled.", path)
+		Log(LogLevel.Warn, "File '%s' already exists, and overwrite is disabled.", path)
 		return false
 	end
 
 	local function isDifferent(a, b)
+		if not onlyIfChanged then return true end
 		if type(a) ~= type(b) then return true end
 		if type(a) == "number" then
 			return math.abs(a - b) > 0.0001
@@ -607,6 +624,17 @@ local function savePreset(name, preset)
 	return true
 end
 
+---Shows a tooltip if the current item is hovered. Accepts multiple lines of text as variadic arguments.
+---@param ... string
+local function guiTooltip(...)
+	if not ImGui.IsItemHovered() then return end
+	ImGui.BeginTooltip()
+	for _, line in ipairs({ ... }) do
+		ImGui.Text(line)
+	end
+	ImGui.EndTooltip()
+end
+
 -- Initializes the mod at game startup.
 registerForEvent("onInit", function()
 	-- Load all saved presets from disk.
@@ -648,100 +676,76 @@ end)
 
 -- Display a simple GUI some options.
 registerForEvent("onDraw", function()
-	if not _isOverlayOpen then return end
-	if not ImGui.Begin(_title, ImGuiWindowFlags.AlwaysAutoResize) then return end
+	if not _isOverlayOpen or not ImGui.Begin(_title, ImGuiWindowFlags.AlwaysAutoResize) then return end
 
+	-- Minimum width and height padding.
 	ImGui.Dummy(230, 4)
 
-	local padding = 10
-	ImGui.Dummy(padding, 0)
+	ImGui.Dummy(10, 0)
 	ImGui.SameLine()
 	local isEnabled = ImGui.Checkbox("  Toggle Mod Functionality", _isEnabled)
-
-	if ImGui.IsItemHovered() then
-		ImGui.BeginTooltip()
-		ImGui.Text("Enables or disables the mod functionality.")
-		ImGui.EndTooltip()
-	end
+	guiTooltip("Enables or disables the mod functionality.")
 
 	ImGui.Dummy(0, 2)
 
-	if not isEnabled then
-		if _isEnabled then
-			_isEnabled = false
+	if isEnabled ~= _isEnabled then
+		_isEnabled = isEnabled
+		_mountedVehicleEntry = nil
+		if isEnabled then
+			loadCameraOffsetPresets()
+			autoApplyCameraOffsetPreset()
+			LogF(DevLevel.Alert, LogLevel.Info, "Mod has been enabled!")
+		else
 			applyDefaultCameraOffsetPresets()
 			purgeCameraOffsetPresets()
-			LogF(2, Info, "Mod has been disabled!")
+			LogF(DevLevel.Alert, LogLevel.Info, "Mod has been disabled!")
+			ImGui.End()
+			return
 		end
-		ImGui.End()
-		return
 	end
 
-	if isEnabled ~= _isEnabled then
-		_isEnabled = true
-		_mountedVehicleEntry = nil
-		loadCameraOffsetPresets()
-		autoApplyCameraOffsetPreset()
-		LogF(2, Info, "Mod has been enabled!")
-	end
-
-
-	ImGui.Dummy(padding, 0)
+	ImGui.Dummy(10, 0)
 	ImGui.SameLine()
 	if ImGui.Button("Reload All Presets", 192, 24) then
 		_mountedVehicleEntry = nil
 		loadCameraOffsetPresets(true)
 		autoApplyCameraOffsetPreset()
-		LogF(2, Info, "Presets have been reloaded!")
+		LogF(DevLevel.Alert, LogLevel.Info, "Presets have been reloaded!")
 	end
-	if ImGui.IsItemHovered() then
-		ImGui.BeginTooltip()
-		ImGui.Text("Reloads all data from custom preset files - only needed if files have been changed or added.")
-		ImGui.EndTooltip()
-	end
+	guiTooltip(
+		"Reloads all data from custom preset files - only\nneeded if files have been changed or added.",
+		"\nPlease note that you need to exit and re-enter\nthe vehicle for the changes to take effect."
+	)
 
 	ImGui.Dummy(0, 2)
 
-	ImGui.Dummy(padding, 0)
+	ImGui.Dummy(10, 0)
 	ImGui.SameLine()
 	ImGui.PushItemWidth(77)
-	_devMode = ImGui.SliderInt("  Developer Mode", _devMode, 0, 3)
-	if ImGui.IsItemHovered() then
-		ImGui.BeginTooltip()
-		ImGui.Text("Enables a feature that allows you to create, test, and save your own presets.")
-		ImGui.Text("")
-		ImGui.Text("Also adjusts the level of debug output:")
-		ImGui.Text(" 0 = Disabled")
-		ImGui.Text(" 1 = Print only")
-		ImGui.Text(" 2 = Print & Alert")
-		ImGui.Text(" 3 = Print, Alert & Log")
-		ImGui.EndTooltip()
-	end
+	DevMode = ImGui.SliderInt("  Developer Mode", DevMode, DevLevel.Disabled, DevLevel.Full)
+	guiTooltip(
+		"Enables a feature that allows you to create, test, and save your own presets.",
+		"\nAlso adjusts the level of debug output:",
+		" 0 = Disabled",
+		" 1 = Print only",
+		" 2 = Print & Alert",
+		" 3 = Print, Alert & Log"
+	)
 	ImGui.PopItemWidth()
 
 	ImGui.Dummy(0, 8)
 
-	if _devMode < 1 then
-		ImGui.End()
-		return
-	end
-
-	local vehicle = getMountedVehicle()
-	if not vehicle then
-		ImGui.End()
-		return
-	end
-
-	local name = getVehicleName(vehicle)
-	if not name then
-		ImGui.End()
-		return
-	end
-
-	local id = getVehicleCameraID(vehicle)
-	if not id then
-		ImGui.End()
-		return
+	local vehicle, name, id
+	for _, fn in ipairs({
+		function() return DevMode > DevLevel.Disabled end,
+		function() vehicle = getMountedVehicle(); return vehicle end,
+		function() name = getVehicleName(vehicle); return name end,
+		function() id = getVehicleCameraID(vehicle); return id end
+	}) do
+		if not fn() then
+			ImGui.End()
+			return
+		end
 	end
 
 	if ImGui.BeginTable("InfoTable", 2, ImGuiTableFlags.Borders) then
@@ -771,14 +775,18 @@ registerForEvent("onDraw", function()
 
 	local entry = _mountedVehicleEntry
 	if not entry then
-		Log(Warn, "No preset found.")
+		Log(LogLevel.Warn, "No preset found.")
 		ImGui.End()
 		return
 	end
 
 	if not _originalEntries[name] then
 		local original = getCurrentCameraOffset(entry.ID)
-		_originalEntries[name] = tableDeepCopy(original or entry)
+		if not original then
+			ImGui.End()
+			return
+		end
+		_originalEntries[name] = tableDeepCopy(original)
 	end
 
 	if ImGui.BeginTable("CameraOffsetEditor", 3, ImGuiTableFlags.Borders) then
@@ -818,30 +826,26 @@ registerForEvent("onDraw", function()
 
 	if ImGui.Button("Apply Changes", width, 24) then
 		_cameraOffsetPresets[name] = entry
-		LogF(2, Info, "The preset '%s' has been updated.", name)
+		LogF(DevLevel.Alert, LogLevel.Info, "The preset '%s' has been updated.", name)
 	end
-	if ImGui.IsItemHovered() then
-		ImGui.BeginTooltip()
-		ImGui.Text("Applies the configured values without saving them permanently.")
-		ImGui.Text("Please note that you need to exit and re-enter the vehicle for the changes to take effect.")
-		ImGui.EndTooltip()
-	end
+	guiTooltip(
+		"Applies the configured values without saving them permanently.",
+		"\nPlease note that you need to exit and re-enter the vehicle\nfor the changes to take effect."
+	)
 	ImGui.Dummy(0, 1)
 
 	if ImGui.Button("Save Changes to File", width, 24) then
 		if savePreset(name, entry) then
-			LogF(2, Info, "File './presets/%s.lua' was saved successfully.", name)
+			LogF(DevLevel.Alert, LogLevel.Info, "File './presets/%s.lua' was saved successfully.", name)
 		else
-			LogF(2, Warn, "File './presets/%s.lua' could not be saved.", name)
+			LogF(DevLevel.Alert, LogLevel.Warn, "File './presets/%s.lua' could not be saved.", name)
 		end
 	end
-	if ImGui.IsItemHovered() then
-		ImGui.BeginTooltip()
-		ImGui.Text(string.format("Saves the modified preset permanently under './presets/%s.lua'.", name))
-		ImGui.Text("Please note that overwriting existing presets is not allowed to prevent accidental loss.")
-		ImGui.Text("If you want to overwrite a preset, you must delete the existing file manually first.")
-		ImGui.EndTooltip()
-	end
+	guiTooltip(
+		string.format("Saves the modified preset permanently under './presets/%s.lua'.", name),
+		"\nPlease note that overwriting existing presets is not allowed\nto prevent accidental loss.",
+		"\nIf you want to overwrite a preset, you must delete the existing\nfile manually first."
+	)
 	ImGui.Dummy(0, 1)
 
 	ImGui.End()
