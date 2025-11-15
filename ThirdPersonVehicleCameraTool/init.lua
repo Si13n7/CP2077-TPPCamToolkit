@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-12, 13:11 UTC+01:00 (MEZ)
+Version: 2025-04-12, 15:03 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -127,7 +127,6 @@ TDBID = TDBID
 ---@field NameToString fun(value: any): string # Converts a game name object to a readable string.
 ---@field GetPlayer fun(): Player|nil # Retrieves the current player instance if available.
 ---@field GetMountedVehicle fun(player: Player): Vehicle|nil # Returns the vehicle the player is currently mounted in, if any.
----@field GetVehicleSystem fun(): IVehicleSystem|nil # Returns the global VehicleSystem, used to query and control player vehicles.
 Game = Game
 
 ---Represents the player character in the game, providing functions to interact with the player instance.
@@ -141,10 +140,6 @@ Player = Player
 ---@field GetRecordID fun(self: Vehicle): any # Returns the unique TweakDBID associated with the vehicle.
 ---@field GetTDBID fun(self: Vehicle): TDBID|nil # Retrieves the internal TweakDB identifier used to reference this vehicle in the game database. Returns `nil` if unavailable.
 Vehicle = Vehicle
-
----Provides access to vehicle-related systems, including vehicle registration, unlocking, and lookup functions.
----@class IVehicleSystem
----@field GetPlayerVehicles fun(self: IVehicleSystem): table[] # Returns all registered vehicles for the player. Each entry includes at least a `recordID` field (TDBID).
 
 ---Represents a three-dimensional vector, commonly used for positions or directions in the game.
 ---@class Vector3
@@ -481,12 +476,11 @@ end
 ---Checks whether a given value exists in a sequential table.
 ---@param tbl table # The table to search through (must be a sequential array).
 ---@param value any # The value to search for in the table.
----@param matchPrefix boolean|nil # If true, the function also matches entries that start with the given value.
 ---@return boolean # Returns true if the value exists in the table, otherwise false.
-local function tblContains(tbl, value, matchPrefix)
+local function tblContains(tbl, value)
 	if type(tbl) ~= "table" or value == nil then return false end
 	for _, v in ipairs(tbl) do
-		if v == value or matchPrefix and strStartsWith(v, value) then return true end
+		if v == value then return true end
 	end
 	return false
 end
@@ -943,31 +937,7 @@ local function loadPresets(refresh)
 			return -1
 		end
 
-		local isDefault = path == "defaults"
-		local installedVehicles = {}
-		if not isDefault then
-			local vs = Game.GetVehicleSystem()
-			local ents = vs and vs:GetPlayerVehicles() or {}
-			for _, v in ipairs(ents) do
-				local id = v.recordID
-				if not id then goto continue end
-
-				local name = TDBID.ToStringDEBUG(id)
-				name = name and name:gsub("^Vehicle%.", "")
-				if not name then goto continue end
-
-				table.insert(installedVehicles, name)
-
-				local app = TweakDB:GetFlat(name .. ".appearanceName")
-				name = app and Game.NameToString(app)
-				if not name then goto continue end
-
-				table.insert(installedVehicles, name)
-
-				::continue::
-			end
-		end
-
+		local isDef = path == "defaults"
 		local count = 0
 		for _, file in ipairs(files) do
 			local name = file.name
@@ -980,10 +950,6 @@ local function loadPresets(refresh)
 				goto continue
 			end
 
-			if not isDefault and not tblContains(installedVehicles, key, true) then
-				goto continue
-			end
-
 			local chunk, err = loadfile(path .. "/" .. name)
 			if not chunk then
 				LogE(DevLevel.BASIC, LogLevel.ERROR, Text.LOG_FAILED_TO_LOAD_PRESET, path, name, err)
@@ -991,15 +957,15 @@ local function loadPresets(refresh)
 			end
 
 			local ok, result = pcall(chunk)
-			if ok and setPresetEntry(key, result) then
-				count = count + 1
-				if not isDefault then
-					LogE(DevLevel.BASIC, LogLevel.INFO, Text.LOG_LOADED_PRESET, key, path, name)
-				end
+			if not ok or (isDef and not result.IsDefault) or not setPresetEntry(key, result) then
+				LogE(DevLevel.BASIC, LogLevel.ERROR, Text.LOG_INVALID_PRESET, path, name)
 				goto continue
 			end
 
-			LogE(DevLevel.BASIC, LogLevel.ERROR, Text.LOG_INVALID_PRESET, path, name)
+			count = count + 1
+			if DevMode >= DevLevel.FULL then
+				Log(LogLevel.INFO, Text.LOG_LOADED_PRESET, key, path, name)
+			end
 
 			::continue::
 		end
@@ -1016,7 +982,6 @@ local function loadPresets(refresh)
 		LogE(DevLevel.FULL, LogLevel.ERROR, Text.LOG_DEFAULTS_INCOMPLETE)
 		return
 	end
-	LogE(DevLevel.BASIC, LogLevel.INFO, Text.LOG_DEFAULTS_LOADED)
 
 	_isEnabled = loadFrom("presets") >= 0
 end
@@ -1068,6 +1033,10 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 	if not save then
 		Log(LogLevel.WARN, Text.LOG_PRESET_NOT_CHANGED, name, default.ID)
 		return false
+	end
+
+	if saveAsDefault then
+		table.insert(parts, "IsDefault=true")
 	end
 
 	local last = parts[#parts]
@@ -1162,7 +1131,6 @@ registerForEvent("onInit", function()
 	}
 	for _, value in ipairs(defaults) do
 		local preset = getPreset(value)
-		preset.IsDefault = true
 		if preset then
 			savePreset(preset.ID, preset, true, true)
 		end
