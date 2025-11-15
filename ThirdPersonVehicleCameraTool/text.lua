@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-05-07, 21:52 UTC+01:00 (MEZ)
+Version: 2025-05-11, 20:54 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -67,10 +67,14 @@ return {
 	GUI_FMAN_USAGE_TIP = "\u{f0520} Usage History| |First Used:|%s|Last Used:|%s|Total Uses:|%d",
 
 	--LOG: ℹ️ Info
+	LOG_ADD_DEF = "Default preset '%s' has been added.",
 	LOG_CAM_OSET_DONE = "Camera offset '%s' is ready.",
 	LOG_CAM_PSET = "Camera preset: '%s'.",
 	LOG_DEL_EPSET = "Last editor preset has been removed.",
 	LOG_DEL_SUCCESS = "Deleted preset '%s'.",
+	LOG_EVNT_CTRL = "Event 'PlayerPuppet:OnTakeControl' triggered.",
+	LOG_EVNT_MNT = "Event 'VehicleComponent:OnMountingEvent' triggered.",
+	LOG_EVNT_UMNT = "Event 'VehicleComponent:OnUnmountingEvent' triggered.",
 	LOG_FOUND_DEF = "Default preset '%s' found.",
 	LOG_LINK_PSET = "Following linked preset (%d): '%s'",
 	LOG_LOAD_PSET = "Preset '%s' has been loaded from '%s/%s'.",
@@ -85,7 +89,6 @@ return {
 	LOG_REST_ALL = "Restored all default presets.",
 	LOG_REST_PSET = "Preset for ID '%s' has been restored.",
 	LOG_REST_PSETS = "Restored %d/%d changed preset(s).",
-	LOG_ADD_DEF = "Default preset '%s' has been added.",
 
 	--LOG: ⚠️ Warnings
 	LOG_BLANK_NAME = "The new preset name cannot be blank.",
@@ -107,7 +110,7 @@ return {
 	LOG_DEFS_INCOMP = "The default presets are incomplete.",
 	LOG_DEL_FAILURE = "Failed to delete preset '%s'. %s",
 	LOG_DIR_NOT_EXIST = "You cannot delete the entire directory under '%s'.",
-	LOG_FAIL_APPLY = "Could not apply preset: incomplete parameters.",
+	LOG_FAIL_APPLY = "Could not apply preset: incomplete parameters ('%s').",
 	LOG_FAIL_LOAD = "Failed to load preset '%s/%s': '%s'.",
 	LOG_MOVE_FAILURE = "Failed to rename preset '%s' to '%s'. %s",
 	LOG_NO_APP = "The vehicle's appearance could not be found.",

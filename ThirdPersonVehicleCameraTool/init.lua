@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-05-11, 15:55 UTC+01:00 (MEZ)
+Version: 2025-05-11, 20:57 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -352,7 +352,7 @@ end
 ---@param t any # Value to check.
 ---@return boolean # True if the argument is a non-empty table, false otherwise.
 local function isTableNotEmpty(t)
-	return (isTable(t) and next(t)) and true or false
+	return isTable(t) and next(t) ~= nil
 end
 
 ---Checks whether the provided argument is of type 'userdata'.
@@ -942,8 +942,8 @@ local function log(lvl, id, fmt, ...)
 
 	local tag =
 		lvl == LogLevels.ERROR and "[Error]  " or
-		lvl == LogLevels.WARN and "[Warn]   " or
-		"[Info]   "
+		lvl == LogLevels.WARN and "[Warn]  " or
+		"[Info]  "
 
 	local msg = format("[TPVCamTool]  [%04X]  %s%s", id or 0, tag, format(fmt, ...))
 
@@ -1023,6 +1023,13 @@ end
 --#endregion
 
 --#region 🚗 Vehicle Metadata
+
+---Checks if the player is currently inside a vehicle.
+---@return boolean # True if the player exists and is mounted in a vehicle, otherwise false.
+local function isVehicleMounted()
+	local player = Game.GetPlayer()
+	return player and Game.GetMountedVehicle(player) ~= nil or false
+end
 
 ---Retrieves the vehicle the player is currently mounted in, if any.
 ---Internally retrieves the player instance and checks for an active vehicle.
@@ -2702,9 +2709,16 @@ end
 ---If forced or conditions are met, applies the appropriate camera preset.
 ---@param force boolean? # If true, the preset will be applied regardless of state.
 local function onMount(force)
-	if not force and not mod_enabled or isTableNotEmpty(vehicle_cache) then return end
+	if not force and (not mod_enabled or not isVehicleMounted() or next(vehicle_cache) ~= nil) then
+		return
+	end
 
 	log_suspend = false
+
+	if dev_mode >= DevLevels.ALERT then
+		log(LogLevels.INFO, 0x0f9b, Text.LOG_EVNT_MNT)
+	end
+
 	applyPreset()
 end
 
@@ -2716,9 +2730,16 @@ local function onUnmount(force)
 	if not force and not mod_enabled then return end
 
 	log_suspend = false
+
+	if dev_mode >= DevLevels.ALERT then
+		log(LogLevels.INFO, 0x9dee, Text.LOG_EVNT_UMNT)
+	end
+
 	padding_width = 0
 	vehicle_cache = {}
+
 	restoreModifiedPresets()
+
 	clearLastEditorBundle()
 end
 
@@ -2741,10 +2762,10 @@ registerForEvent("onInit", function()
 
 	--When the player mounts a vehicle, automatically apply the matching camera preset if available.
 	--This event can fire even if the player is already mounted.
-	Observe("VehicleComponent", "OnMountingEvent", onMount)
+	Observe("VehicleComponent", "OnMountingEvent", function(_) onMount(false) end)
 
 	--When the player unmounts from a vehicle, reset to default camera offsets.
-	Observe("VehicleComponent", "OnUnmountingEvent", onUnmount)
+	Observe("VehicleComponent", "OnUnmountingEvent", function(_) onUnmount(false) end)
 
 	--Triggered when control over the player character is gained (e.g. after loading a save).
 	Observe("PlayerPuppet", "OnTakeControl", function(self)
@@ -2752,6 +2773,11 @@ registerForEvent("onInit", function()
 
 		overlay_locked = true
 		file_man_open = false
+
+		if dev_mode >= DevLevels.ALERT then
+			log(LogLevels.INFO, 0x0f8c, Text.LOG_EVNT_CTRL)
+		end
+
 		onUnmount(true)
 
 		local devMode = dev_mode
