@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-12, 15:03 UTC+01:00 (MEZ)
+Version: 2025-04-12, 16:20 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -909,6 +909,7 @@ local function setPresetEntry(key, preset)
 	if preset == nil then
 		if _cameraPresets[key] ~= nil then
 			_cameraPresets[key] = nil
+			_guiEditorPreset = nil
 		end
 		return true
 	end
@@ -925,7 +926,7 @@ local function purgePresets()
 	Log(LogLevel.WARN, Text.LOG_CLEARED_PRESETS)
 end
 
----Loads camera offset presets from `./defaults/` (first) and `./presets/` (second).
+---Loads camera offset presets from `./defaults` (first) and `./presets` (second).
 ---Each `.lua` file must return a `CameraPreset` table with at least an `ID` field.
 ---Skips already loaded presets unless `refresh` is true (then clears and reloads all).
 ---@param refresh boolean|nil — If true, clears existing presets before loading (default: false).
@@ -991,7 +992,7 @@ end
 ---@param name string # The name of the preset file (with or without `.lua` extension).
 ---@param preset table # The preset data to save (must include an `ID` and valid offset data).
 ---@param allowOverwrite boolean|nil # Whether existing files may be overwritten.
----@param saveAsDefault boolean|nil # If true, saves the preset to the `./defaults/` directory instead of `./presets/`.
+---@param saveAsDefault boolean|nil # If true, saves the preset to the `./defaults` directory instead of `./presets`.
 ---@return boolean # Returns `true` on success, or `false` if writing failed or nothing needed to be saved.
 local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 	if type(name) ~= "string" or type(preset) ~= "table" then return false end
@@ -1032,6 +1033,15 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 
 	if not save then
 		Log(LogLevel.WARN, Text.LOG_PRESET_NOT_CHANGED, name, default.ID)
+
+		if not saveAsDefault then
+			local ok = os.remove(path)
+			if ok then
+				Log(LogLevel.WARN, Text.LOG_DELETE_SUCCESS, path)
+			end
+			return ok and setPresetEntry(name, nil)
+		end
+
 		return false
 	end
 
@@ -1052,6 +1062,8 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 	end
 	file:write(table.concat(parts))
 	file:close()
+
+	LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_PRESET_SAVED, name)
 
 	return true
 end
@@ -1296,19 +1308,19 @@ registerForEvent("onDraw", function()
 			local text = item.value or Text.GUI_NONE
 			ImGui.TableSetColumnIndex(1)
 			if item.key == Text.GUI_TABLE_LABEL_PRESET then
-				local rawValue = _guiEditorPresetName or text
-				local extValue = fileWithLuaExt(rawValue)
+				local value = _guiEditorPresetName or text
+				local file = fileWithLuaExt(value)
 
-				local width = ImGui.CalcTextSize(extValue) + 8
+				local width = ImGui.CalcTextSize(file) + 8
 				ImGui.PushItemWidth(width)
 
-				local isNotDefault = rawValue ~= id
+				local isNotDefault = value ~= id
 				local pushedStyles = 0
 				if isNotDefault then
 					pushedStyles = pushStyleColors(ImGuiCol.FrameBg, 0xff505020)
 				end
 
-				local newValue, changed = ImGui.InputText("##Preset", extValue, 96)
+				local newValue, changed = ImGui.InputText("##Preset", file, 96)
 				if changed and newValue then
 					_guiEditorPresetName = newValue
 				end
@@ -1317,7 +1329,7 @@ registerForEvent("onDraw", function()
 					ImGui.PopStyleColor(pushedStyles)
 				end
 
-				addTooltip(F(Text.GUI_TABLE_VALUE_PRESET_TOOLTIP, isNotDefault and extValue or fileWithLuaExt(name), name,
+				addTooltip(F(Text.GUI_TABLE_VALUE_PRESET_TOOLTIP, isNotDefault and file or fileWithLuaExt(name), name,
 					appName, nameShortenSmart(name), nameShortenSmart(appName)))
 
 				ImGui.PopItemWidth()
@@ -1366,6 +1378,7 @@ registerForEvent("onDraw", function()
 			local flag = i < 3 and ImGuiTableColumnFlags.WidthFixed or ImGuiTableColumnFlags.WidthStretch
 			ImGui.TableSetupColumn(label, flag, -1)
 		end
+
 		ImGui.TableHeadersRow()
 
 		local tooltips = {
@@ -1393,14 +1406,13 @@ registerForEvent("onDraw", function()
 				ImGui.TableSetColumnIndex(i)
 				ImGui.PushItemWidth(-1)
 
-				local isNotDefault = not floatEquals(orgValue, curValue)
 				local pushedStyles = 0
-				if isNotDefault then
+				if not floatEquals(curValue, orgValue) then
 					pushedStyles = pushStyleColors(ImGuiCol.FrameBg, 0xff505020)
 				end
 
 				local newValue = ImGui.DragFloat(F("##%s_%s", level, field), curValue, speed, min, max, format)
-				if newValue ~= curValue then
+				if not floatEquals(newValue, curValue) then
 					_guiEditorUnsavedChanges[name] = true
 					data[field] = math.min(math.max(newValue, min), max)
 				end
@@ -1442,12 +1454,12 @@ registerForEvent("onDraw", function()
 		pushedStyles = pushStyleColors(ImGuiCol.Button, 0xff204050)
 	end
 	if ImGui.Button(Text.GUI_PRESET_SAVE, contentWidth, 24) then
+		_cameraPresets[validKey] = preset
+		_guiEditorPresetName = validKey
+		Log(LogLevel.INFO, Text.LOG_PRESET_UPDATED, validKey)
 		if savePreset(validKey, preset, _guiEditorAllowOverwrite) then
 			_guiEditorUnsavedChanges[name] = nil
 			_guiEditorAllowOverwrite = false
-			_cameraPresets[validKey] = preset
-			_guiEditorPresetName = validKey
-			LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_PRESET_SAVED, validKey)
 		else
 			LogE(DevLevel.ALERT, LogLevel.WARN, Text.LOG_PRESET_NOT_SAVED, validKey)
 		end
