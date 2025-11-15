@@ -13,7 +13,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-10-02, 08:14 UTC+01:00 (MEZ)
+Version: 2025-10-03, 13:46 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -81,7 +81,8 @@ ImGui = ImGui
 ---@field NoCollapse integer # Disables the ability to collapse the window.
 ---@field NoResize integer # Disables window resizing.
 ---@field NoMove integer # Disables window moving.
----@field NoNavInputs number # Disables navigation inputs (keyboard/gamepad) for the window, restricting control to mouse interactions.
+---@field NoFocusOnAppearing integer # Prevents the window from taking focus when it appears.
+---@field NoInputs integer # Disables all inputs (mouse, keyboard, etc.) for the window.
 ImGuiWindowFlags = ImGuiWindowFlags
 
 ---Flags to customize table behavior and appearance.

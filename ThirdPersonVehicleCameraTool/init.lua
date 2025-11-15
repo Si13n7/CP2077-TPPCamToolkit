@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-10-02, 09:33 UTC+01:00 (MEZ)
+Version: 2025-10-03, 13:46 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -2766,22 +2766,23 @@ local function savePreset(name, preset, allowOverwrite, forceDefault)
 	local parts = { "return{" }
 	insert(parts, format("ID=%q,", preset.ID))
 	for _, mode in ipairs(PresetInfo.Levels) do
-		local p = preset[mode]
-		local d = default[mode]
-		local sub = {}
+		local curLevel = preset[mode]
+		local defLevel = default[mode] or {}
+		local offsetParts = {}
 
-		if isTable(p) then
-			d = isTable(d) and d or {}
-			for _, k in ipairs(PresetInfo.Offsets) do
-				if isCustom or forceDefault or equals(p[k], d[k]) then
+		if isTableValid(curLevel) then
+			for _, offset in ipairs(PresetInfo.Offsets) do
+				local curVal = curLevel[offset]
+				local defVal = defLevel[offset]
+				if isCustom or forceDefault or not equals(curVal, defVal) then
 					save = true
-					insert(sub, format("%s=%s", k, serialize(p[k] or d[k])))
+					insert(offsetParts, format("%s=%s", offset, serialize(curVal)))
 				end
 			end
 		end
 
-		if #sub > 0 then
-			insert(parts, format("%s={%s},", mode, concat(sub, ",")))
+		if isTableValid(offsetParts) then
+			insert(parts, format("%s={%s},", mode, concat(offsetParts, ",")))
 		end
 	end
 
@@ -3757,7 +3758,7 @@ local function openGlobalOptionsWindow(scale, contentWidth, controlPadding, heig
 		ImGui.SetNextWindowSize(w, h)
 	end
 
-	local flags = bor(ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.NoResize, ImGuiWindowFlags.NoMove)
+	local flags = bor(ImGuiWindowFlags.NoResize, ImGuiWindowFlags.NoMove, ImGuiWindowFlags.NoCollapse)
 	config.isOpen = ImGui.Begin(Text.GUI_GSETS, config.isOpen, flags)
 	if not config.isOpen then return end
 
@@ -3917,11 +3918,11 @@ local function openFileExplorerWindow(scale, controlPadding, halfHeightPadding, 
 		ImGui.SetNextWindowSize(w, h)
 	end
 
-	local flags = bor(ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.NoResize, ImGuiWindowFlags.NoMove)
+	local flags = bor(ImGuiWindowFlags.NoResize, ImGuiWindowFlags.NoMove, ImGuiWindowFlags.NoCollapse)
 	explorer.isOpen = ImGui.Begin(Text.GUI_FEXP, explorer.isOpen, flags)
 	if not explorer.isOpen then return end
 
-	local barFlags = bor(ImGuiTableFlags.SizingFixedFit, ImGuiTableFlags.NoBordersInBody)
+	local barFlags = bor(ImGuiTableFlags.NoBordersInBody, ImGuiTableFlags.SizingFixedFit)
 	local barHeight = floor(32 * scale)
 	if ImGui.BeginTable("SearchBar", 3, barFlags) then
 		ImGui.TableSetupColumn("##Label", ImGuiTableColumnFlags.WidthFixed, barHeight)
@@ -4382,7 +4383,7 @@ registerForEvent("onDraw", function()
 	--Main window begins.
 	local flags = ImGuiWindowFlags.AlwaysAutoResize
 	if not gui.isOverlayOpen then
-		flags = bor(flags, ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.NoNavInputs)
+		flags = bor(flags, ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.NoFocusOnAppearing, ImGuiWindowFlags.NoInputs)
 	end
 	if not ImGui.Begin(Text.GUI_TITL, flags) then return end
 
