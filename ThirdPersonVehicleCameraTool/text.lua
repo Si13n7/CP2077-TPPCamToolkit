@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-05-11, 11:32 UTC+01:00 (MEZ)
+Version: 2025-06-04, 15:07 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -33,6 +33,8 @@ return {
 	GUI_DMODE = "Developer Mode",
 	GUI_DMODE_TIP = "Enables a feature that allows you to create, test, and save your own presets.\n\nAlso adjusts the level of debug output:\n\u{f0b39}\u{f00a0} Disabled\n\u{f0b3a}\u{f018d} Print only\n\u{f0b3b}\u{f0d59} Print & Alert\n\u{f0b3c}\u{f1272} Print, Alert & Log",
 	GUI_NO_VEH = "\u{f02fd} Please enter a vehicle first!",
+	GUI_PRE_ON = "\u{f1952} Preset loaded and active!",
+	GUI_PRE_OFF = "\u{f11be} No preset available!",
 	GUI_APPLY = "\u{f044f} Apply ",
 	GUI_APPLY_TIP = "Applies the configured values without saving them permanently.\n\nThe vehicle must be exited and re-entered for the changes to become active.",
 	GUI_SAVE = "\u{f0193} Save ",
@@ -73,7 +75,7 @@ return {
 	LOG_DEL_EPSET = "Last editor preset has been removed.",
 	LOG_DEL_SUCCESS = "Deleted preset '%s'.",
 	LOG_EVNT_MNT = "Event 'VehicleComponent:OnMountingEvent' triggered.",
-	LOG_EVNT_UMNT = "Event 'VehicleComponent:OnUnmountingEvent' triggered.",
+	LOG_EVNT_UMNT_FAIL = "Event 'VehicleComponent:OnUnmountingEvent' triggered without any valid reason.",
 	LOG_FOUND_DEF = "Default preset '%s' found.",
 	LOG_LOAD_PSET = "Preset '%s' has been loaded from '%s/%s'.",
 	LOG_MOD_OFF = "Mod has been disabled!",

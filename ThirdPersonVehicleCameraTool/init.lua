@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-05-15, 09:24 UTC+01:00 (MEZ)
+Version: 2025-06-04, 15:07 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -80,7 +80,7 @@ ______________________________________________
 ---@field Preset ICameraPreset # The actual preset data (angles and offsets).
 ---@field Key string # Internal identifier for lookups and invalid name detection.
 ---@field Name string # User-modifiable display name of the preset.
----@field Token number # Adler-32 checksum of `Preset`, used to detect changes.
+---@field Token number # Adler-53 checksum of `Preset`, used to detect changes.
 ---@field IsPresent boolean # True if a corresponding preset file exists on disk.
 
 ---Represents pending actions for a modified camera preset within the editor workflow.
@@ -265,13 +265,17 @@ local padding_locked = false
 ---@type table<string, any>
 local custom_params = {}
 
----List of camera preset IDs that were modified at runtime to enable selective restoration.
----@type string[]
-local used_presets = {}
-
 ---Contains all camera presets.
 ---@type table<string, ICameraPreset>
 local camera_presets = {}
+
+---Determines whether a preset is currently loaded and active.
+---@type boolean
+local preset_active = false
+
+---List of camera preset IDs that were modified at runtime to enable selective restoration.
+---@type string[]
+local used_presets = {}
 
 ---A mapping of preset names to their usage statistics.
 ---@type table<string, IPresetUsage>
@@ -342,7 +346,7 @@ end
 ---Checks whether the provided argument is a non-empty string.
 ---Returns false if the argument is not a string or is an empty string.
 ---@param s any # Value to check.
----@return boolean # True if the argument is a string, false otherwise.
+---@return boolean # True if the argument is a non-empty string, false otherwise.
 local function isStringValid(s)
 	return isString(s) and #s > 0
 end
@@ -438,6 +442,20 @@ end
 ---@return boolean # True if all arguments are strings, false otherwise.
 local function areString(...)
 	return areType("string", ...)
+end
+
+---Checks whether all provided arguments are a non-empty strings.
+---Returns false if any argument is not a string or is an empty string.
+---@param ... any # Values to check.
+---@return boolean # True if all arguments are non-empty strings, false otherwise.
+local function areStringValid(...)
+	for i = 1, select("#", ...) do
+		local s = select(i, ...)
+		if not isStringValid(s) then
+			return false
+		end
+	end
+	return true
 end
 
 ---Checks whether all provided arguments are of type `table`.
@@ -811,10 +829,7 @@ end
 ---@return any # The value at index `i`, or the last value if `i` is too large.
 local function pick(i, ...)
 	local len = select("#", ...)
-	if i <= len then
-		return select(i, ...)
-	end
-	return select(len, ...)
+	return select(i < len and i or len, ...)
 end
 
 ---Converts any value to a readable string representation.
@@ -861,21 +876,40 @@ local function serialize(x)
 	return "{" .. concat(parts, ",") .. "}"
 end
 
----Computes an Adler-32 checksum over one or more values without allocating a new table.
+---Computes an Adler-53 checksum over one or more values without allocating a new table.
+---
+---This function implements a custom 53-bit variant of the Adler checksum algorithm,
+---designed by me (Si13n7) through minimal mathematical adjustments to the original.
+---
+---It improves upon Adler-32 by using a much larger prime modulus and a wider final hash space,
+---which significantly reduces the chance of hash collisions, even with shorter inputs.
+---
+---The result fits within Lua's numeric precision limit for integers (53 bits), making it safe
+---to use as a numeric key or identifier without loss of accuracy.
+---
+---Compared to Adler-32, Adler-53 offers:
+--- - A larger prime modulus (2^26-5) for better distribution
+--- - Full use of Lua's 53-bit integer precision
+--- - Improved robustness against uniform or repeating byte patterns
+---
+---This makes it suitable for identifying or caching structured values, serialized content,
+---or any use case where a compact and deterministic hash is required.
 ---@param ... any # One or more values to include in the checksum calculation.
----@return integer # 32-bit checksum combining all arguments.
+---@return integer # 53-bit checksum combining all arguments.
 local function checksum(...)
+	local mod = 0x3fffffb
 	local a, b = 1, 0
-	local n = select('#', ...)
-	for i = 1, n do
+	local len = select('#', ...)
+	for i = 1, len do
 		local v = select(i, ...)
 		local s = serialize(v)
 		for j = 1, #s do
-			a = (a + s:byte(j)) % 65521
-			b = (b + a) % 65521
+			local x = s:byte(j)
+			a = (a + x) % mod
+			b = (b + a) % mod
 		end
 	end
-	return bor(lshift(b, 16), a)
+	return floor(b * 2 ^ 26 + a)
 end
 
 ---Checks whether a file with the given name exists and is readable.
@@ -1656,7 +1690,7 @@ local function getDefaultPreset(preset)
 	if not fallback then return nil end
 
 	--Ensures unique key to prevent conflicts.
-	local key = format("%08x_%s", checksum(id), id)
+	local key = format("%x_%s", checksum(id), id)
 
 	fallback.IsDefault = true
 	fallback.IsJoined = true
@@ -1745,13 +1779,17 @@ local function applyPreset(preset, id)
 		return
 	end
 
-	local fallback = getDefaultPreset(preset) or {}
+	local isDefault = preset.IsDefault
+	local fallback = isDefault and preset or getDefaultPreset(preset) or {}
 	for i, path in ipairs(CameraLevels) do
 		local level = PresetLevels[(i - 1) % 3 + 1]
 		local a, x, y, z = getOffsetData(preset, fallback, level)
 
 		setCameraLookAtOffset(preset, path, x, y, z)
 		setCameraDefaultRotationPitch(preset, path, a)
+	end
+	if not isDefault then
+		preset_active = true
 	end
 
 	insert(used_presets, preset.ID)
@@ -2080,7 +2118,7 @@ end
 
 ---Generates a checksum token for a camera preset by combining its ID and offset tables.
 ---@param preset ICameraPreset? # The camera preset containing fields `ID`, `Close`, `Medium`, and `Far`.
----@return integer # Adler-32 checksum of `preset.ID`, `preset.Close`, `preset.Medium`, `preset.Far`, or -1 if invalid.
+---@return integer # Adler-53 checksum of `preset.ID`, `preset.Close`, `preset.Medium`, `preset.Far`, or -1 if invalid.
 local function getEditorPresetToken(preset)
 	if not isTable(preset) then return -1 end ---@cast preset ICameraPreset
 	return checksum(preset.ID, preset.Close, preset.Medium, preset.Far)
@@ -2253,6 +2291,7 @@ end
 ---If `padding_locked` is true and `padding_width` is already set, returns the locked value.
 ---@return number width # Available width of the content region in pixels.
 ---@return number half # Half of `width` minus half the item spacing.
+---@return number spacing # Item spacing width.
 ---@return number scale # UI scale factor (fontSize / 18).
 ---@return number padding # Computed horizontal padding (pixels), at least 10 * scale when unlocked.
 local function getMetrics()
@@ -2270,7 +2309,7 @@ local function getMetrics()
 		w = 230 * s
 	end
 	if padding_locked then
-		return w, hf, s, padding_width
+		return w, hf, sp, s, padding_width
 	end
 
 	local bw = 230 * s
@@ -2278,7 +2317,7 @@ local function getMetrics()
 	local rp = (w - bw) * 0.5 + bo - sp
 	padding_width = ceil(max(10 * s, rp))
 
-	return w, hf, s, padding_width
+	return w, hf, sp, s, padding_width
 end
 
 ---Aligns the next ImGui item horizontally, vertically, or both.
@@ -2391,14 +2430,56 @@ end
 ---Calls `ImGui.PopStyleColor(num)` only if `num` is a positive integer.
 ---@param num integer # The number of style colors to pop from the ImGui stack.
 local function popColors(num)
-	if num <= 0 then return end
+	if not isNumber(num) or num <= 0 then return end
 	ImGui.PopStyleColor(num)
+end
+
+---Displays a single line of text with optional horizontal centering, vertical spacing, and custom color.
+---@param text string # The text to display.
+---@param color? number #  Optional 32-bit ABGR color (e.g. 0xffc0c0c0). If provided, temporarily overrides the current text color.
+---@param heightPadding? number # Optional vertical space (in pixels) added below the text. Defaults to 0 if omitted.
+---@param contentWidth? number # Optional content width, used to center the text horizontally.
+---@param itemSpacing? number # Optional horizontal spacing between UI elements. Used with centering logic.
+local function addText(text, color, heightPadding, contentWidth, itemSpacing)
+	if not isStringValid(text) then return end
+
+	if areNumber(contentWidth, itemSpacing) then
+		local halfSize = ImGui.CalcTextSize(text) * 0.5
+		local padding = max(0, (contentWidth - itemSpacing * 3) * 0.5 - halfSize)
+		if padding > 0 then
+			ImGui.Dummy(padding, 0)
+			ImGui.SameLine()
+		end
+	end
+
+	local isColor = isNumber(color)
+	if isColor then
+		---@cast color number
+		ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(color, 0xff))
+	end
+
+	ImGui.Text(text)
+
+	if isColor then
+		ImGui.PopStyleColor()
+	end
+
+	if not isNumber(heightPadding) then return end
+	---@cast heightPadding number
+	ImGui.Dummy(0, heightPadding)
 end
 
 ---Adds centered text with custom word wrapping.
 ---@param text string # The text to display.
 ---@param wrap number # The maximum width before wrapping.
 local function addTextCenterWrap(text, wrap)
+	if not isStringValid(text) then return end
+
+	if not isNumber(wrap) or wrap < 40 then
+		ImGui.Text(text)
+		return
+	end
+
 	local ln, w = "", ImGui.GetWindowSize()
 	for s in text:gmatch("%S+") do
 		local t = (nilOrEmpty(ln)) and s or (ln .. " " .. s)
@@ -2474,7 +2555,7 @@ end
 ---@param noBtnColor? number # Optional color index for the No button (ImGuiCol style constant).
 ---@return boolean? # True if Yes clicked, false if No clicked, nil if popup not active.
 local function addPopupYesNo(id, text, scale, yesBtnColor, noBtnColor)
-	if not id or not ImGui.BeginPopup(id) then return nil end
+	if not areStringValid(id, text) or not ImGui.BeginPopup(id) then return nil end
 
 	local result = nil
 
@@ -2518,6 +2599,8 @@ end
 ---@return number? w # The window width when the button was clicked.
 ---@return number? h # The window height (clamped to at least 400) when the button was clicked.
 local function addFileManButton(contentWidth, heightPadding, halfHeightPadding, buttonHeight)
+	if not areNumber(contentWidth, heightPadding, halfHeightPadding, buttonHeight) then return end
+
 	local x, y, w, h
 
 	ImGui.Separator()
@@ -2741,6 +2824,7 @@ local function onUnmount(force)
 	vehicle_cache = {}
 	restoreModifiedPresets()
 	clearLastEditorBundle()
+	preset_active = false
 end
 
 ---Handles logic when the game or CET shuts down.
@@ -2780,14 +2864,23 @@ registerForEvent("onInit", function()
 	end)
 
 	--When the player unmounts from a vehicle, reset to default camera offsets.
-	Observe("VehicleComponent", "OnUnmountingEvent", function(_) onUnmount(false) end)
+	Observe("VehicleComponent", "OnUnmountingEvent", function(_)
+		if isVehicleMounted() then
+			if dev_mode >= DevLevels.ALERT then
+				log(LogLevels.INFO, 0x0f9b, Text.LOG_EVNT_UMNT_FAIL)
+			end
+			return
+		end
+
+		onUnmount(false)
+	end)
 
 	--When the game returns to the main menu, ensure any active vehicle camera presets are reset.
-	Observe('QuestTrackerGameController', 'OnUninitialize', function() onUnmount(false) end)
+	Observe("QuestTrackerGameController", "OnUninitialize", function() onUnmount(false) end)
 
 	--While the loading screen is active, but also triggers
 	--once when the user confirms it at the end with a key press.
-	Observe('LoadingScreenProgressBarController', 'SetProgress', function(_, progress)
+	Observe("LoadingScreenProgressBarController", "SetProgress", function(_, progress)
 		overlay_locked = progress < 1.0 --1.0 only on keyboard-confirmation.
 		if not mod_enabled then return end
 		if overlay_locked then
@@ -2803,7 +2896,7 @@ registerForEvent("onInit", function()
 	end)
 
 	--When a non-keyboard-confirmed loading screen finishes.
-	Observe('FastTravelSystem', 'OnLoadingScreenFinished', function(_, finished)
+	Observe("FastTravelSystem", "OnLoadingScreenFinished", function(_, finished)
 		if not finished then return end
 		overlay_locked = false
 		if backupDevMode ~= nil then
@@ -2838,10 +2931,10 @@ registerForEvent("onInit", function()
 	end)
 
 	--When Photo Mode is activated.
-	Observe('gameuiPhotoModeMenuController', 'OnShow', function() overlay_locked = true end)
+	Observe("gameuiPhotoModeMenuController", "OnShow", function() overlay_locked = true end)
 
 	--When Photo Mode is closed.
-	Observe('gameuiPhotoModeMenuController', 'OnHide', function() overlay_locked = false end)
+	Observe("gameuiPhotoModeMenuController", "OnHide", function() overlay_locked = false end)
 end)
 
 --Detects when the CET overlay is opened.
@@ -2879,7 +2972,7 @@ registerForEvent("onDraw", function()
 	end
 
 	--Computes scaled layout values (content width, control sizes, and paddings) based on the UI scale factor.
-	local contentWidth, halfContentWidth, scale, controlPadding = getMetrics()
+	local contentWidth, halfContentWidth, itemSpacing, scale, controlPadding = getMetrics()
 	local baseContentWidth = floor(230 * scale)
 	local buttonHeight = floor(24 * scale)
 	local rowHeight = floor(28 * scale)
@@ -3015,12 +3108,7 @@ registerForEvent("onDraw", function()
 		log_suspend = true
 		if dev_mode > DevLevels.DISABLED then
 			if not locked and not vehicle then
-				ImGui.Dummy(controlPadding, 0)
-				ImGui.SameLine()
-				ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(Colors.CARAMEL, 0xff))
-				ImGui.Text(Text.GUI_NO_VEH)
-				ImGui.PopStyleColor()
-				ImGui.Dummy(0, halfHeightPadding)
+				addText(Text.GUI_NO_VEH, Colors.CARAMEL, halfHeightPadding, contentWidth, itemSpacing)
 			end
 
 			--Button to open the Preset File Manager.
@@ -3036,6 +3124,16 @@ registerForEvent("onDraw", function()
 			--Opens the Preset File Manager window when button triggered.
 			openFileManWindow(scale, controlPadding, halfHeightPadding, buttonHeight, x, y, w, h)
 			return
+		elseif not locked and isVehicleMounted() then
+			local text, color
+			if preset_active then
+				text = Text.GUI_PRE_ON
+				color = Colors.FIR
+			else
+				text = Text.GUI_PRE_OFF
+				color = Colors.CARAMEL
+			end
+			addText(text, color, halfHeightPadding, contentWidth, itemSpacing)
 		end
 
 		--Creation of Main window is complete.
