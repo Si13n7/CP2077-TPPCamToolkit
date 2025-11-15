@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-19, 01:29 UTC+01:00 (MEZ)
+Version: 2025-04-19, 16:31 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -18,12 +18,13 @@ ______________________________________________
 
 
 --Aliases for commonly used standard library functions to simplify code.
-local format, rep, concat, insert, unpack, floor, max, min, band, bor, lshift, rshift =
+local format, rep, concat, insert, unpack, ceil, floor, max, min, band, bor, lshift, rshift =
 	string.format,
 	string.rep,
 	table.concat,
 	table.insert,
 	table.unpack,
+	math.ceil,
 	math.floor,
 	math.max,
 	math.min,
@@ -1178,20 +1179,34 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 	return true
 end
 
----Retrieves the available content width, dynamic horizontal padding for centering UI elements, and current item spacing.
----If `padding_locked` is true, returns the last computed `padding_width` without recalculation.
----@return number width # The available width of the content region.
----@return number padding # The computed horizontal padding for centering controls.
----@return number spacing # The current horizontal item spacing from the style (style.ItemSpacing.x).
+---Calculates UI layout metrics based on the current content region and font size.
+---Uses a baseline font height of 18px to derive a scale factor.
+---If `padding_locked` is true and `padding_width` is already set, returns the locked value.
+---@return number width # Available width of the content region in pixels.
+---@return number half # Half of `width` minus half the item spacing.
+---@return number scale # UI scale factor (fontSize / 18).
+---@return number padding # Computed horizontal padding (pixels), at least 10 * scale when unlocked.
 local function getMetrics()
-	local width = ImGui.GetContentRegionAvail()
-	local style = ImGui.GetStyle()
-	local spacing = style.ItemSpacing.x
-	if padding_locked then return width, padding_width, spacing end
-	padding_width = max(10, math.floor((width - 230) * 0.5 + 18) - spacing)
-	return width, padding_width, spacing
-end
+	local w  = ImGui.GetContentRegionAvail()
 
+	local st = ImGui.GetStyle()
+	local sp = st.ItemSpacing.x
+	local hf = ceil(w * 0.5 - (sp * 0.5))
+
+	local h  = ImGui.GetFontSize()
+	local s  = h / 18
+
+	if padding_locked and isNumber(padding_width) then
+		return w, hf, s, padding_width
+	end
+
+	local bw = 230 * s
+	local bo = 18 * s
+	local rp = (w - bw) * 0.5 + bo - sp
+	padding_width = ceil(max(10 * s, rp))
+
+	return w, hf, s, padding_width
+end
 ---Vertically aligns the next drawn item (typically text) within a cell of known height.
 ---Calculates offset using the current font height to position the item relative to the vertical center.
 ---@param cellHeight number # The height of the cell to align within.
@@ -1313,7 +1328,7 @@ end
 ---@param yesBtnColor? number # Optional color index for the Yes button (ImGuiCol style constant).
 ---@param noBtnColor? number # Optional color index for the No button (ImGuiCol style constant).
 ---@return boolean? # true if Yes clicked, false if No clicked, nil if popup not active.
-local function addPopupYesNo(id, text, yesBtnColor, noBtnColor)
+local function addPopupYesNo(id, text, scale, yesBtnColor, noBtnColor)
 	if not id or not ImGui.BeginPopup(id) then return nil end
 
 	local result = nil
@@ -1323,9 +1338,12 @@ local function addPopupYesNo(id, text, yesBtnColor, noBtnColor)
 	ImGui.Separator()
 	ImGui.Dummy(0, 2)
 
+	local width = ceil(80 * scale)
+	local height = floor(30 * scale)
+
 	---@cast yesBtnColor number
 	local pushed = isNumber(yesBtnColor) and pushColors(ImGuiCol.Button, yesBtnColor) or 0
-	if ImGui.Button(Text.GUI_YES, 80, 30) then
+	if ImGui.Button(Text.GUI_YES, width, height) then
 		result = true
 		ImGui.CloseCurrentPopup()
 	end
@@ -1335,7 +1353,7 @@ local function addPopupYesNo(id, text, yesBtnColor, noBtnColor)
 
 	---@cast noBtnColor number
 	pushed = isNumber(noBtnColor) and pushColors(ImGuiCol.Button, noBtnColor) or 0
-	if ImGui.Button(Text.GUI_NO, 80, 30) then
+	if ImGui.Button(Text.GUI_NO, width, height) then
 		result = false
 		ImGui.CloseCurrentPopup()
 	end
@@ -1481,11 +1499,17 @@ registerForEvent("onDraw", function()
 	--Main window begins.
 	if not ImGui.Begin(Text.GUI_TITL, ImGuiWindowFlags.AlwaysAutoResize) then return end
 
-	--Minimum window width and height padding.
-	ImGui.Dummy(230, 4)
+	--Computes scaled layout values (content width, control sizes, and paddings) based on the UI scale factor.
+	local contentWidth, halfContentWidth, scale, controlPadding = getMetrics()
+	local baseContentWidth = floor(230 * scale)
+	local buttonHeight = floor(24 * scale)
+	local rowHeight = floor(28 * scale)
+	local heightPadding = floor(4 * scale)
+	local halfHeightPadding = floor(2 * scale)
+	local doubleHeightPadding = floor(8 * scale)
 
-	--Retrieves the available content width and the dynamically calculated control padding for UI element alignment.
-	local contentWidth, controlPadding, itemSpacingX = getMetrics()
+	--Minimum window width and height padding.
+	ImGui.Dummy(baseContentWidth, heightPadding)
 
 	--Checkbox to toggle mod functionality and handle enable/disable logic.
 	ImGui.Dummy(controlPadding, 0)
@@ -1506,7 +1530,7 @@ registerForEvent("onDraw", function()
 			logF(DevLevels.ALERT, LogLevels.INFO, Text.LOG_MOD_OFF)
 		end
 	end
-	ImGui.Dummy(0, 2)
+	ImGui.Dummy(0, halfHeightPadding)
 	if not mod_enabled then
 		--Mod is disabled — nothing left to add.
 		ImGui.End()
@@ -1514,9 +1538,10 @@ registerForEvent("onDraw", function()
 	end
 
 	--The button that reloads all presets.
+	local rldBtnWidth = floor(192 * scale)
 	ImGui.Dummy(controlPadding, 0)
 	ImGui.SameLine()
-	if ImGui.Button(Text.GUI_RLD_ALL, 192, 24) then
+	if ImGui.Button(Text.GUI_RLD_ALL, rldBtnWidth, buttonHeight) then
 		editor_bundles = {}
 		loadPresets(true)
 		restoreAllPresets()
@@ -1524,17 +1549,18 @@ registerForEvent("onDraw", function()
 		logF(DevLevels.ALERT, LogLevels.INFO, Text.LOG_PSETS_RLD)
 	end
 	addTooltip(Text.GUI_RLD_ALL_TIP)
-	ImGui.Dummy(0, 2)
+	ImGui.Dummy(0, halfHeightPadding)
 
 	--Slider to set the developer mode level.
+	local sliderWidth = floor(77 * scale)
 	ImGui.Dummy(controlPadding, 0)
 	ImGui.SameLine()
-	ImGui.PushItemWidth(77)
+	ImGui.PushItemWidth(sliderWidth)
 	dev_mode = ImGui.SliderInt(Text.GUI_DMODE, dev_mode, DevLevels.DISABLED, DevLevels.FULL)
 	padding_locked = ImGui.IsItemActive()
 	addTooltip(Text.GUI_DMODE_TIP)
 	ImGui.PopItemWidth()
-	ImGui.Dummy(0, 8)
+	ImGui.Dummy(0, doubleHeightPadding)
 
 	--Table showing vehicle name, camera ID and more — if certain conditions are met.
 	local vehicle, name, appName, id, key
@@ -1599,12 +1625,11 @@ registerForEvent("onDraw", function()
 			}
 		}
 
-		local height = 28
 		for _, row in ipairs(rows) do
-			ImGui.TableNextRow(0, height)
+			ImGui.TableNextRow(0, rowHeight)
 			ImGui.TableSetColumnIndex(0)
 
-			alignVertNext(height)
+			alignVertNext(rowHeight)
 			ImGui.Text(row.label)
 			addTooltip(row.tip)
 
@@ -1613,7 +1638,7 @@ registerForEvent("onDraw", function()
 			if row.editable then
 				local namWidth, _ = ImGui.CalcTextSize(name)
 				local appWidth, _ = ImGui.CalcTextSize(appName)
-				local width = min(max(namWidth, appWidth), contentWidth - 32) + 8
+				local width = min(max(namWidth, appWidth), floor(contentWidth - 32 * scale)) + ceil(8 * scale)
 				ImGui.PushItemWidth(width)
 
 				local color
@@ -1650,7 +1675,7 @@ registerForEvent("onDraw", function()
 				))
 				ImGui.PopItemWidth()
 			else
-				alignVertNext(height)
+				alignVertNext(rowHeight)
 				ImGui.Text(tostring(row.value or Text.GUI_NONE))
 			end
 		end
@@ -1700,14 +1725,13 @@ registerForEvent("onDraw", function()
 			Text.GUI_TBL_VAL_Z_TIP
 		}
 
-		local height = 28
 		for i, row in ipairs(rows) do
 			local level = PresetLevels[i]
 
-			ImGui.TableNextRow(0, height)
+			ImGui.TableNextRow(0, rowHeight)
 			ImGui.TableSetColumnIndex(0)
 
-			alignVertNext(height)
+			alignVertNext(rowHeight)
 			ImGui.Text(row.label)
 			addTooltip(row.tip)
 
@@ -1742,7 +1766,7 @@ registerForEvent("onDraw", function()
 		end
 
 		ImGui.EndTable()
-		ImGui.Dummy(0, 1)
+		ImGui.Dummy(0, halfHeightPadding)
 	end
 
 	if tasks.Validate then
@@ -1762,8 +1786,7 @@ registerForEvent("onDraw", function()
 	--Button to apply previously configured values in-game.
 	local color = tasks.Restore and Colors.OLIVE or Colors.CARAMEL
 	local pushed = tasks.Apply and pushColors(ImGuiCol.Button, color) or 0
-	local btnWidth = floor(contentWidth * 0.5 - (itemSpacingX * 0.5))
-	if ImGui.Button(Text.GUI_APPLY, btnWidth, 24) then
+	if ImGui.Button(Text.GUI_APPLY, halfContentWidth, buttonHeight) then
 		--Always applies on user action — even if unnecessary.
 		tasks.Apply = false
 		camera_presets[pivot.Key] = nil
@@ -1778,7 +1801,7 @@ registerForEvent("onDraw", function()
 	--Button in same line to save configured values to a file for future automatic use.
 	local saveConfirmed = false
 	pushed = (tasks.Save or tasks.Rename) and pushColors(ImGuiCol.Button, color) or 0
-	if ImGui.Button(Text.GUI_SAVE, btnWidth, 24) then
+	if ImGui.Button(Text.GUI_SAVE, halfContentWidth, buttonHeight) then
 		if presetFileExists(finale.Name) then
 			overwrite_confirm = true
 			ImGui.OpenPopup(key)
@@ -1790,7 +1813,7 @@ registerForEvent("onDraw", function()
 	addTooltip(format(tasks.Restore and Text.GUI_REST_TIP or Text.GUI_SAVE_TIP, key))
 
 	if overwrite_confirm then
-		local confirmed = addPopupYesNo(key, format(Text.GUI_OVWR_CONFIRM, key), Colors.CARAMEL)
+		local confirmed = addPopupYesNo(key, format(Text.GUI_OVWR_CONFIRM, key), scale, Colors.CARAMEL)
 		if confirmed ~= nil then
 			overwrite_confirm = false
 			saveConfirmed = confirmed
@@ -1828,18 +1851,18 @@ registerForEvent("onDraw", function()
 		end
 	end
 
-	ImGui.Dummy(0, 4)
+	ImGui.Dummy(0, heightPadding)
 
 	--Button to open Preset File Manager.
 	local x, y, w, h
 	ImGui.Separator()
-	ImGui.Dummy(0, 4)
-	if ImGui.Button(Text.GUI_OPEN_FMAN, contentWidth, 24) then
+	ImGui.Dummy(0, heightPadding)
+	if ImGui.Button(Text.GUI_OPEN_FMAN, contentWidth, buttonHeight) then
 		x, y = ImGui.GetWindowPos()
 		w, h = ImGui.GetWindowSize()
 		file_man_open = not file_man_open
 	end
-	ImGui.Dummy(0, 2)
+	ImGui.Dummy(0, halfHeightPadding)
 
 	--GUI creation of Main window is complete.
 	ImGui.End()
@@ -1869,7 +1892,6 @@ registerForEvent("onDraw", function()
 		ImGui.TableSetupColumn(" \u{f05e9}", ImGuiTableColumnFlags.WidthFixed)
 		ImGui.TableHeadersRow()
 
-		local height = 28
 		for _, f in ipairs(files) do
 			local file = f.name
 			if not hasLuaExt(file) then goto continue end
@@ -1882,7 +1904,7 @@ registerForEvent("onDraw", function()
 			ImGui.TableNextRow()
 			ImGui.TableSetColumnIndex(0)
 
-			alignVertNext(height)
+			alignVertNext(buttonHeight)
 			local columnWidth = ImGui.GetColumnWidth(0) - 4
 			local textWidth = ImGui.CalcTextSize(file)
 			if columnWidth < textWidth then
@@ -1899,11 +1921,11 @@ registerForEvent("onDraw", function()
 			end
 
 			ImGui.TableSetColumnIndex(1)
-			if ImGui.Button("\u{f05e8}##" .. file, 0, height) then
+			if ImGui.Button("\u{f05e8}##" .. file, 0, buttonHeight) then
 				ImGui.OpenPopup(file)
 			end
 
-			if addPopupYesNo(file, format(Text.GUI_FMAN_DEL_CONFIRM, file), Colors.GARNET) then
+			if addPopupYesNo(file, format(Text.GUI_FMAN_DEL_CONFIRM, file), scale, Colors.GARNET) then
 				local path = getPresetFilePath(file) ---@cast path string
 				local ok, err = os.remove(path)
 				if ok then
@@ -1932,8 +1954,10 @@ registerForEvent("onDraw", function()
 	end
 
 	if not anyFiles then
-		ImGui.Dummy(0, 180)
-		ImGui.Dummy(controlPadding - 4, 0)
+		local wPad = ceil(180 * scale)
+		local hPad = floor(controlPadding - 4 * scale)
+		ImGui.Dummy(0, wPad)
+		ImGui.Dummy(hPad, 0)
 		ImGui.SameLine()
 		ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(Colors.GARNET, 0xff))
 		ImGui.Text(Text.GUI_FMAN_NO_PSETS)
