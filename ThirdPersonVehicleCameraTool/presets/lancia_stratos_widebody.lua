@@ -1,0 +1,1 @@
+return{ID="4w_911",Close={y=0.25,z=1.125},Medium={y=0.2},Far={y=0.3}}

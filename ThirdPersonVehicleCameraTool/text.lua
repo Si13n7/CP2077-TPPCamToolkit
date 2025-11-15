@@ -31,10 +31,17 @@ return {
 
 	--GUI: Table Labels
 	GUI_TABLE_LABEL_VEHICLE = "Vehicle",
-	GUI_TABLE_LABEL_CAMERA_ID = "Camera ID",
+	GUI_TABLE_LABEL_APPEARANCE = "Appearance",
+	GUI_TABLE_LABEL_CAMERAID = "Camera",
 	GUI_TABLE_LABEL_PRESET = "Preset",
-	GUI_TABLE_LABEL_PRESET_TOOLTIP = "When saving, the name \"%s\" is automatically used. The new name must be at least a prefix of it.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each color variation.",
 	GUI_TABLE_LABEL_IS_DEFAULT = "Is Default",
+
+	--GUI: Table Values
+	GUI_TABLE_VALUE_PRESET_TOOLTIP = "When saving, the name \"%s\" is used. The new name must exactly match the value of Vehicle or Appearance, or be at least a prefix of one of them.\n\nPlease note that you only need to change the name manually if you want to apply a preset to multiple identical vehicles, so you do not need to create a separate preset for each color variation.\n\n\nMatching Priorities:\n\n1. Vehicle Name\n2. Appearance Name\n3. Prefix of Vehicle Name\n4. Prefix of Appearance Name",
+	GUI_TABLE_VALUE_ANGLE_TOOLTIP = "Min: %s\nMax: %s",
+	GUI_TABLE_VALUE_X_TOOLTIP = "Min: %s\nMax: %s\n\nIncrease: Right\nDecrease: Left",
+	GUI_TABLE_VALUE_Y_TOOLTIP = "Min: %s\nMax: %s\n\nIncrease: Closer\nDecrease: Farther",
+	GUI_TABLE_VALUE_Z_TOOLTIP = "Min: %s\nMax: %s\n\nIncrease: Up\nDecrease: Down",
 
 	--GUI: Preset File Manager
 	GUI_FMAN_TITLE = "Preset File Manager",
@@ -44,7 +51,7 @@ return {
 	GUI_FMAN_DELETE_CONFIRM = "Delete file \"%s\"?",
 
 	--LOG: Info
-	LOG_CAMERA_ID = "Camera preset ID: '%s'",
+	LOG_CAMERA_PRESET = "Camera preset: '%s'",
 	LOG_CAMERA_OFFSET_COMPLETE = "Camera offset '%s' is complete.",
 	LOG_FOUND_DEFAULT = "Default preset '%s' found.",
 	LOG_LINKED_PRESET = "Following linked preset (%d): '%s'",
@@ -57,7 +64,6 @@ return {
 	LOG_RESTORED_ALL_DEFAULTS = "Restored all default presets.",
 	LOG_RESTORED_PRESET = "Preset for ID '%s' has been restored.",
 	LOG_RESTORED_SOME_PRESETS = "Restored %d/%d changed preset(s).",
-	LOG_VEHICLE = "Mounted vehicle: '%s'",
 	LOG_DELETE_SUCCESS = "Deleted preset '%s'.",
 
 	--LOG: Warnings
@@ -65,11 +71,10 @@ return {
 	LOG_CLEARED_PRESETS = "Cleared all loaded camera offset presets.",
 	LOG_FILE_EXISTS = "File './%s' already exists, and overwrite is disabled.",
 	LOG_NO_PRESET_FOUND = "No preset found.",
-	LOG_PREFIX_MISMATCH = "The new preset name must be '%s' or a prefix of it; otherwise, it will not be applied and will be ignored.",
+	LOG_NAMES_MISMATCH = "The new preset name must be '%s', '%s', or a prefix of one of them; otherwise, it will not be applied and will be ignored.",
+	LOG_NAME_MISMATCH = "The new preset name must be '%s' or a prefix of it; otherwise, it will not be applied and will be ignored.",
 	LOG_PRESET_NOT_CHANGED = "No changes were made to preset '%s' compared to the default preset '%s'.",
 	LOG_PRESET_NOT_SAVED = "File './presets/%s.lua' could not be saved.",
-	LOG_SHORT_NAME = "The new preset name must be at least 2 characters long.",
-	LOG_SHADOWED = "A preset with the shorter name ('%s') already exists. The shortest name is always preferred when applying presets. Therefore, you must either delete this preset to use the name '%s', or choose an even shorter name for your new preset to be loaded.",
 	LOG_SKIPPED_PRESET = "Skipping already loaded preset: '%s' ('./%s/%s').",
 
 	--LOG: Errors

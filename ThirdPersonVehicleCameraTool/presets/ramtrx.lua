@@ -1,0 +1,1 @@
+return{ID="4w_Thorton_Colby_Pickup",Close={y=0.2},Far={y=0.5}}

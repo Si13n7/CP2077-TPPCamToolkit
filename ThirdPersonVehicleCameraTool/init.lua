@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-08, 11:07 UTC+01:00 (MEZ)
+Version: 2025-04-11, 10:57 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -111,6 +111,11 @@ bit32 = bit32
 ---@field SetFlat fun(self: TweakDB, key: string, value: any) # Sets or modifies a value in the database for the specified key.
 TweakDB = TweakDB
 
+---Represents a TweakDB ID used to reference records in the game database.
+---@class TDBID
+---@field ToStringDEBUG fun(id: TDBID): string|nil # Converts a TDBID to a readable string, typically starting with a namespace like "Vehicle.".
+TDBID = TDBID
+
 ---Provides various global game functions, such as getting the player, mounted vehicles, and converting names to strings.
 ---@class Game
 ---@field NameToString fun(value: any): string # Converts a game name object to a readable string.
@@ -127,6 +132,7 @@ Player = Player
 ---@class Vehicle
 ---@field GetCurrentAppearanceName fun(self: Vehicle): string|nil # Retrieves the current appearance name of the vehicle.
 ---@field GetRecordID fun(self: Vehicle): any # Returns the unique TweakDBID associated with the vehicle.
+---@field GetTDBID fun(self: Vehicle): TDBID|nil # Retrieves the internal TweakDB identifier used to reference this vehicle in the game database. Returns `nil` if unavailable.
 Vehicle = Vehicle
 
 ---Represents a three-dimensional vector, commonly used for positions or directions in the game.
@@ -144,7 +150,7 @@ Observe = Observe
 
 ---Allows the registration of functions to be executed when certain game events occur, such as initialization or shutdown.
 ---@class registerForEvent
----@field registerForEvent fun(eventName: string, callback: fun(...): nil) # Registers a callback function for a specified event (e.g., 'onInit', 'onIsDefault').
+---@field registerForEvent fun(eventName: string, callback: fun(...): nil) # Registers a callback function for a specified event (e.g., `onInit`, `onIsDefault`).
 registerForEvent = registerForEvent
 
 ---Provides logging functionality, allowing messages to be printed to the console or log files for debugging purposes.
@@ -170,6 +176,9 @@ dir = dir
 ---@type fun(format: string|number, ...: any): string
 F = string.format
 
+---Loads all static UI and log string constants from `text.lua` into the global `Text` table.
+---This is the most efficient way to manage display strings separately from logic and code.
+---@type table<string, string>
 Text = dofile("text.lua")
 
 ---Developer mode levels used to control the verbosity and behavior of debug output.
@@ -208,14 +217,18 @@ LogLevel = {
 	ERROR = 2
 }
 
----Constant format string for TweakDB path generation.
----The first '%s' represents the preset ID, the second '%s' represents the camera level (e.g., "High_Close"),
----and the third '%s' represents the variable (e.g., "lookAtOffset", "defaultRotationPitch").
+---Format string for generating a TweakDB path to a vehicle's default rotation pitch value.
+---First `%s` = preset ID, second `%s` = camera level (e.g., "High_Close").
 ---@type string
-local TWEAKDB_PATH_FORMAT = "Camera.VehicleTPP_%s_%s.%s"
+local TWEAKDB_PATH_FORMAT_DRP = "Camera.VehicleTPP_%s_%s.defaultRotationPitch"
+
+---Format string for generating a TweakDB path to a vehicle's look-at offset vector.
+---First `%s` = preset ID, second `%s` = camera level (e.g., "Low_Medium").
+---@type string
+local TWEAKDB_PATH_FORMAT_LAO = "Camera.VehicleTPP_%s_%s.lookAtOffset"
 
 ---Constant array of possible camera levels used in TweakDB path generation.
----Each level corresponds to the second '%s' in the `TWEAKDB_PATH_FORMAT` string (e.g., "Low_Medium").
+---Each level corresponds to the second `%s` in the `TWEAKDB_PATH_FORMAT` string (e.g., "Low_Medium").
 ---@type string[]
 local TWEAKDB_PATH_LEVELS = {
 	"High_Close",
@@ -372,6 +385,53 @@ local function floatEquals(a, b, epsilon)
 	return math.abs(a - b) < epsilon
 end
 
+---Checks if a string starts with a given prefix.
+---@param str string # The string to check.
+---@param prefix string # The prefix to match.
+---@return boolean # True if `str` starts with `prefix`, false otherwise.
+local function stringStartsWith(str, prefix)
+	if not str or not prefix then return false end
+	str, prefix = tostring(str), tostring(prefix)
+	return #str >= #prefix and str:sub(1, #prefix) == prefix
+end
+
+---Checks if a string ends with a specified suffix.
+---@param str string # The string to check.
+---@param suffix string # The suffix to look for.
+---@return boolean Returns # True if the `str` ends with the specified `suffix`, otherwise false.
+local function stringEndsWith(str, suffix)
+	if not str or not suffix then return false end
+	str, suffix = tostring(str), tostring(suffix)
+	return #str >= #suffix and str:sub(- #suffix) == suffix
+end
+
+---Checks if a given filename string ends with `.lua`.
+---@param name string # The value to check, typically a string representing a filename.
+---@return boolean # Returns `true` if the filename ends with `.lua`, otherwise `false`.
+local function fileIsLua(name)
+	if not name then return false end
+	name = tostring(name)
+	return stringEndsWith(name, ".lua")
+end
+
+---Returns the file name with a `.lua` extension. If the input already ends with `.lua`, it is returned unchanged.
+---@param name string # The input value to be converted to a Lua file name.
+---@return string # The file name with `.lua` extension, or an empty string if the input is `nil`.
+local function fileWithLuaExt(name)
+	if not name then return "" end
+	name = tostring(name)
+	return fileIsLua(name) and name or name .. ".lua"
+end
+
+---Removes the `.lua` extension from a filename if present.
+---@param name string # The filename to process.
+---@return string # The filename without `.lua` extension, or the original string if no `.lua` extension is found.
+local function fileWithoutLuaExt(name)
+	if not name then return "" end
+	name = tostring(name)
+	return fileIsLua(name) and name:gsub("%.lua$", "") or name
+end
+
 ---Checks whether a given value exists in a sequential table.
 ---@param tbl table # The table to search through (must be a sequential array).
 ---@param value any # The value to search for in the table.
@@ -382,47 +442,6 @@ local function tableContainsValue(tbl, value)
 		if v == value then return true end
 	end
 	return false
-end
-
----Checks if a string starts with a given prefix.
----@param str string # The string to check.
----@param prefix string # The prefix to match.
----@return boolean # True if 'str' starts with 'prefix', false otherwise.
-local function stringStartsWith(str, prefix)
-	if not str or not prefix then return false end
-	str, prefix = tostring(str), tostring(prefix)
-	return #str >= #prefix and str:sub(1, #prefix) == prefix
-end
-
----Checks if a string ends with a specified suffix.
----@param str string # The string to check.
----@param suffix string # The suffix to look for.
----@return boolean Returns # True if the string ends with the specified suffix, otherwise false.
-local function stringEndsWith(str, suffix)
-	if not str or not suffix then return false end
-	str, suffix = tostring(str), tostring(suffix)
-	return #str >= #suffix and str:sub(- #suffix) == suffix
-end
-
----Returns true if the given value is a string ending with ".lua".
----@param name any
----@return boolean
-local function fileIsLua(name)
-	return type(name) == "string" and stringEndsWith(name, ".lua")
-end
-
----Ensures the given name ends with ".lua". If it already ends with ".lua", the name is returned unchanged.
----@param name string
----@return string
-local function fileWithLuaExt(name)
-	return fileIsLua(name) and name or name .. ".lua"
-end
-
----Removes the ".lua" extension from the given name if it exists. Returns the name unchanged if it has no extension.
----@param name string
----@return string
-local function fileWithoutLuaExt(name)
-	return fileIsLua(name) and name:gsub("%.lua$", "") or name
 end
 
 ---Returns the value at the specified index from a variable list of arguments.
@@ -440,7 +459,7 @@ end
 ---@param path string # The camera path for the vehicle.
 ---@return number # The default rotation pitch for the given camera path.
 local function getCameraDefaultRotationPitch(id, path)
-	return TweakDB:GetFlat(F(TWEAKDB_PATH_FORMAT, id, path, "defaultRotationPitch")) or 11
+	return TweakDB:GetFlat(F(TWEAKDB_PATH_FORMAT_DRP, id, path)) or 11
 end
 
 ---Sets the default rotation pitch value for a vehicle camera.
@@ -452,18 +471,18 @@ local function setCameraDefaultRotationPitch(id, path, value)
 	if not fallback or floatEquals(value, fallback) then
 		return
 	end
-	TweakDB:SetFlat(F(TWEAKDB_PATH_FORMAT, id, path, "defaultRotationPitch"), value or fallback)
+	TweakDB:SetFlat(F(TWEAKDB_PATH_FORMAT_DRP, id, path), value or fallback)
 end
 
----Fetches the current camera offset from 'TweakDB' based on the specified ID and path.
+---Fetches the current camera offset from TweakDB based on the specified ID and path.
 ---@param id string # The camera ID.
 ---@param path string # The camera path to retrieve the offset for.
 ---@return Vector3|nil # The camera offset as a Vector3.
 local function getCameraLookAtOffset(id, path)
-	return TweakDB:GetFlat(F(TWEAKDB_PATH_FORMAT, id, path, "lookAtOffset"))
+	return TweakDB:GetFlat(F(TWEAKDB_PATH_FORMAT_LAO, id, path))
 end
 
----Sets a camera offset in 'TweakDB' to the specified position values.
+---Sets a camera offset in TweakDB to the specified position values.
 ---@param id string # The camera ID.
 ---@param path string # The camera path to set the offset for.
 ---@param x number # The X-coordinate of the camera position.
@@ -475,7 +494,7 @@ local function setCameraLookAtOffset(id, path, x, y, z)
 		return
 	end
 	local value = Vector3.new((x or fallback.x), (y or fallback.y), (z or fallback.z))
-	TweakDB:SetFlat(F(TWEAKDB_PATH_FORMAT, id, path, "lookAtOffset"), value)
+	TweakDB:SetFlat(F(TWEAKDB_PATH_FORMAT_LAO, id, path), value)
 end
 
 ---Extracts the record name from a TweakDBID string representation.
@@ -526,65 +545,84 @@ local function getVehicleCameraID(vehicle)
 	return nil
 end
 
----Attempts to retrieve the appearance name of the currently mounted vehicle.
----@return string|nil # The appearance name (e.g., "porsche_911turbo__basic_johnny") or nil if not found.
+---Attempts to retrieve the name of the specified vehicle.
+---@param vehicle Vehicle|nil # The vehicle object to retrieve the name from.
+---@return string|nil # The resolved vehicle name as a string, or `nil` if it could not be determined.
 local function getVehicleName(vehicle)
+	if not vehicle then return nil end
+
+	local tid = vehicle:GetTDBID()
+	if not tid then return nil end
+
+	local str = TDBID.ToStringDEBUG(tid)
+	if not str then return nil end
+
+	local result = str:gsub("^Vehicle%.", "")
+	return result
+end
+
+---Attempts to retrieve the appearance name of the specified vehicle.
+---@param vehicle Vehicle|nil # The vehicle object to retrieve the appearance name from.
+---@return string|nil # The resolved vehicle name as a string, or `nil` if it could not be determined.
+local function getVehicleAppearanceName(vehicle)
 	if not vehicle then return nil end
 
 	local name = vehicle:GetCurrentAppearanceName()
 	if not name then return nil end
 
-	return Game.NameToString(name)
+	local result = Game.NameToString(name)
+	return result
 end
 
----Finds the best matching preset key for a given vehicle name.
----First tries for an exact match, then falls back to partial match using string prefix.
----@param vehicleName string|nil # The vehicle name to match against preset keys.
----@return string|nil # The matching preset key if found, or nil otherwise.
-local function getPresetKey(vehicleName)
-	if not vehicleName then return nil end
-
+---Attempts to find the best matching key in the `_cameraPresets` table using one or more candidate values.
+---It first checks for exact matches, and then for prefix-based partial matches.
+---@param ... string # One or more strings to match against known preset keys (e.g., vehicle name, appearance name).
+---@return string|nil # The matching key from `_cameraPresets`, or `nil` if no match was found.
+local function findPresetKey(...)
 	for pass = 1, 2 do
-		for key in pairs(_cameraPresets) do
-			local exact = pass == 1 and vehicleName == key
-			local partial = pass == 2 and stringStartsWith(vehicleName, key)
-			if exact or partial then
-				return key
+		for i = 1, select("#", ...) do
+			local search = select(i, ...)
+			for key in pairs(_cameraPresets) do
+				local exact = pass == 1 and search == key
+				local partial = pass == 2 and stringStartsWith(search, key)
+				if exact or partial then return key end
 			end
 		end
 	end
-
 	return nil
 end
 
----Validates a new preset key against a vehicle name and existing preset key.
----Ensures the key is non-empty, sufficiently long, a prefix of the vehicle name,
----and not shadowed by a shorter existing preset. Falls back to `currentKey` on failure.
----@param vehicleName string # The name of the currently mounted vehicle.
----@param currentKey string # The currently selected or active preset key.
----@param newKey string|nil # The proposed new key for the preset.
----@return string # The validated preset key (either `newKey` or fallback to `currentKey`).
-local function getValidPresetKey(vehicleName, currentKey, newKey)
-	if not vehicleName or not newKey then return currentKey end
-	if not currentKey then return vehicleName end
+---Validates a new preset key based on the given vehicle and appearance names.
+---Ensures the key is non-empty, meets the minimum length, and matches expected name prefixes.
+---@param vehicleName string # The base vehicle name used for validation.
+---@param appearanceName string # The appearance variant of the vehicle. May be the same as `vehicleName`.
+---@param currentKey string # The currently active or fallback preset key. Used as return value on failure.
+---@param newKey string|nil # The newly entered preset key that should be validated.
+---@return string # Returns the validated preset key (without `.lua` extension), or `currentKey` if validation fails.
+local function validatePresetKey(vehicleName, appearanceName, currentKey, newKey)
+	if type(vehicleName) ~= "string" or
+		type(appearanceName) ~= "string" then
+		return currentKey
+	end
+	if type(currentKey) ~= "string" then return vehicleName end
+	if type(newKey) ~= "string" then return currentKey end
 
 	local name = fileWithoutLuaExt(newKey)
 	local len = #name
 	if len < 1 then
 		Log(LogLevel.WARN, Text.LOG_BLANK_NAME)
 		return currentKey
-	elseif len < 3 then
-		Log(LogLevel.WARN, Text.LOG_SHORT_NAME)
-		return currentKey
-	elseif not stringStartsWith(vehicleName, name) then
-		Log(LogLevel.WARN, Text.LOG_PREFIX_MISMATCH, vehicleName)
-		return currentKey
-	elseif not stringStartsWith(currentKey, name) then
-		Log(LogLevel.WARN, Text.LOG_SHADOWED, currentKey, name)
-		return currentKey
 	end
-
-	return name
+	if stringStartsWith(vehicleName, name) or
+		stringStartsWith(appearanceName, name) then
+		return name
+	end
+	if vehicleName ~= appearanceName then
+		Log(LogLevel.WARN, Text.LOG_NAMES_MISMATCH, vehicleName, appearanceName)
+	else
+		Log(LogLevel.WARN, Text.LOG_NAME_MISMATCH, vehicleName)
+	end
+	return currentKey
 end
 
 ---Retrieves the current camera offset data for the specified camera ID from TweakDB
@@ -603,7 +641,12 @@ local function getPreset(id)
 		local angle = getCameraDefaultRotationPitch(id, path)
 
 		---@cast preset table<string, OffsetData>
-		preset[level] = { a = angle, x = vec3.x, y = vec3.y, z = vec3.z }
+		preset[level] = {
+			a = angle,
+			x = vec3.x,
+			y = vec3.y,
+			z = vec3.z
+		}
 
 		if preset.Far and preset.Medium and preset.Close then
 			if DevMode >= DevLevel.FULL then
@@ -647,7 +690,7 @@ end
 ---@return number x # The X offset value. Falls back to 0 if not found.
 ---@return number y # The Y offset value. Falls back to 0 if not found.
 ---@return number z # The Z offset value. Falls back to a default per level (Close = 1.115, Medium = 1.65, Far = 2.25).
-local function getValidOffsetData(preset, fallback, level)
+local function getOffsetData(preset, fallback, level)
 	if type(preset) ~= "table" or not tableContainsValue(CAMERA_LEVELS, level) then
 		Log(LogLevel.ERROR, Text.LOG_NO_PRESET_FOR_LEVEL, level)
 		return 0, 0, 0, 0 --Should never be returned with the current code.
@@ -680,17 +723,15 @@ local function applyPreset(preset, count)
 		local name = getVehicleName(vehicle)
 		if not name then return end
 
-		if DevMode >= DevLevel.ALERT then
-			Log(LogLevel.INFO, Text.LOG_VEHICLE, name)
+		local appName = getVehicleAppearanceName(vehicle)
+		if not appName then return end
 
-			local vehicleID = getVehicleCameraID(vehicle)
-			if vehicleID then
-				Log(LogLevel.INFO, Text.LOG_CAMERA_ID, vehicleID)
-			end
-		end
-
-		local key = getPresetKey(name)
+		local key = name == appName and findPresetKey(name) or findPresetKey(name, appName)
 		if not key then return end
+
+		if DevMode >= DevLevel.ALERT then
+			Log(LogLevel.INFO, Text.LOG_CAMERA_PRESET, key)
+		end
 
 		applyPreset(_cameraPresets[key], 0)
 		return
@@ -716,7 +757,7 @@ local function applyPreset(preset, count)
 	local fallback = getDefaultPreset(preset) or {}
 	for i, path in ipairs(TWEAKDB_PATH_LEVELS) do
 		local level = CAMERA_LEVELS[(i - 1) % 3 + 1]
-		local a, x, y, z = getValidOffsetData(preset, fallback, level)
+		local a, x, y, z = getOffsetData(preset, fallback, level)
 
 		setCameraLookAtOffset(preset.ID, path, x, y, z)
 		setCameraDefaultRotationPitch(preset.ID, path, a)
@@ -877,15 +918,15 @@ local function loadPresets(refresh)
 	_isEnabled = loadFrom("presets") >= 0
 end
 
----Saves the current preset to './presets/<name>.lua' only if the file doesn't already exist.
+---Saves the current preset to `./presets/<name>.lua` only if the file doesn't already exist.
 ---By default, only values that differ from the game's defaults are saved.
----If `saveComplete` is true, all values (including unchanged/default ones) are saved explicitly.
+---If `saveEverything` is true, all values (including unchanged/default ones) are saved explicitly.
 ---@param name string # The name of the preset.
 ---@param preset table # The preset data to save.
 ---@param allowOverwrite boolean|nil # If true, overwrites the file if it exists.
----@param saveComplete boolean|nil # If true, saves all values, even those that match the defaults.
+---@param saveEverything boolean|nil # If true, saves all values, even those that match the defaults.
 ---@return boolean # True if saved successfully or if the file already exists; false if an error occurred.
-local function savePreset(name, preset, allowOverwrite, saveComplete)
+local function savePreset(name, preset, allowOverwrite, saveEverything)
 	if type(name) ~= "string" or type(preset) ~= "table" then return false end
 
 	local path = "presets/" .. fileWithLuaExt(name)
@@ -899,7 +940,7 @@ local function savePreset(name, preset, allowOverwrite, saveComplete)
 	end
 
 	local function isDifferent(a, b)
-		if saveComplete then return true end
+		if saveEverything then return true end
 		if type(a) ~= type(b) then return true end
 		if type(a) == "number" then
 			return not floatEquals(a, b)
@@ -914,7 +955,7 @@ local function savePreset(name, preset, allowOverwrite, saveComplete)
 	local default = getDefaultPreset(preset) or {}
 	local save = false
 	local parts = { "return{" }
-	table.insert(parts, F('ID=%q,', preset.ID))
+	table.insert(parts, F("ID=%q,", preset.ID))
 	for _, mode in ipairs(CAMERA_LEVELS) do
 		local p = preset[mode]
 		local d = default[mode]
@@ -931,7 +972,7 @@ local function savePreset(name, preset, allowOverwrite, saveComplete)
 		end
 
 		if #sub > 0 then
-			table.insert(parts, F('%s={%s},', mode, table.concat(sub, ",")))
+			table.insert(parts, F("%s={%s},", mode, table.concat(sub, ",")))
 		end
 	end
 
@@ -1027,7 +1068,7 @@ registerForEvent("onDraw", function()
 	--Main window begins
 	if not _isOverlayOpen or not ImGui.Begin(Text.GUI_TITLE, ImGuiWindowFlags.AlwaysAutoResize) then return end
 
-	--Minimum window width and height.
+	--Minimum window width and height padding.
 	ImGui.Dummy(230, 4)
 
 	--Retrieves the available content width and the dynamically calculated control padding for UI element alignment.
@@ -1081,7 +1122,7 @@ registerForEvent("onDraw", function()
 	ImGui.Dummy(0, 8)
 
 	--Table showing vehicle name, camera ID and more — if certain conditions are met.
-	local vehicle, name, id
+	local vehicle, name, appName, id
 	for _, fn in ipairs({
 		function()
 			return DevMode > DevLevel.DISABLED
@@ -1093,6 +1134,10 @@ registerForEvent("onDraw", function()
 		function()
 			name = getVehicleName(vehicle)
 			return name
+		end,
+		function()
+			appName = getVehicleAppearanceName(vehicle)
+			return appName
 		end,
 		function()
 			id = getVehicleCameraID(vehicle)
@@ -1112,7 +1157,7 @@ registerForEvent("onDraw", function()
 		ImGui.TableSetupColumn(Text.GUI_TABLE_HEADER_VALUE, ImGuiTableColumnFlags.WidthStretch)
 		ImGui.TableHeadersRow()
 
-		presetKey = getPresetKey(name)
+		presetKey = name == appName and findPresetKey(name) or findPresetKey(name, appName)
 		if not _guiEditorPreset then
 			_guiEditorPresetDef = nil
 			_guiEditorPresetName = nil
@@ -1120,9 +1165,10 @@ registerForEvent("onDraw", function()
 
 		local dict = {
 			{ key = Text.GUI_TABLE_LABEL_VEHICLE,    value = name },
-			{ key = Text.GUI_TABLE_LABEL_CAMERA_ID,  value = id },
-			{ key = Text.GUI_TABLE_LABEL_PRESET,     value = fileWithLuaExt(presetKey or id) },
-			{ key = Text.GUI_TABLE_LABEL_IS_DEFAULT, value = tostring(presetKey == nil) }
+			{ key = Text.GUI_TABLE_LABEL_APPEARANCE, value = appName },
+			{ key = Text.GUI_TABLE_LABEL_CAMERAID,   value = id },
+			{ key = Text.GUI_TABLE_LABEL_PRESET,     value = presetKey or id },
+			{ key = Text.GUI_TABLE_LABEL_IS_DEFAULT, value = presetKey == nil and "True" or "False" }
 		}
 		for _, item in ipairs(dict) do
 			ImGui.TableNextRow()
@@ -1132,7 +1178,7 @@ registerForEvent("onDraw", function()
 			local text = item.value or "None"
 			ImGui.TableSetColumnIndex(1)
 			if item.key == Text.GUI_TABLE_LABEL_PRESET then
-				local value = _guiEditorPresetName or text
+				local value = fileWithLuaExt(_guiEditorPresetName or text)
 
 				local width = ImGui.CalcTextSize(value) + 8
 				ImGui.PushItemWidth(width)
@@ -1142,7 +1188,8 @@ registerForEvent("onDraw", function()
 					newText = fileWithLuaExt(newText)
 					_guiEditorPresetName = newText
 				end
-				guiTooltip(F(Text.GUI_TABLE_LABEL_PRESET_TOOLTIP, fileWithoutLuaExt(value) ~= id and value or name))
+				guiTooltip(F(Text.GUI_TABLE_VALUE_PRESET_TOOLTIP, fileWithoutLuaExt(value) ~= id and value or name,
+					appName))
 
 				ImGui.PopItemWidth()
 			else
@@ -1192,6 +1239,12 @@ registerForEvent("onDraw", function()
 		end
 		ImGui.TableHeadersRow()
 
+		local tooltips = {
+			Text.GUI_TABLE_VALUE_ANGLE_TOOLTIP,
+			Text.GUI_TABLE_VALUE_X_TOOLTIP,
+			Text.GUI_TABLE_VALUE_Y_TOOLTIP,
+			Text.GUI_TABLE_VALUE_Z_TOOLTIP
+		}
 		for _, level in ipairs(CAMERA_LEVELS) do
 			local data = preset[level]
 			if type(data) ~= "table" then goto continue end
@@ -1213,6 +1266,11 @@ registerForEvent("onDraw", function()
 				value = ImGui.DragFloat(F("##%s_%s", level, field), value, speed, min, max, format)
 				data[field] = math.min(math.max(value, min), max)
 
+				local tip = tooltips[i]
+				if tip then
+					guiTooltip(F(tip, min, max))
+				end
+
 				ImGui.PopItemWidth()
 			end
 
@@ -1224,7 +1282,7 @@ registerForEvent("onDraw", function()
 	end
 
 	--The validated preset key, required for the apply and save buttons.
-	local validKey = getValidPresetKey(name, presetKey or name, _guiEditorPresetName)
+	local validKey = validatePresetKey(name, appName, presetKey or name, _guiEditorPresetName)
 
 	--Button to apply previously configured values in-game.
 	if ImGui.Button(Text.GUI_PRESET_APPLY, contentWidth, 24) then
@@ -1240,6 +1298,7 @@ registerForEvent("onDraw", function()
 		if savePreset(validKey, preset, _guiEditorAllowOverwrite) then
 			_guiEditorAllowOverwrite = false
 			_cameraPresets[validKey] = preset
+			_guiEditorPresetName = validKey
 			LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_PRESET_SAVED, validKey)
 		else
 			LogE(DevLevel.ALERT, LogLevel.WARN, Text.LOG_PRESET_NOT_SAVED, validKey)
