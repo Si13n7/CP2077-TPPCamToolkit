@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-06, 10:45 UTC+01:00 (MEZ)
+Version: 2025-04-06, 14:22 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -217,10 +217,6 @@ local _isOverlayOpen = false
 ---@type boolean
 local _isEnabled = true
 
----Determines whether overwriting the preset file is allowed.
----@type boolean
-local _allowOverwrite = false
-
 ---Determines whether a vehicle is currently mounted.
 ---@type boolean
 local _isVehicleMounted = false
@@ -269,6 +265,10 @@ local _guiEditorPresetDef
 ---The file name used for saving the current edited preset (including `.lua` extension).
 ---@type string|nil
 local _guiEditorPresetName
+
+---Determines whether overwriting the preset file is allowed.
+---@type boolean
+local _guiEditorAllowOverwrite = false
 
 ---Logs and displays messages based on the current `DevMode` level.
 ---Messages can be written to the log file, printed to the console, or shown as in-game alerts.
@@ -816,7 +816,7 @@ local function savePreset(name, preset, allowOverwrite, saveComplete)
 		if saveComplete then return true end
 		if type(a) ~= type(b) then return true end
 		if type(a) == "number" then
-			return floatEquals(a, b)
+			return not floatEquals(a, b)
 		end
 		return a ~= b
 	end
@@ -839,7 +839,7 @@ local function savePreset(name, preset, allowOverwrite, saveComplete)
 			for _, k in ipairs(OFFSETDATA_KEYS) do
 				if isDifferent(p[k], d[k]) then
 					save = true
-					table.insert(sub, k .. "=" .. round(p[k]))
+					table.insert(sub, F("%s=%s", k, round(p[k])))
 				end
 			end
 		end
@@ -1159,8 +1159,8 @@ registerForEvent("onDraw", function()
 
 	--Button to save configured values to a file for future automatic use.
 	if ImGui.Button("Save Changes to File", contentWidth, 24) then
-		if savePreset(validKey, preset, _allowOverwrite) then
-			_allowOverwrite = false
+		if savePreset(validKey, preset, _guiEditorAllowOverwrite) then
+			_guiEditorAllowOverwrite = false
 			_cameraPresets[validKey] = preset
 			LogE(DevLevel.Alert, LogLevel.Info, "File './presets/%s.lua' was saved successfully.", validKey)
 		else
@@ -1176,7 +1176,7 @@ registerForEvent("onDraw", function()
 	--Checkbox to toggle allowing file overwrites.
 	ImGui.Dummy(controlPadding, 0)
 	ImGui.SameLine()
-	_allowOverwrite = ImGui.Checkbox("Allow Overwriting of Files", _allowOverwrite)
+	_guiEditorAllowOverwrite = ImGui.Checkbox("Allow Overwriting of Files", _guiEditorAllowOverwrite)
 	guiTooltip("Enables or disables the ability to overwrite existing preset files.")
 	ImGui.Dummy(0, 2)
 
