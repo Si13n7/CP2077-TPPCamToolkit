@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-17, 12:20 UTC+01:00 (MEZ)
+Version: 2025-04-19, 01:29 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -67,16 +67,16 @@ local LogLevels = {
 
 ---Defines color constants used for theming and UI interaction states.
 ---@class ColorEnum
----@field CUSTOM integer # Verdigris Teal – indicates custom or user-adjusted presets.
----@field RESTORE integer # Moss Jade – represents actions that revert values to defaults.
----@field CONFIRM integer # Antique Bronze – used for confirming user-driven changes.
----@field DELETE integer # Burnt Cranberry – signals destructive operations such as deletions.
+---@field CARAMEL integer # Caramel is a warm, golden brown with rich amber tones.
+---@field FIR integer # Fir is a dark, cool green with subtle blue undertones.
+---@field GARNET integer # Garnet is a deep, muted red with a subtle brown undertone.
+---@field OLIVE integer # Olive is a muted yellow-green with an earthy, natural tone.
 ---@type ColorEnum
 local Colors = {
-	CUSTOM = 0x8a6a7a29,
-	RESTORE = 0x8a297a68,
-	CONFIRM = 0x8a295c7a,
-	DELETE = 0x8a29297a
+	CARAMEL = 0x8a295c7a,
+	FIR = 0x8a6a7a29,
+	GARNET = 0x8a29297a,
+	OLIVE = 0x8a297a68
 }
 
 ---Constant array of possible camera levels.
@@ -157,31 +157,35 @@ local padding_width
 ---@type boolean
 local padding_locked
 
----Represents the state of an editable vehicle camera preset in the UI editor.
----Tracks different versions of the preset to properly trace changes.
----@class IEditorPresetData
----@field Current ICameraPreset? # The currently edited preset (may be modified by the UI).
----@field CurrentName string? # Editable working name for the current preset.
----@field CurrentToken number? # Checksum of the Current data, used for change tracking.
----@field File ICameraPreset? # The preset as loaded from file, before any user changes.
----@field FileName string? # The file name associated with the loaded preset.
----@field FileToken number? # Checksum of the File preset.
----@field Origin ICameraPreset? # A previous version of Current that has not been applied yet.
----@field OriginName string?
----@field OriginToken number? # Checksum of the Origin preset.
----@field Default ICameraPreset? # The game's default preset for this vehicle.
----@field DefaultToken number? # Checksum of the Default preset.
----@field RenamePending boolean? # True if the preset was renamed but the file rename hasn't been completed yet.
----@field RefreshPending boolean? # Indicates the editor UI should refresh its internal state.
----@field ApplyPending boolean? # Indicates changes that can be applied to take effect in-game.
----@field SavePending boolean? # Indicates that there are unsaved changes that can be saved.
----@field SaveIsRestore boolean? # If true, saving the preset will act as a revert-to-default action.
+---A single camera preset entry in the editor, including its data and metadata.
+---@class IEditorPreset
+---@field Preset ICameraPreset # The actual preset data (angles and offsets).
+---@field Key string # Internal identifier for lookups and invalid name detection.
+---@field Name string # User-modifiable display name of the preset.
+---@field Token number # Adler‑32 checksum of `Preset`, used to detect changes.
+---@field IsPresent boolean # True if a corresponding preset file exists on disk.
+
+---Flags for pending editor actions on a modified camera preset.
+---@class IEditorTasks
+---@field Rename boolean # True if the preset has been renamed but the file itself still needs to be renamed.
+---@field Validate boolean # True if angles or offsets have changed, used to highlight buttons.
+---@field Apply boolean # True if there are unapplied changes ready to be applied in-game.
+---@field Save boolean # True if there are unsaved modifications that need to be written to disk.
+---@field Restore boolean # True if saving will revert the preset back to its default configuration.
+
+---Represents all versions and pending actions for a vehicle’s camera preset in the UI editor.
+---@class IEditorBundle
+---@field Nexus IEditorPreset # Immutable default preset for the mounted vehicle.
+---@field Flux IEditorPreset # Live preset reflecting current UI edits.
+---@field Pivot IEditorPreset # Snapshot of Flux at the last apply action.
+---@field Finale IEditorPreset # Snapshot of Flux at the last save action.
+---@field Tasks IEditorTasks # Flags for pending rename, validate, apply, save, or restore actions.
 
 ---Holds per-vehicle editor state for all mounted and recently edited vehicles.
 ---The key is always the vehicle name and appearance name, separated by an asterisk (*).
 ---Each entry tracks editor data and preset version states for the given vehicle.
----@type table<string, IEditorPresetData|nil>
-local editor_data = {}
+---@type table<string, IEditorBundle|nil>
+local editor_bundles = {}
 
 ---Determines whether overwriting the preset file is allowed.
 ---@type boolean
@@ -233,17 +237,17 @@ local function log(lvl, fmt, ...)
 	end
 end
 
----Enforces a log message to be emitted using a temporary `dev_mode` override.
+---Forces a log message to be emitted using a temporary `dev_mode` override.
 ---Useful for outputting messages regardless of the current developer mode setting.
 ---Internally calls `log()` with the given parameters, then restores the previous `dev_mode`.
 ---@param mode DevLevelType # Temporary debug mode to use.
 ---@param lvl LogLevelType # Log level passed to `log()`.
 ---@param fmt string # Format string for the message.
 ---@vararg any # Optional arguments for formatting the message.
-local function logE(mode, lvl, fmt, ...)
+local function logF(mode, lvl, fmt, ...)
 	if mode <= DevLevels.DISABLED then return end
 	local prev = dev_mode
-	dev_mode = mode
+	dev_mode = prev < mode and mode or prev
 	log(lvl, fmt, ...)
 	dev_mode = prev
 end
@@ -839,7 +843,7 @@ end
 ---@return number z # The Z offset value. Falls back to a default per level (Close = 1.115, Medium = 1.65, Far = 2.25).
 local function getOffsetData(preset, fallback, level)
 	if not isTable(preset) or not contains(PresetLevels, level) then
-		logE(DevLevels.FULL, LogLevels.ERROR, Text.LOG_NO_PSET_FOR_LVL, level)
+		logF(DevLevels.FULL, LogLevels.ERROR, Text.LOG_NO_PSET_FOR_LVL, level)
 		return 0, 0, 0, 0 --Should never be returned with the current code.
 	end
 
@@ -1038,7 +1042,7 @@ local function loadPresets(refresh)
 	local function loadFrom(path)
 		local files = dir(path)
 		if not files then
-			logE(DevLevels.FULL, LogLevels.ERROR, Text.LOG_DIR_NOT_EXIST, path)
+			logF(DevLevels.FULL, LogLevels.ERROR, Text.LOG_DIR_NOT_EXIST, path)
 			return -1
 		end
 
@@ -1051,19 +1055,19 @@ local function loadPresets(refresh)
 			local key = trimLuaExt(name)
 			if camera_presets[key] then
 				count = count + 1
-				logE(DevLevels.BASIC, LogLevels.WARN, Text.LOG_SKIP_PSET, key, path, name)
+				logF(DevLevels.BASIC, LogLevels.WARN, Text.LOG_SKIP_PSET, key, path, name)
 				goto continue
 			end
 
 			local chunk, err = loadfile(path .. "/" .. name)
 			if not chunk then
-				logE(DevLevels.BASIC, LogLevels.ERROR, Text.LOG_FAIL_LOAD, path, name, err)
+				logF(DevLevels.BASIC, LogLevels.ERROR, Text.LOG_FAIL_LOAD, path, name, err)
 				goto continue
 			end
 
 			local ok, result = pcall(chunk)
 			if not ok or (isDef and not result.IsDefault) or not setPresetEntry(key, result) then
-				logE(DevLevels.BASIC, LogLevels.ERROR, Text.LOG_BAD_PSET, path, name)
+				logF(DevLevels.BASIC, LogLevels.ERROR, Text.LOG_BAD_PSET, path, name)
 				goto continue
 			end
 
@@ -1084,7 +1088,7 @@ local function loadPresets(refresh)
 
 	if loadFrom("defaults") < 39 then
 		mod_enabled = false
-		logE(DevLevels.FULL, LogLevels.ERROR, Text.LOG_DEFS_INCOMP)
+		logF(DevLevels.FULL, LogLevels.ERROR, Text.LOG_DEFS_INCOMP)
 		return
 	end
 
@@ -1139,9 +1143,11 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 		log(LogLevels.WARN, Text.LOG_PSET_NOT_CHANGED, name, default.ID)
 
 		if not saveAsDefault then
-			local ok = os.remove(path)
+			local ok, err = os.remove(path)
 			if ok then
-				logE(DevLevels.ALERT, LogLevels.WARN, Text.LOG_DEL_SUCCESS, path)
+				logF(DevLevels.ALERT, LogLevels.WARN, Text.LOG_DEL_SUCCESS, path)
+			else
+				logF(DevLevels.FULL, LogLevels.ERROR, Text.LOG_DEL_FAILURE, path, err)
 			end
 			return ok and setPresetEntry(name)
 		end
@@ -1167,7 +1173,7 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 	file:write(concat(parts))
 	file:close()
 
-	logE(DevLevels.ALERT, LogLevels.INFO, Text.LOG_PSET_SAVED, name)
+	logF(DevLevels.ALERT, LogLevels.INFO, Text.LOG_PSET_SAVED, name)
 
 	return true
 end
@@ -1339,6 +1345,80 @@ local function addPopupYesNo(id, text, yesBtnColor, noBtnColor)
 	return result
 end
 
+---Creates a new editor preset entry from a camera preset.
+---@param preset ICameraPreset # The source camera preset.
+---@param key string # Identifier/name for this preset entry.
+---@param snapshot boolean? # If true, deep-copies `preset` and clears its `IsDefault` flag.
+---@param verify boolean? # If true, sets `IsPresent` by checking the file system.
+---@return IEditorPreset # A table with fields: Preset, Key, Name, Token, IsPresent.
+local function getEditorPreset(preset, key, snapshot, verify)
+	local object = preset
+	local isdef = object.IsDefault
+	if snapshot then
+		object = clone(object)
+		object.IsDefault = nil --Would break comparison logic
+	end
+	return {
+		Preset = object,
+		Key = key,
+		Name = key,
+		Token = checksum(object),
+		IsPresent = verify and presetFileExists(key, isdef) or false
+	}
+end
+
+---Retrieves (and if necessary initializes) the four editor‐preset entries for a given arguments.
+---If the entries already exist in `editor_bundles`, it simply returns them.
+---@param name string # Vehicle name (e.g. "v_sport2_porsche_911turbo_player").
+---@param appName string # Appearance name (e.g. "porsche_911turbo__basic_johnny").
+---@param id string # Camera‑preset ID for TweakDB lookup.
+---@param key string # Preset key/alias used for storage and display.
+---@return IEditorPreset? Flux # Live preset entry reflecting current UI edits.
+---@return IEditorPreset? Pivot # Snapshot of Flux at the last apply action.
+---@return IEditorPreset? Finale # Snapshot of Flux at the last save action.
+---@return IEditorPreset? Nexus # Immutable default preset entry.
+---@return IEditorTasks? Tasks # Pending action flags (Rename, Validate, Apply, Save, Restore).
+local function getEditorBundleUnpacked(name, appName, id, key)
+	local bundle = deep(editor_bundles, format("%s*%s", name, appName)) ---@cast bundle IEditorBundle
+	if not isTable(bundle.Flux, bundle.Pivot, bundle.Finale, bundle.Nexus, bundle.Tasks) then
+		local flux = getPreset(id)
+		if not flux then
+			log(LogLevels.WARN, Text.LOG_NO_PSET_FOUND)
+			return
+		end
+
+		bundle.Flux = getEditorPreset(flux, key)
+		bundle.Pivot = getEditorPreset(flux, key, true)
+		bundle.Finale = getEditorPreset(flux, key, true, true)
+
+		local nexus = getDefaultPreset(flux) ---@cast nexus ICameraPreset
+		bundle.Nexus = getEditorPreset(nexus, key, true, true)
+
+		bundle.Tasks = {
+			Rename = false,
+			Validate = false,
+			Apply = false,
+			Save = false,
+			Restore = false
+		}
+	end
+	return bundle.Flux, bundle.Pivot, bundle.Finale, bundle.Nexus, bundle.Tasks
+end
+
+---Replaces an existing editor preset entry with values from another and updating its checksum.
+---@param src IEditorPreset # The source preset entry whose data will be copied.
+---@param dest IEditorPreset # The preset entry to overwrite (modified in place).
+---@param verify boolean? # If true, recomputes `IsPresent` by checking the file system for `src.Key`.
+local function replaceEditorPreset(src, dest, verify)
+	if not isTable(dest) or not isTable(src) then return end
+	dest.Preset = clone(src.Preset)
+	dest.Preset.IsDefault = nil --Would mess with comparison logic.
+	dest.Key = src.Key
+	dest.Name = src.Name
+	dest.Token = checksum(dest.Preset)
+	dest.IsPresent = verify and presetFileExists(src.Key) or false
+end
+
 --This event is triggered when the CET environment initializes for a particular game session.
 registerForEvent("onInit", function()
 	--Save default presets.
@@ -1398,7 +1478,7 @@ end)
 registerForEvent("onDraw", function()
 	if not overlay_open then return end
 
-	--Main window begins
+	--Main window begins.
 	if not ImGui.Begin(Text.GUI_TITL, ImGuiWindowFlags.AlwaysAutoResize) then return end
 
 	--Minimum window width and height padding.
@@ -1417,13 +1497,13 @@ registerForEvent("onDraw", function()
 		if isEnabled then
 			loadPresets()
 			applyPreset()
-			logE(DevLevels.ALERT, LogLevels.INFO, Text.LOG_MOD_ON)
+			logF(DevLevels.ALERT, LogLevels.INFO, Text.LOG_MOD_ON)
 		else
 			dev_mode = DevLevels.DISABLED
-			editor_data = {}
+			editor_bundles = {}
 			restoreAllPresets()
 			purgePresets()
-			logE(DevLevels.ALERT, LogLevels.INFO, Text.LOG_MOD_OFF)
+			logF(DevLevels.ALERT, LogLevels.INFO, Text.LOG_MOD_OFF)
 		end
 	end
 	ImGui.Dummy(0, 2)
@@ -1437,11 +1517,11 @@ registerForEvent("onDraw", function()
 	ImGui.Dummy(controlPadding, 0)
 	ImGui.SameLine()
 	if ImGui.Button(Text.GUI_RLD_ALL, 192, 24) then
-		editor_data = {}
+		editor_bundles = {}
 		loadPresets(true)
 		restoreAllPresets()
 		applyPreset()
-		logE(DevLevels.ALERT, LogLevels.INFO, Text.LOG_PSETS_RLD)
+		logF(DevLevels.ALERT, LogLevels.INFO, Text.LOG_PSETS_RLD)
 	end
 	addTooltip(Text.GUI_RLD_ALL_TIP)
 	ImGui.Dummy(0, 2)
@@ -1490,33 +1570,37 @@ registerForEvent("onDraw", function()
 		end
 	end
 
-	local editor = deep(editor_data, format("%s*%s", name, appName)) ---@cast editor IEditorPresetData
-	editor.CurrentName = editor.CurrentName or key
-	editor.OriginName = editor.OriginName or key
-	editor.FileName = editor.FileName or key
+	local flux, pivot, finale, nexus, tasks = getEditorBundleUnpacked(name, appName, id, key)
+	---@cast flux IEditorPreset
+	---@cast pivot IEditorPreset
+	---@cast finale IEditorPreset
+	---@cast nexus IEditorPreset
+	---@cast tasks IEditorTasks
+	if not isTable(flux, pivot, finale, nexus, tasks) then
+		--GUI closed — no further controls required.
+		ImGui.End()
+	end
 
 	if ImGui.BeginTable("PresetInfo", 2, ImGuiTableFlags.Borders) then
-		ImGui.TableSetupColumn(Text.GUI_TBL_HEAD_INFO, ImGuiTableColumnFlags.WidthFixed, -1)
-		ImGui.TableSetupColumn(Text.GUI_TBL_HEAD_VAL, ImGuiTableColumnFlags.WidthStretch)
+		ImGui.TableSetupColumn("\u{f11be}", ImGuiTableColumnFlags.WidthFixed, -1)
+		ImGui.TableSetupColumn("\u{f09a8}", ImGuiTableColumnFlags.WidthStretch)
 		ImGui.TableHeadersRow()
 
 		local rows = {
-			{ label = Text.GUI_TBL_LABL_VEH,   tip = Text.GUI_TBL_LABL_VEH_TIP,   value = name },
-			{ label = Text.GUI_TBL_LABL_APP,   tip = Text.GUI_TBL_LABL_APP_TIP,   value = appName },
-			{ label = Text.GUI_TBL_LABL_CAMID, tip = Text.GUI_TBL_LABL_CAMID_TIP, value = id },
+			{ label = "\u{f010b}", tip = Text.GUI_TBL_LABL_VEH_TIP,   value = name },
+			{ label = "\u{f07ac}", tip = Text.GUI_TBL_LABL_APP_TIP,   value = appName },
+			{ label = "\u{f0567}", tip = Text.GUI_TBL_LABL_CAMID_TIP, value = id },
 			{
-				label = Text.GUI_TBL_LABL_PSET,
-				tip = Text.GUI_TBL_LABL_PSET_TIP,
-				value = (editor.CurrentName ~= key or presetFileExists(editor.CurrentName)) and editor.CurrentName or id,
-				valTip = Text.GUI_TBL_VAL_PSET_TIP,
+				label    = "\u{f1952}",
+				tip      = Text.GUI_TBL_LABL_PSET_TIP,
+				value    = (flux.Name ~= key or contains(camera_presets, key)) and flux.Name or id,
+				valTip   = Text.GUI_TBL_VAL_PSET_TIP,
 				editable = true
 			}
 		}
 
 		local height = 28
-		local skipAppRow = name == appName
 		for _, row in ipairs(rows) do
-			if row.label == Text.GUI_TBL_LABL_APP and skipAppRow then goto continue end
 			ImGui.TableNextRow(0, height)
 			ImGui.TableSetColumnIndex(0)
 
@@ -1527,31 +1611,38 @@ registerForEvent("onDraw", function()
 			ImGui.TableSetColumnIndex(1)
 
 			if row.editable then
-				local curWidth = ImGui.CalcTextSize(ensureLuaExt(row.value))
-				local origWidth = ImGui.CalcTextSize(ensureLuaExt(editor.OriginName))
-				local width = min(max(56, curWidth, origWidth) + 8, contentWidth - 40)
+				local namWidth, _ = ImGui.CalcTextSize(name)
+				local appWidth, _ = ImGui.CalcTextSize(appName)
+				local width = min(max(namWidth, appWidth), contentWidth - 32) + 8
 				ImGui.PushItemWidth(width)
 
 				local color
-				if editor.CurrentName ~= editor.OriginName then
-					color = Colors.DELETE
-				elseif presetFileExists(editor.CurrentName) then
-					color = Colors.CUSTOM
+				if flux.Name ~= flux.Key then
+					color = Colors.GARNET
+				elseif flux.Name == finale.Name then
+					color = Colors.FIR
 				else
-					color = Colors.CONFIRM
+					color = Colors.CARAMEL
 				end
 
-				local file = ensureLuaExt(row.value)
 				local pushd = row.value ~= id and pushColors(ImGuiCol.FrameBg, color) or 0
-				local newVal, changed = ImGui.InputText("##FileName", file, 96)
+				local newVal, changed = ImGui.InputText("##FileName", row.value, 96)
 				if changed and newVal then
-					editor.CurrentName = trimLuaExt(newVal)
-					editor.RenamePending = true
+					local trimVal = trimLuaExt(newVal)
+					if flux.Name ~= trimVal then
+						if #trimVal > 0 then
+							flux.Name = trimVal
+							tasks.Rename = true
+						else
+							flux.Key = key
+							flux.Name = key
+						end
+					end
 				end
 				popColors(pushd)
 				addTooltip(format(
 					row.valTip,
-					file,
+					color == Colors.CARAMEL and flux.Name or key,
 					name,
 					appName,
 					chopUnderscoreParts(name),
@@ -1562,69 +1653,24 @@ registerForEvent("onDraw", function()
 				alignVertNext(height)
 				ImGui.Text(tostring(row.value or Text.GUI_NONE))
 			end
-
-			::continue::
 		end
 
 		ImGui.EndTable()
 	end
 
-	if editor.RenamePending then
-		editor.RenamePending = editor.CurrentName ~= editor.FileName and presetFileExists(editor.FileName)
-		editor.OriginName = editor.CurrentName
+	if tasks.Rename then
+		tasks.Rename = finale.IsPresent and flux.Name ~= finale.Name
+		flux.Key = flux.Name
 	end
 
 	--Camera preset editor allowing adjustments to Angle, X, Y, and Z coordinates — if certain conditions are met.
-	local preset = editor.Current or getPreset(id)
-	if not preset then
-		log(LogLevels.WARN, Text.LOG_NO_PSET_FOUND)
-
-		--GUI closed — no further controls required.
-		ImGui.End()
-		return
-	end
-
-	if editor.RefreshPending or not editor.Origin then
-		editor.RefreshPending = false
-
-		local copy = clone(preset)
-		editor.Origin = copy
-		editor.OriginToken = checksum(copy)
-
-		if editor.SavePending ~= true then
-			copy = clone(copy)
-			editor.File = copy
-			editor.FileToken = checksum(copy)
-		end
-
-		editor.Current = preset
-
-		if not editor.Default then
-			local original = getDefaultPreset(preset) ---@cast original ICameraPreset
-			copy = clone(original)
-			copy.IsDefault = nil
-
-			editor.Default = copy
-			editor.DefaultToken = checksum(copy)
-		end
-	end
-
-	local default = editor.Default
-	if not default then
-		log(LogLevels.ERROR, Text.LOG_NO_DEF_PSET, id, name)
-
-		--GUI ends early — default preset not found.
-		ImGui.End()
-		return
-	end
-
 	if ImGui.BeginTable("PresetEditor", 5, ImGuiTableFlags.Borders) then
 		local headers = {
-			Text.GUI_TBL_HEAD_LVL,
-			Text.GUI_TBL_HEAD_ANG,
-			Text.GUI_TBL_HEAD_X,
-			Text.GUI_TBL_HEAD_Y,
-			Text.GUI_TBL_HEAD_Z
+			"\u{f066a}",
+			"\u{f10f3}\u{f0aee}", --Angles
+			"\u{f0d4c}\u{f0b05}", --X-axis
+			"\u{f0d51}\u{f0b06}", --Y-axis
+			"\u{f0d55}\u{f0b07}" --Z-axis
 		}
 
 		for i, header in ipairs(headers) do
@@ -1642,9 +1688,9 @@ registerForEvent("onDraw", function()
 		ImGui.TableHeadersRow()
 
 		local rows = {
-			{ label = Text.GUI_TBL_LABL_CLO, tip = Text.GUI_TBL_LABL_CLO_TIP },
-			{ label = Text.GUI_TBL_LABL_MID, tip = Text.GUI_TBL_LABL_MID_TIP },
-			{ label = Text.GUI_TBL_LABL_FAR, tip = Text.GUI_TBL_LABL_FAR_TIP }
+			{ label = "\u{f0623}", tip = Text.GUI_TBL_LABL_CLO_TIP },
+			{ label = "\u{f0622}", tip = Text.GUI_TBL_LABL_MID_TIP },
+			{ label = "\u{f0621}", tip = Text.GUI_TBL_LABL_FAR_TIP }
 		}
 
 		local tips = {
@@ -1666,8 +1712,8 @@ registerForEvent("onDraw", function()
 			addTooltip(row.tip)
 
 			for j, field in ipairs(PresetOffsets) do
-				local defVal = get(default, 0, level, field)
-				local curVal = get(preset, defVal, level, field)
+				local defVal = get(nexus.Preset, 0, level, field)
+				local curVal = get(flux.Preset, defVal, level, field)
 				local speed = pick(j, 1, 5e-3)
 				local minVal = pick(j, -45, -5, -10, 0)
 				local maxVal = pick(j, 90, 5, 10, 32)
@@ -1676,18 +1722,18 @@ registerForEvent("onDraw", function()
 				ImGui.TableSetColumnIndex(j)
 				ImGui.PushItemWidth(-1)
 
-				local pushd = not equals(curVal, defVal) and pushColors(ImGuiCol.FrameBg, Colors.CUSTOM) or 0
+				local pushd = not equals(curVal, defVal) and pushColors(ImGuiCol.FrameBg, Colors.FIR) or 0
 				local newVal = ImGui.DragFloat(format("##%s_%s", level, field), curVal, speed, minVal, maxVal, fmt)
 				if not equals(newVal, curVal) then
 					newVal = min(max(newVal, minVal), maxVal)
-					deep(preset, level)[field] = newVal
-					editor.RefreshPending = true
+					deep(flux.Preset, level)[field] = newVal
+					tasks.Validate = true
 				end
 				popColors(pushd)
 
 				local tip = tips[j]
 				if tip then
-					local origVal = get(editor.Origin, defVal, level, field)
+					local origVal = get(pivot.Preset, defVal, level, field)
 					addTooltip(split(format(tip, defVal, minVal, maxVal, origVal), "|"))
 				end
 
@@ -1699,30 +1745,31 @@ registerForEvent("onDraw", function()
 		ImGui.Dummy(0, 1)
 	end
 
-	if editor.RefreshPending then
-		editor.RefreshPending = false
-		editor.Current = preset
-		editor.CurrentToken = checksum(editor.Current)
-		editor.ApplyPending = editor.CurrentToken ~= editor.OriginToken
-		editor.SavePending = editor.CurrentToken ~= editor.FileToken
-		if editor.SavePending then
-			editor.SaveIsRestore = editor.CurrentToken == editor.DefaultToken
-		end
+	if tasks.Validate then
+		tasks.Validate = false
+		flux.Token = checksum(flux.Preset)
+		tasks.Apply = flux.Token ~= pivot.Token
+		tasks.Save = flux.Token ~= finale.Token
+		tasks.Restore = tasks.Save and flux.Token == nexus.Token
 	end
-	key = validatePresetKey(name, appName, key or name, editor.CurrentName)
-	if key ~= editor.CurrentName then
-		editor.CurrentName = key
+
+	key = validatePresetKey(name, appName, key or name, flux.Name)
+	if key ~= flux.Name then
+		--No longer identical to `flux.Key`; triggers red highlight in UI.
+		flux.Name = key
 	end
 
 	--Button to apply previously configured values in-game.
-	local color = editor.SaveIsRestore and Colors.RESTORE or Colors.CONFIRM
-	local pushed = editor.ApplyPending and pushColors(ImGuiCol.Button, color) or 0
+	local color = tasks.Restore and Colors.OLIVE or Colors.CARAMEL
+	local pushed = tasks.Apply and pushColors(ImGuiCol.Button, color) or 0
 	local btnWidth = floor(contentWidth * 0.5 - (itemSpacingX * 0.5))
 	if ImGui.Button(Text.GUI_APPLY, btnWidth, 24) then
-		editor.RefreshPending = true
-		editor.ApplyPending = false
-		camera_presets[key] = preset
-		logE(DevLevels.ALERT, LogLevels.INFO, Text.LOG_PSET_UPD, key)
+		--Always applies on user action — even if unnecessary.
+		tasks.Apply = false
+		camera_presets[pivot.Key] = nil
+		camera_presets[key] = flux.Preset
+		replaceEditorPreset(flux, pivot)
+		logF(DevLevels.ALERT, LogLevels.INFO, Text.LOG_PSET_UPD, key)
 	end
 	popColors(pushed)
 	addTooltip(Text.GUI_APPLY_TIP)
@@ -1730,10 +1777,9 @@ registerForEvent("onDraw", function()
 
 	--Button in same line to save configured values to a file for future automatic use.
 	local saveConfirmed = false
-	pushed = (editor.SavePending or editor.RenamePending) and pushColors(ImGuiCol.Button, color) or 0
+	pushed = (tasks.Save or tasks.Rename) and pushColors(ImGuiCol.Button, color) or 0
 	if ImGui.Button(Text.GUI_SAVE, btnWidth, 24) then
-		local path = key == editor.FileName and key or editor.FileName ---@cast path string
-		if presetFileExists(path) then
+		if presetFileExists(finale.Name) then
 			overwrite_confirm = true
 			ImGui.OpenPopup(key)
 		else
@@ -1741,10 +1787,10 @@ registerForEvent("onDraw", function()
 		end
 	end
 	popColors(pushed)
-	addTooltip(format(editor.SaveIsRestore and Text.GUI_REST_TIP or Text.GUI_SAVE_TIP, key))
+	addTooltip(format(tasks.Restore and Text.GUI_REST_TIP or Text.GUI_SAVE_TIP, key))
 
 	if overwrite_confirm then
-		local confirmed = addPopupYesNo(key, format(Text.GUI_OVWR_CONFIRM, key), Colors.CONFIRM)
+		local confirmed = addPopupYesNo(key, format(Text.GUI_OVWR_CONFIRM, key), Colors.CARAMEL)
 		if confirmed ~= nil then
 			overwrite_confirm = false
 			saveConfirmed = confirmed
@@ -1753,35 +1799,38 @@ registerForEvent("onDraw", function()
 	if saveConfirmed then
 		saveConfirmed = false
 
-		if editor.ApplyPending then
-			camera_presets[key] = preset
-			editor.RefreshPending = true
-			editor.ApplyPending = false
-			log(LogLevels.INFO, Text.LOG_PSET_UPD, key)
-		end
+		--Apply is always performed on user request, even if redundant.
+		tasks.Apply = false
+		camera_presets[pivot.Key] = nil
+		camera_presets[key] = flux.Preset
+		replaceEditorPreset(flux, pivot)
+		log(LogLevels.INFO, Text.LOG_PSET_UPD, key)
 
 		--Saving is always performed, even if no changes were made in the editor. The
 		--user could theoretically delete preset files manually outside the game, and
 		--the mod wouldn't detect that at runtime. It would be problematic if saving
 		--were blocked just because the mod assumes there are no changes.
-		if savePreset(key, preset, true) then
-			editor.SavePending = false
-			if editor.RenamePending then
-				editor.RenamePending = false
-				local path = getPresetFilePath(editor.FileName) ---@cast path string
-				local ok = os.remove(path)
-				if ok then
-					editor.FileName = editor.CurrentName
+		if savePreset(key, flux.Preset, true) then
+			tasks.Save = false
+
+			if tasks.Rename then
+				tasks.Rename = false
+				local path = getPresetFilePath(finale.Name) ---@cast path string
+				local ok, err = os.remove(path)
+				if not ok then
+					logF(DevLevels.FULL, LogLevels.ERROR, Text.LOG_MOVE_FAILURE, finale.Name, flux.Name, err)
 				end
 			end
+
+			replaceEditorPreset(flux, finale, true)
 		else
-			logE(DevLevels.ALERT, LogLevels.WARN, Text.LOG_PSET_NOT_SAVED, key)
+			logF(DevLevels.ALERT, LogLevels.WARN, Text.LOG_PSET_NOT_SAVED, key)
 		end
 	end
 
 	ImGui.Dummy(0, 4)
 
-	--Button to open Preset File Manager
+	--Button to open Preset File Manager.
 	local x, y, w, h
 	ImGui.Separator()
 	ImGui.Dummy(0, 4)
@@ -1795,13 +1844,13 @@ registerForEvent("onDraw", function()
 	--GUI creation of Main window is complete.
 	ImGui.End()
 
-	--Preset File Manager window
+	--Preset File Manager window.
 	if not file_man_open then return end
 
 	local files = dir("presets")
 	if not files then
 		file_man_open = false
-		logE(DevLevels.FULL, LogLevels.ERROR, Text.LOG_DIR_NOT_EXIST, "presets")
+		logF(DevLevels.FULL, LogLevels.ERROR, Text.LOG_DIR_NOT_EXIST, "presets")
 		return
 	end
 
@@ -1816,8 +1865,8 @@ registerForEvent("onDraw", function()
 
 	local anyFiles = false
 	if ImGui.BeginTable("PresetFiles", 2, ImGuiTableFlags.Borders) then
-		ImGui.TableSetupColumn(Text.GUI_FMAN_HEAD_NAME, ImGuiTableColumnFlags.WidthStretch)
-		ImGui.TableSetupColumn(Text.GUI_FMAN_HEAD_ACTION, ImGuiTableColumnFlags.WidthFixed)
+		ImGui.TableSetupColumn(" \u{f09a8}", ImGuiTableColumnFlags.WidthStretch)
+		ImGui.TableSetupColumn(" \u{f05e9}", ImGuiTableColumnFlags.WidthFixed)
 		ImGui.TableHeadersRow()
 
 		local height = 28
@@ -1850,29 +1899,29 @@ registerForEvent("onDraw", function()
 			end
 
 			ImGui.TableSetColumnIndex(1)
-			if ImGui.Button(format(Text.GUI_FMAN_DEL_BTN, file), 0, height) then
+			if ImGui.Button("\u{f05e8}##" .. file, 0, height) then
 				ImGui.OpenPopup(file)
 			end
 
-			if addPopupYesNo(file, format(Text.GUI_FMAN_DEL_CONFIRM, file), Colors.DELETE) then
+			if addPopupYesNo(file, format(Text.GUI_FMAN_DEL_CONFIRM, file), Colors.GARNET) then
 				local path = getPresetFilePath(file) ---@cast path string
-				local ok = os.remove(path)
+				local ok, err = os.remove(path)
 				if ok then
-					for n, _ in pairs(editor_data) do
+					for n, _ in pairs(editor_bundles) do
 						local parts = split(n, "*")
 						if #parts < 2 then goto continue end
 
 						local vName, aName = parts[1], parts[2]
 						if startsWith(vName, k) or startsWith(aName, k) then
-							editor_data[n] = nil
+							editor_bundles[n] = nil
 						end
 
 						::continue::
 					end
 					setPresetEntry(k)
-					logE(DevLevels.ALERT, LogLevels.INFO, Text.LOG_DEL_SUCCESS, file)
+					logF(DevLevels.ALERT, LogLevels.INFO, Text.LOG_DEL_SUCCESS, file)
 				else
-					logE(DevLevels.ALERT, LogLevels.WARN, Text.LOG_DEL_FAILURE, file)
+					logF(DevLevels.FULL, LogLevels.WARN, Text.LOG_DEL_FAILURE, file, err)
 				end
 			end
 
@@ -1886,7 +1935,7 @@ registerForEvent("onDraw", function()
 		ImGui.Dummy(0, 180)
 		ImGui.Dummy(controlPadding - 4, 0)
 		ImGui.SameLine()
-		ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(Colors.DELETE, 0xff))
+		ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(Colors.GARNET, 0xff))
 		ImGui.Text(Text.GUI_FMAN_NO_PSETS)
 		ImGui.PopStyleColor()
 	end
