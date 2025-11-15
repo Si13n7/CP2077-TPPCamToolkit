@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-10-10, 14:21 UTC+01:00 (MEZ)
+Version: 2025-10-11, 13:39 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -43,7 +43,7 @@ Development Environment:
 --#region 🚧 Core Definitions
 
 ---Represents available developer debug modes used to control logging and feedback behavior.
----@alias DevLevelType 0|1|2|3|4
+---@alias DevLevelType 0|1|2|3|4|5
 
 ---Represents available logging levels for categorizing message severity.
 ---@alias LogLevelType 0|1|2
@@ -78,6 +78,7 @@ Development Environment:
 ---@field Max number? # The maximum value.
 ---@field Speed number? # Adjust sensitivity for ImGui controls; lower values allow finer adjustments.
 ---@field IsGameOption boolean? # Determines whether this is treated as game option.
+---@field IsNotAvailable boolean? # Determines whether this option is currently not available.
 
 ---Represents a single game setting option with its associated metadata and values.
 ---@class IGameConfigOption
@@ -181,14 +182,17 @@ local DevLevels = {
 	---Logs output to the CET console only.
 	BASIC = 1,
 
-	---Logs to console and keeps the overlay visible even when CET is hidden.
+	---Same as BASIC, but keeps the overlay visible even when CET is hidden.
 	OVERLAY = 2,
 
-	---Same as OVERLAY, but also shows pop-up alerts on screen.
-	ALERT = 3,
+	---Same as OVERLAY, but adds a ruler at the bottom of the screen.
+	RULER = 3,
+
+	---Same as RULER, but also shows pop-up alerts on screen.
+	ALERT = 4,
 
 	---Same as ALERT, but with extended technical output and additional logging to file.
-	FULL = 4
+	FULL = 5
 }
 
 ---Log levels used to classify the severity of log messages.
@@ -433,14 +437,23 @@ local state = {
 	---Determines whether the mod is enabled.
 	isModEnabled = true,
 
+	---The current game version.
+	gameVersion = nil,
+
 	---Indicates whether the running game version meets the minimum required version.
-	isGameMinVersion = false,
+	isGameCompatible = false,
+
+	---The current game version.
+	cetVersion = nil,
 
 	---Indicates whether the running CET version meets the minimum required version.
-	isRuntimeMinVersion = false,
+	isCetCompatible = false,
 
 	---Indicates whether the running CET version supports all required features.
-	isRuntimeFullVersion = false,
+	isCetTopical = false,
+
+	---Determines whether Codeware is installed.
+	isCodewareAvailable = false,
 
 	---If true, temporarily suppresses all logging output regardless of `state.devMode`.
 	---Useful to avoid log spam during mass operations or invalid intermediate states.
@@ -576,6 +589,10 @@ local gui = {
 
 	---Determines whether the CET overlay is open.
 	isOverlayOpen = false,
+
+	---Indicates whether the current ImGui window is being rendered for the first frame.
+	---Used to perform one-time setup operations such as preventing automatic item selection or setting initial focus.
+	isFirstFrame = false,
 
 	---Forces a one–frame skip in `onDraw` after certain events (e.g. onUnmount).
 	---Used to ensure `getMetrics()` is executed once, then discarded,
@@ -1368,12 +1385,14 @@ local function deserialize(x, isFile)
 	if not isStringValid(x) then return nil, nil end
 
 	if isFile then
-		return loadfile(x)
+		local ok, result = pcall(loadfile, x)
+		return ok and result or nil
 	end
 
 	local str = x:match("^%s*return") and x or "return " .. x
 	---@diagnostic disable-next-line
-	return loadstring(str)
+	local ok, result = pcall(loadstring, str)
+	return ok and result or nil
 end
 
 ---Computes an Adler-53 checksum over one or more values without allocating a new table.
@@ -1693,7 +1712,7 @@ local function log(lvl, id, fmt, ...)
 	end
 
 	if state.devMode >= DevLevels.ALERT then
-		if state.isRuntimeFullVersion then
+		if state.isCetTopical then
 			local toast = format("%s %s", LogMeta[lvl].ICON, str)
 			local kind = LogMeta[lvl].TOAST
 			gui.toasterBumps[kind] = gui.toasterBumps[kind] and (gui.toasterBumps[kind] .. "\n\n" .. toast) or toast
@@ -1873,7 +1892,7 @@ end
 local function getVanillaVehicleCount()
 	local cache = getCache(0x0a00, true)
 	if cache then return cache end
-	return setCache(0x0a00, isVersionAtMost(getGameVersion(), "2.20") and 85 or 105, true)
+	return setCache(0x0a00, isVersionAtMost(state.gameVersion, "2.21") and 85 or 105, true)
 end
 
 ---Finds the name (including `Vehicle.` prefix) of a vehicle based on its TweakDB ID.
@@ -2298,7 +2317,7 @@ end
 ---@param updateConfig boolean? # If true, the related `config.options` entry is updated as well.
 local function updateConfigDefaultParam(name, value, updateConfig)
 	local option = name and config.options[name]
-	if not option then return end
+	if not option or option.IsNotAvailable then return end
 
 	local default = option.Default
 	local isRestore = value == default
@@ -2331,17 +2350,17 @@ local function updateConfigDefaultParam(name, value, updateConfig)
 		end
 	end
 
+	if not state.isCodewareAvailable then return end
+
 	local isFOV = name == "fov"
-	if isFOV or name == "zoom" then
-		local player = Game.GetPlayer()
-		local component = player and player:FindComponentByType("vehicleTPPCameraComponent")
-		if component then
-			if isFOV then
-				component:SetFOV(value)
-			else
-				component:SetZoom(value)
-			end
-		end
+	local player = (isFOV or name == "zoom") and Game.GetPlayer()
+	local component = player and player:FindComponentByType("vehicleTPPCameraComponent")
+	if not component then return end
+
+	if isFOV then
+		component:SetFOV(value)
+	else
+		component:SetZoom(value)
 	end
 end
 
@@ -2352,7 +2371,7 @@ local function updateConfigDefaultParams(doRestore)
 		if not option.IsGameOption then
 			option.Value = option.Value or option.Default
 		else
-			if option.Value == nil then
+			if not option.IsNotAvailable and option.Value == nil then
 				for _, section in ipairs(DefaultParams.Keys) do
 					local key = format("%s.%s", section, var)
 					option.Value = TweakDB:GetFlat(key) or option.Default
@@ -3259,31 +3278,17 @@ local function loadPresetsFrom(path)
 
 		local isBusy = false
 		local iterations = ceil(length / 5)
-		local index, file
-
-		--Workaround to query all custom vehicle appearances. I'm not sure
-		--if this is a CET bug or intended behavior, but it doesn't seem to
-		--matter when I call it. On the very first time, only about half of
-		--the appearances that should be available are returned. The query
-		--must be forced at least one frame before the actual action. The
-		--result is discarded, only to ensure that the next queries returns
-		--all appearances.
-		local names, amount
-		local interval = 0
-		asyncRepeatBurst(interval, function(id)
-			local map, quantity = getAllUniqueVehicleIdentifiers(true)
-			logIf(DevLevels.BASIC, LogLevels.INFO, 0x98e0, Text.LOG_VEH_UIDS, quantity)
-			if quantity == amount or interval >= 1 then
-				asyncStop(id)
-				names = map
-				return
-			end
-			amount = quantity
-			interval = interval + .1
-		end)
+		local index, file, names
+		local isMappingSuccess, isMappingDone = false, false
 
 		asyncRepeat(0.1, function(id)
-			if isBusy or not names then return end
+			if isBusy or not isMappingDone then return end
+			if not isMappingSuccess then
+				asyncStop(id)
+				task.IsActive = false
+				count = 0
+				return
+			end
 			isBusy = true
 			for _ = 1, iterations do
 				index, file = next(files, index)
@@ -3321,6 +3326,28 @@ local function loadPresetsFrom(path)
 			if isFunction(task.Finalizer) then
 				task.Finalizer()
 			end
+		end)
+
+		--Workaround to query all custom vehicle appearances. I'm not sure
+		--if this is a CET bug or intended behavior, but it doesn't seem to
+		--matter when I call it. On the very first time, only about half of
+		--the appearances that should be available are returned. The query
+		--must be forced at least one frame before the actual action. The
+		--result is discarded, only to ensure that the next queries returns
+		--all appearances.
+		local interval, amount = 0, 0
+		asyncRepeatBurst(interval, function(id)
+			local map, quantity = getAllUniqueVehicleIdentifiers(true)
+			logIf(DevLevels.BASIC, LogLevels.INFO, 0x98e0, Text.LOG_VEH_UIDS, quantity)
+			if quantity == amount or interval >= 1 then
+				asyncStop(id)
+				names = map
+				isMappingSuccess = quantity > 0
+				isMappingDone = true
+				return
+			end
+			amount = quantity
+			interval = interval + .1
 		end)
 
 		return
@@ -3449,19 +3476,31 @@ local function saveGlobalOptions()
 
 	sqliteBegin()
 
+	local doVacuum = false
+
 	--Update only changed entries.
 	for name, option in pairs(config.options) do
+		local default = serialize(option.Default)
 		local current = serialize(option.Value or option.Default)
 		local previous = database[name]
 		if not equals(current, previous) then
-			sqliteUpsert("GlobalOptions", "Name", {
-				Name = name,
-				Value = current
-			})
+			if equals(current, default) then
+				doVacuum = true
+				sqliteDelete("GlobalOptions", "Name", name)
+			else
+				sqliteUpsert("GlobalOptions", "Name", {
+					Name = name,
+					Value = current
+				})
+			end
 		end
 	end
 
 	sqliteCommit()
+
+	if doVacuum then
+		sqliteVacuum()
+	end
 end
 
 ---Loads `config.options` values from `db.sqlite3`.
@@ -3502,7 +3541,7 @@ local function saveAdvancedOptions()
 
 	sqliteBegin()
 
-	local doVacuum = true
+	local doVacuum = false
 
 	for i, options in pairs(config.advancedOptions) do
 		local tableName = "AdvancedOptions" .. i
@@ -3529,6 +3568,7 @@ local function saveAdvancedOptions()
 				if not isTableValid(config.advancedOptions[i]) then
 					config.advancedOptions[i] = nil
 				end
+				doVacuum = true
 				sqliteDelete(tableName, "Name", name)
 				goto continue
 			end
@@ -3783,7 +3823,7 @@ end
 ---@return number height # The height of the window.
 ---@return number maxWidth # The maximum screen width.
 ---@return number maxHeight # The maximum screen height.
-local function validateWindowBounds(x, y, width, height, maxWidth, maxHeight, parent)
+local function validateWindowBounds(x, y, width, height, maxWidth, maxHeight)
 	if not areNumber(x, y) then
 		x, y = ImGui.GetWindowPos()
 		---@cast x number
@@ -4023,11 +4063,12 @@ end
 ---Returns true if the Yes button is clicked, false if No is clicked, and nil if the popup was not active.
 ---@param id string # The unique popup ID.
 ---@param text string # The message to display in the popup.
+---@param scale number # UI scale factor based on current DPI and font size.
 ---@param yesBtnColor? number # Optional color index for the Yes button (ImGuiCol style constant).
 ---@param noBtnColor? number # Optional color index for the No button (ImGuiCol style constant).
 ---@return boolean? # True if Yes clicked, false if No clicked, nil if popup not active.
 local function addPopupYesNo(id, text, scale, yesBtnColor, noBtnColor)
-	if not areStringValid(id, text) or not ImGui.BeginPopup(id) then return nil end
+	if not areStringValid(id, text) or not isNumber(scale) or not ImGui.BeginPopup(id) then return nil end
 
 	local result = nil
 
@@ -4061,6 +4102,56 @@ local function addPopupYesNo(id, text, scale, yesBtnColor, noBtnColor)
 	return result
 end
 
+---Draws a vertical on-screen ruler at the bottom center of the screen.
+---@param scale number # UI scale factor based on current DPI and font size.
+---@param maxWidth number # Screen width for window positioning.
+---@param maxHeight number # Screen height for window positioning.
+local function drawRuler(scale, maxWidth, maxHeight)
+	if not areNumber(scale, maxWidth, maxHeight) then return end
+
+	ImGui.PushStyleColor(ImGuiCol.WindowBg, 0x00000000)
+	ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 0)
+
+	local flags = bor(
+		ImGuiWindowFlags.NoTitleBar,
+		ImGuiWindowFlags.NoMove,
+		ImGuiWindowFlags.NoCollapse,
+		ImGuiWindowFlags.AlwaysAutoResize,
+		ImGuiWindowFlags.NoSavedSettings,
+		ImGuiWindowFlags.NoFocusOnAppearing,
+		ImGuiWindowFlags.NoBringToFrontOnFocus
+	)
+	if not ImGui.Begin("VerticalScreenRuler", true, flags) then return end
+
+	local lineH = ImGui.GetTextLineHeight() * 0.2
+	local posX, posY = ImGui.GetCursorPos()
+	local fov = get(config.options.fov, 69, "Value")
+	local ticks = fov > 69 and fov or 62
+	local colors = {
+		[10]        = 0xffffff00, --cyan
+		[ticks - 2] = 0xff00ffff, --yellow
+		[ticks - 1] = 0xff00aaff, --orange
+		[ticks]     = 0xff0000ff --red
+	}
+	for i = 0, ticks do
+		local isMajor = i % 5 == 0
+		local tick = rep("_", isMajor and 4 or 3)
+		local text = isMajor and format(" %3d", i) or ""
+		local osetY = posY + (ticks - i) * lineH
+		ImGui.SetCursorPos(posX, osetY)
+		ImGui.PushStyleColor(ImGuiCol.Text, colors[i] or 0xafffffff)
+		ImGui.Text(isMajor and tick .. text or tick)
+		ImGui.PopStyleColor()
+	end
+
+	local width, height = ImGui.GetWindowSize()
+	local x, y = (maxWidth - width) * 0.5, ((maxHeight - height) + (9 * scale))
+	ImGui.SetWindowPos(x, y)
+
+	ImGui.PopStyleColor()
+	ImGui.End()
+end
+
 ---Draws and manages the Global Settings window.
 ---@param scale number # UI scale factor based on current DPI and font size.
 ---@param x number # X-coordinate of the window's top-left corner.
@@ -4082,7 +4173,12 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 	height = math.max(height, 210 * scale)
 	ImGui.SetNextWindowSize(width, height)
 
-	local flags = bor(ImGuiWindowFlags.NoResize, ImGuiWindowFlags.NoMove, ImGuiWindowFlags.NoCollapse)
+	local flags = bor(
+		ImGuiWindowFlags.NoResize,
+		ImGuiWindowFlags.NoMove,
+		ImGuiWindowFlags.NoCollapse,
+		ImGuiWindowFlags.NoSavedSettings
+	)
 	config.isOpen = ImGui.Begin(Text.GUI_SETTINGS, config.isOpen, flags)
 	if not config.isOpen then return false end
 
@@ -4096,11 +4192,13 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 	ImGui.TableHeadersRow()
 
 	for key, option in opairs(config.options, "DisplayName") do
-		---@cast key string
 		---@cast option IOptionData
+		if option.IsNotAvailable then goto continue end
+
 		ImGui.TableNextRow()
 
 		ImGui.TableNextColumn()
+		---@cast key string
 		ImGui.Text(tostring(option.DisplayName or key))
 
 		ImGui.TableNextColumn()
@@ -4134,6 +4232,8 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 		else
 			ImGui.Text(Text.GUI_NONE)
 		end
+
+		::continue::
 	end
 
 	ImGui.EndTable()
@@ -4179,7 +4279,11 @@ local function openAdvancedOptionsWindow(scale, isOpening, maxWidth, maxHeight)
 		ImGui.SetNextWindowSize(width, height)
 	end
 
-	config.isAdvancedOpen = ImGui.Begin(Text.GUI_ASET_TITLE, config.isAdvancedOpen, ImGuiWindowFlags.NoCollapse)
+	local flags = bor(
+		ImGuiWindowFlags.NoCollapse,
+		ImGuiWindowFlags.NoSavedSettings
+	)
+	config.isAdvancedOpen = ImGui.Begin(Text.GUI_ASET_TITLE, config.isAdvancedOpen, flags)
 	if not config.isAdvancedOpen then return end
 
 	if validateWindowBounds(x, y, width, height, maxWidth, maxHeight) then
@@ -4280,7 +4384,7 @@ end
 ---@param buttonHeight number # The height for button controls in the file table.
 ---@param itemSpacing number # Horizontal spacing between UI elements, used for centering logic.
 local function openFileExplorerWindow(scale, isOpening, x, y, width, height, maxHeight, halfHeightPadding, buttonHeight, itemSpacing)
-	if not explorer.isOpen or not areNumber(scale, x, y, width, height, maxHeight, halfHeightPadding, buttonHeight, itemSpacing) then
+	if not explorer.isOpen or not areNumber(scale, width, height, maxHeight, halfHeightPadding, buttonHeight) then
 		return
 	end
 
@@ -4308,16 +4412,20 @@ local function openFileExplorerWindow(scale, isOpening, x, y, width, height, max
 	end
 
 	height = math.max(height, 400 * scale)
-	if isOpening then
+	if isOpening and areNumber(x, y) then
 		ImGui.SetNextWindowPos(x, y)
 		ImGui.SetNextWindowSize(width, height)
 	end
 	ImGui.SetNextWindowSizeConstraints(width, height, math.max(width, 400 * scale), maxHeight)
 
-	explorer.isOpen = ImGui.Begin(Text.GUI_PSET_EXPL, explorer.isOpen, ImGuiWindowFlags.NoCollapse)
+	local flags = bor(
+		ImGuiWindowFlags.NoCollapse,
+		ImGuiWindowFlags.NoSavedSettings
+	)
+	explorer.isOpen = ImGui.Begin(Text.GUI_PSET_EXPL, explorer.isOpen, flags)
 	if not explorer.isOpen then return end
 
-	local isValidated, _, _, winWidth, winHeight = validateWindowBounds()
+	local isValidated, _, _, _, winHeight = validateWindowBounds()
 	if isValidated then
 		ImGui.End()
 		return
@@ -4501,6 +4609,11 @@ local function openFileExplorerWindow(scale, isOpening, x, y, width, height, max
 		ImGui.EndTable()
 	end
 
+	if not isNumber(itemSpacing) then
+		ImGui.End()
+		return
+	end
+
 	local isEmpty = nilOrEmpty(files)
 	if isEmpty or explorer.totalVisible < 1 then
 		local text = isEmpty and Text.GUI_PSET_EXPL_EMPTY or Text.GUI_PSET_EXPL_UNMATCH
@@ -4547,7 +4660,7 @@ local function onInit()
 		end
 	end
 
-	loadPresets(true, 3)
+	loadPresets(true, 5)
 end
 
 ---Handles logic when a vehicle is unmounted.
@@ -4643,12 +4756,18 @@ registerForEvent("onInit", function()
 	local backupDevMode
 
 	--Game version check.
-	state.isGameMinVersion = isVersionAtLeast(getGameVersion(), "2.21")
+	state.gameVersion = getGameVersion()
+	state.isGameCompatible = isVersionAtLeast(state.gameVersion, "2.21")
 
 	--CET version check.
-	local runVer = getRuntimeVersion()
-	state.isRuntimeMinVersion = isVersionAtLeast(runVer, "1.35")
-	state.isRuntimeFullVersion = isVersionAtLeast(runVer, "1.35.1")
+	state.cetVersion = getRuntimeVersion()
+	state.isCetCompatible = isVersionAtLeast(state.cetVersion, "1.35")
+	state.isCetTopical = isVersionAtLeast(state.cetVersion, "1.35.1")
+
+	--Codeware dependencies.
+	---@diagnostic disable-next-line
+	state.isCodewareAvailable = isUserdata(Codeware)
+	config.options.zoom.IsNotAvailable = not state.isCodewareAvailable
 
 	--Ensures the log file is fresh when the mod initializes.
 	pcall(function()
@@ -4823,6 +4942,7 @@ end)
 --Detects when the CET overlay is opened.
 registerForEvent("onOverlayOpen", function()
 	gui.isOverlayOpen = true
+	gui.isFirstFrame = true
 end)
 
 --Detects when the CET overlay is closed.
@@ -4836,7 +4956,7 @@ end)
 --Display a simple GUI with some options.
 registerForEvent("onDraw", function()
 	--Notification system (requires at least CET 'v1.35.1').
-	if state.isRuntimeFullVersion and gui.areToastsPending then
+	if state.isCetTopical and gui.areToastsPending then
 		gui.areToastsPending = false
 		if isTableValid(gui.toasterBumps) then
 			for k, v in pairs(gui.toasterBumps) do
@@ -4865,11 +4985,17 @@ registerForEvent("onDraw", function()
 	end
 
 	--Main window begins.
-	local flags = gui.isValidating and 0 or ImGuiWindowFlags.AlwaysAutoResize
+	local flags = gui.isValidating and ImGuiWindowFlags.None or ImGuiWindowFlags.AlwaysAutoResize
 	if not gui.isOverlayOpen then
-		flags = bor(flags, ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.NoFocusOnAppearing, ImGuiWindowFlags.NoInputs)
+		flags = bor(flags, ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.NoInputs)
 	end
 	if not ImGui.Begin(Text.GUI_TITLE, flags) then return end
+
+	--Preventing automatic item selection.
+	if gui.isFirstFrame then
+		gui.isFirstFrame = false
+		ImGui.SetKeyboardFocusHere(-1)
+	end
 
 	--Forces ImGui to rebuild the window on the next frame with fresh metrics.
 	if gui.forceMetricsReset then
@@ -4921,8 +5047,8 @@ registerForEvent("onDraw", function()
 	--Create top controls only if CET is open.
 	if not isStillVisible then
 		--Warning for outdated versions.
-		if (not state.isGameMinVersion or not state.isRuntimeMinVersion) and state.devMode <= DevLevels.DISABLED then
-			local gameVer, cetVer = serialize(getGameVersion()), serialize(getRuntimeVersion())
+		if state.devMode <= DevLevels.DISABLED and (not state.isGameCompatible or not state.isCetCompatible) then
+			local gameVer, cetVer = serialize(state.gameVersion), serialize(state.cetVersion)
 			ImGui.Dummy(0, 0)
 			ImGui.SameLine()
 			ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(Colors.GARNET, 0xff))
@@ -4969,6 +5095,7 @@ registerForEvent("onDraw", function()
 		if ImGui.Button(Text.GUI_SETTINGS, buttonWidth, buttonHeight) then
 			config.isOpen = true
 		end
+		addTooltip(scale, Text.GUI_SETTINGS_TIP)
 		ImGui.Dummy(0, halfHeightPadding)
 		local isAdvancedOpening =
 			openGlobalOptionsWindow(
@@ -5018,6 +5145,11 @@ registerForEvent("onDraw", function()
 		end
 
 		ImGui.Dummy(0, doubleHeightPadding)
+	else
+		--Draw ruler only if CET isn't open.
+		if state.devMode >= DevLevels.RULER then
+			drawRuler(scale, maxWidth, maxHeight)
+		end
 	end
 
 	--Table showing vehicle name, camera ID and more — if certain conditions are met.
@@ -5096,7 +5228,7 @@ registerForEvent("onDraw", function()
 			camHeight = cache.camHeight
 			if isString(camHeight) then return camHeight end
 			local settings = getUserSettingsOption("/controls/vehicle", "VehicleTPPCameraHeight", true)
-			camHeight = isTableValid(settings) and settings.Value
+			camHeight = isTableValid(settings) and settings.Value or Text.GUI_NONE
 			cache.camHeight = camHeight
 			setCache(0xcb3d, cache)
 			return camHeight
@@ -5145,6 +5277,7 @@ registerForEvent("onDraw", function()
 			explorer.isOpen = not explorer.isOpen
 			isExplorerOpening = explorer.isOpen
 		end
+		addTooltip(scale, Text.GUI_PSET_EXPL_TIP)
 		ImGui.Dummy(0, halfHeightPadding)
 
 		if isLocked then
@@ -5510,6 +5643,7 @@ registerForEvent("onDraw", function()
 		explorer.isOpen = not explorer.isOpen
 		isExplorerOpening = explorer.isOpen
 	end
+	addTooltip(scale, Text.GUI_PSET_EXPL_TIP)
 	ImGui.Dummy(0, halfHeightPadding)
 
 	--Well done.

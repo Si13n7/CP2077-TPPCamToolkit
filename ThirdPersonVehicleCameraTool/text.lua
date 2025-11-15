@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-10-10, 14:21 UTC+01:00 (MEZ)
+Version: 2025-10-11, 13:39 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -23,20 +23,22 @@ return {
 	GUI_NO = "\u{f073a} No",
 	GUI_NONE = "None",
 
-	--GUI: 🚀 Main Controls and Tooltips
-	GUI_TITLE = "Third-Person Vehicle Camera Tool",
+	--GUI: 🚀 Main Controls
+	GUI_TITLE = "TPP Vehicle Cam Toolkit",
 	GUI_VERSION_WARN = "\u{f0026} This mod requires game version 2.21 or higher and CET version 1.35 or higher. You are using at least one outdated version (game: %s; CET: %s), which may cause issues. Any use is at your own risk. Please do not report any problems unless you meet the minimum requirements.",
 	GUI_MOD_TOGGLE = " Toggle Mod Functionality",
 	GUI_MOD_TOGGLE_TIP = "Enables or disables the mod functionality",
 	GUI_SETTINGS = "\u{F1064} Global Settings ",
+	GUI_SETTINGS_TIP = "Applies settings that affect all vehicles.\n\nDue to a game limitation affecting third-person behavior, some changes made while seated in a vehicle only take effect after exiting and re-entering.",
 	GUI_CREAT_MODE = " Creator Mode",
-	GUI_CREAT_MODE_TIP = "Enables a feature that allows you to create, test, and save your own presets.\n\nAlso controls debug output and overlay visibility:\n\u{f0b39}\u{f00a0} Disabled - running in performance mode\n\u{f0b3a}\u{f018d} Logs basic info to the CET console\n\u{f0b3b}\u{f05b2} Like 1, but keeps the overlay always visible\n\u{f0b3c}\u{f0369} Like 2, plus in-game pop-up notifications\n\u{f0b3d}\u{f1272} Like 3, plus extended debug info and log file output",
+	GUI_CREAT_MODE_TIP = "Enables a feature that allows you to create, test, and save your own presets.\n\nAlso controls debug output and overlay visibility:\n\u{f0b39}\u{f00a0} Disabled - runs in performance mode\n\u{f0b3a}\u{f018d} Logs basic info to the CET console\n\u{f0b3b}\u{f05b2} Keeps the overlay always visible\n\u{f0b3c}\u{f046d} Adds a ruler at the bottom of the screen\n\u{f0b3d}\u{f0369} Adds in-game pop-up notifications\n\u{f0b3e}\u{f1272} Adds extended debug info and log file output",
 	GUI_PSETS_RLD = "\u{f054d} Reload Presets ",
 	GUI_PSETS_RLD_TIP = "Reloads all preset data. Use this to reset unsaved changes, after enabling or disabling vanilla presets, or when you have changed or added preset files outside of the game.\n\nKeep in mind that changes only take effect after exiting and re-entering the vehicle",
 	GUI_STATE_NO_VEH = "\u{f02fd} Please enter a vehicle first",
 	GUI_STATE_PSET_ON = "\u{f1668} Preset loaded and active",
 	GUI_STATE_PSET_OFF = "\u{f11be} No preset available",
 	GUI_PSET_EXPL = "\u{f069d} Preset Explorer ",
+	GUI_PSET_EXPL_TIP = "Browse all preset files, view usage data, or delete the ones you no longer need.",
 	GUI_EDIT_APPLY = "\u{f044f} Apply ",
 	GUI_EDIT_APPLY_TIP = "Applies the configured values without saving them permanently.\n\nThe vehicle must be exited and re-entered for the changes to become active.",
 	GUI_EDIT_SAVE = "\u{f0193} Save ",
@@ -56,7 +58,7 @@ return {
 	GUI_GSET_RESET = "\u{f054d} Reset",
 	GUI_GSET_RESET_TIP = "You may need to reload the presets for changes to fully take effect, and some changes only apply after exiting and re-entering the vehicle.",
 	GUI_GSET_ADVANCED = "\u{f0169} Advanced",
-	GUI_GSET_ADVANCED_TIP = "Direct access to all raw global parameters. No automatic calibration or value limits applied\n\nDue to a game limitation, changes made while seated in a vehicle take effect only after exiting and re-entering.",
+	GUI_GSET_ADVANCED_TIP = "Direct access to all raw global parameters. No automatic calibration or value limits applied",
 	GUI_ASET_TITLE = "\u{f0169} Advanced Settings",
 
 	--GUI: 🗂️ Preset Explorer

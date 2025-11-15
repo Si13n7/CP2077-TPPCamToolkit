@@ -13,7 +13,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-10-09, 22:44 UTC+01:00 (MEZ)
+Version: 2025-10-11, 13:39 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -33,6 +33,7 @@ ______________________________________________
 ---@field Dummy fun(width: number, height: number) # Creates an invisible element of specified width and height, useful for spacing.
 ---@field SameLine fun(offsetX?: number, spacing?: number) # Places the next UI element on the same line. Optionally adds horizontal offset and spacing.
 ---@field Text fun(text: string) # Displays text within the current window or tooltip.
+---@field GetTextLineHeight fun(): number # Returns the height in pixels of a single line of text in the current font.
 ---@field PushTextWrapPos fun(wrapLocalPosX?: number) # Sets a maximum width (in pixels) for wrapping text. Applies to subsequent Text elements until `PopTextWrapPos()` is called. If no value is provided, wraps at the edge of the window.
 ---@field PopTextWrapPos fun() # Restores the previous text wrapping position. Should be called after `PushTextWrapPos()` to reset wrapping behavior.
 ---@field Button fun(label: string, width?: number, height?: number): boolean # Creates a clickable button with optional width and height. Returns true if the button was clicked.
@@ -42,6 +43,7 @@ ______________________________________________
 ---@field DragFloat fun(label: string, value: number, speed?: number, min?: number, max?: number, format?: string): number # Creates a draggable float input widget. Allows the user to adjust the value by dragging or with arrow keys. Optional speed, min/max limits, and format string. Returns the updated float value.
 ---@field IsItemHovered fun(): boolean # Returns true if the last item is hovered by the mouse cursor.
 ---@field IsItemActive fun(): boolean # Returns true while the last item is being actively used (e.g., held with mouse or keyboard input).
+---@field SetKeyboardFocusHere fun(offset?: integer) # Sets the keyboard focus to the next widget (or `offset` widgets ahead) in the window. Useful to programmatically focus text inputs or other interactive items.
 ---@field PushItemWidth fun(width: number) # Sets the width of the next UI element (e.g., slider, text input).
 ---@field PopItemWidth fun() # Resets the width of the next UI element to the default value.
 ---@field BeginTooltip fun() # Begins creating a tooltip. Must be paired with `ImGui.EndTooltip()`.
@@ -63,10 +65,12 @@ ______________________________________________
 ---@field SetNextWindowPos fun(x: number, y: number) # Sets the position for the next window before calling `ImGui.Begin()`.
 ---@field SetNextWindowSize fun(width: number, height: number) # Sets the size for the next window before calling `ImGui.Begin()`.
 ---@field SetNextWindowSizeConstraints fun(minWidth: number, minHeight: number, maxWidth?: number, maxHeight?: number) # Sets minimum and optional maximum size constraints for the next window. Must be called before `ImGui.Begin()`.
+---@field GetCursorPos fun(): number, number # Returns the current cursor position (X, Y) within the window. Can be used to manually position elements.
 ---@field SetWindowPos fun(x: number, y: number) # Sets the position for the current window.
 ---@field GetFontSize fun(): number # Returns the height in pixels of the currently used font. Useful for vertical alignment calculations.
 ---@field GetCursorPosX fun(): number # Returns the current X-position of the cursor within the window. Can be used to place elements precisely.
 ---@field GetCursorPosY fun(): number # Returns the current Y-position of the cursor within the window. Can be used to place elements precisely.
+---@field SetCursorPos fun(x: number, y: number) # Sets the cursor position within the window. Useful for precise manual placement of elements.
 ---@field SetCursorPosX fun(x: number) # Sets the X-position of the cursor within the window. Useful for manual horizontal positioning of UI elements.
 ---@field SetCursorPosY fun(y: number) # Sets the Y-position of the cursor within the window. Use to manually position elements vertically.
 ---@field OpenPopup fun(id: string) # Opens a popup by identifier. Should be followed by `ImGui.BeginPopup()`.
@@ -74,7 +78,7 @@ ______________________________________________
 ---@field CloseCurrentPopup fun() # Closes the currently open popup window. Should be called inside the popup itself.
 ---@field EndPopup fun() # Ends the current popup window. Always call after `BeginPopup()`.
 ---@field PushStyleColor fun(idx: integer, color: integer) # Pushes a new color style override for the current ImGui context.
----@field PopStyleColor fun(count?: integer) # Removes one or more pushed style colors from the stack. Default count is 1.
+---@field PushStyleVar fun(idx: integer, value: number) # Pushes a single style variable override for the current ImGui context. `idx` is the ImGuiStyleVar enum value (e.g., WindowBorderSize, WindowPadding, ItemSpacing), and `value` is the number to set. Must be paired with `PopStyleVar()` to restore the previous style.
 ---@field PopStyleColor fun(count?: integer) # Removes one or more pushed style colors from the stack. Default count is 1.
 ---@field BeginDisabled fun(disabled: boolean) # Begins a block in which all contained UI elements are disabled (grayed out and unclickable) if `disabled` is true. Must be closed with `ImGui.EndDisabled()`.
 ---@field EndDisabled fun() # Ends a disabled UI block started by `ImGui.BeginDisabled()`. Re-enables UI interaction.
@@ -83,13 +87,22 @@ ImGui = ImGui
 
 ---Flags used to configure ImGui window behavior and appearance.
 ---@class ImGuiWindowFlags
+---@field None integer # Default flag value representing no special behavior. The window uses standard behavior with title bar, resizing, moving, and input enabled.
+---@field NoTitleBar integer # Disables the window title bar.
 ---@field NoResize integer # Disables window resizing.
 ---@field NoMove integer # Disables window moving.
 ---@field NoCollapse integer # Disables the ability to collapse the window.
 ---@field AlwaysAutoResize integer # Automatically resizes the window to fit its content each frame.
+---@field NoSavedSettings integer # Prevents the window from saving its settings to the .ini file.
 ---@field NoFocusOnAppearing integer # Prevents the window from taking focus when it appears.
+---@field NoBringToFrontOnFocus integer # Prevents the window from being brought to the front when focused.
 ---@field NoInputs integer # Disables all inputs (mouse, keyboard, etc.) for the window.
 ImGuiWindowFlags = ImGuiWindowFlags
+
+---Style variables used to override ImGui layout and appearance settings temporarily.
+---@class ImGuiStyleVar
+---@field WindowBorderSize integer # Sets the thickness of a window's border in pixels. Can be pushed with `ImGui.PushStyleVar` to override the default border size. Set to 0 to remove the window border.
+ImGuiStyleVar = ImGuiStyleVar
 
 ---Flags for customizing tree node and collapsing header behavior in ImGui.
 ---@class ImGuiTreeNodeFlags
