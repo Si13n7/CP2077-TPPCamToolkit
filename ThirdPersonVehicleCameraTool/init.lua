@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-05-07, 20:30 UTC+01:00 (MEZ)
+Version: 2025-05-07, 21:52 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -1613,13 +1613,13 @@ local function applyPreset(preset, id, count)
 			log(LogLevels.INFO, 0x9583, Text.LOG_CAM_PSET, key)
 		end
 
-		local pre = camera_presets[key]
-		if isTableNotEmpty(pre) then
+		local pset = camera_presets[key]
+		if isTableNotEmpty(pset) then
 			resetCustomCameraParams(key)
-			applyPreset(camera_presets[key], cid, 0)
+			applyPreset(pset, cid, 0)
 
 			--Tracks preset usage
-			local usage = get(preset_usage, {}, key) ---@cast usage IPresetUsage
+			local usage = preset_usage[key] or {}
 			local now = os.time()
 			usage.First = usage.First or now
 			usage.Last = now
