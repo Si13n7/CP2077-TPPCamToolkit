@@ -1,0 +1,1 @@
+return{ID="4w_Limo_Thrax",Close={y=-1.08,d=1.05},Medium={y=-1.08,d=2.15},Far={y=-1.08,d=5.8}}
