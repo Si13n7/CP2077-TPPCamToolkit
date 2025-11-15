@@ -13,7 +13,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-09-18, 16:29 UTC+01:00 (MEZ)
+Version: 2025-09-27, 23:05 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -150,31 +150,48 @@ TweakDB = TweakDB
 ---@field ToStringDEBUG fun(id: TDBID): string? # Converts a TDBID to a readable string, typically starting with a namespace like "Vehicle.".
 TDBID = TDBID
 
----Provides various global game functions, such as getting the player, mounted vehicles, and converting names to strings.
----@class Game
----@field NameToString fun(value: any): string # Converts a game name object to a readable string.
----@field GetSystemRequestsHandler fun(): SystemRequestsHandler # Provides access to system requests, e.g., game version.
----@field GetPlayer fun(): Player? # Retrieves the current player instance if available.
----@field GetMountedVehicle fun(player: Player): Vehicle? # Returns the vehicle the player is currently mounted in, if any.
-Game = Game
-
 ---Provides access to system-level requests and information.
 ---@class SystemRequestsHandler
 ---@field GetGameVersion fun(): string # Returns the current game version string.
-SystemRequestsHandler = SystemRequestsHandler
+
+---Represents an internal game name type. Can be converted to a readable string using Game.NameToString().
+---@class CName
+
+---Represents a single vehicle appearance entry.
+---@class VehicleAppearance
+---@field name CName # The internal name/ID of the appearance. Use Game.NameToString(name) to get a readable string.
+
+---Represents a loaded game resource, including its appearances.
+---@class GameResource
+---@field appearances VehicleAppearance[] # The appearances data of the resource.
+
+---Provides methods to access a loaded resource and retrieve its data.
+---@class ResourceLoader
+---@field GetResource fun(self: ResourceLoader): GameResource? # Returns the loaded resource object, or nil if loading failed.
+
+---Provides access to the game's resource depot, which manages various game resources.
+---@class ResourceDepot
+---@field LoadResource fun(self: ResourceDepot, name: string): ResourceLoader? # Loads the resource with the specified name, or nil if not found.
 
 ---Represents the player character in the game, providing functions to interact with the player instance.
 ---@class Player
 ---@field SetWarningMessage fun(self: Player, message: string, duration: number) # Displays a warning message on the player's screen for a specified duration.
-Player = Player
 
 ---Represents a vehicle entity within the game, providing functions to interact with it, such as getting the appearance name.
 ---@class Vehicle
 ---@field GetRecordID fun(self: Vehicle): any # Returns the unique TweakDBID associated with the vehicle.
 ---@field GetTDBID fun(self: Vehicle): TDBID? # Retrieves the internal TweakDB identifier used to reference this vehicle in the game database. Returns `nil` if unavailable.
----@field GetCurrentAppearanceName fun(self: Vehicle): string? # Retrieves the current appearance name of the vehicle.
+---@field GetCurrentAppearanceName fun(self: Vehicle): CName? # Retrieves the current appearance name of the vehicle.
 ---@field GetDisplayName fun(self: Vehicle): string? # Retrieves the human-readable display name of the vehicle.
-Vehicle = Vehicle
+
+---Provides various global game functions, such as getting the player, mounted vehicles, and converting names to strings.
+---@class Game
+---@field NameToString fun(value: CName): string # Converts a game name object to a readable string.
+---@field GetSystemRequestsHandler fun(): SystemRequestsHandler # Provides access to system requests, e.g., game version.
+---@field GetResourceDepot fun(): ResourceDepot? # Returns the resource depot object, or nil if not available.
+---@field GetPlayer fun(): Player? # Retrieves the current player instance if available.
+---@field GetMountedVehicle fun(player: Player): Vehicle? # Returns the vehicle the player is currently mounted in, if any.
+Game = Game
 
 ---Represents a three-dimensional vector, commonly used for positions or directions in the game.
 ---@class Vector3
@@ -184,7 +201,13 @@ Vehicle = Vehicle
 ---@field new fun(x: number, y: number, z: number): Vector3 # Creates a new Vector3 instance with specified x, y, and z coordinates.
 Vector3 = Vector3
 
----Provides version information about the currently running runtime environment.
+---Provides functions for encoding tables to JSON strings and decoding JSON strings to Lua tables.
+---@class json
+---@field encode fun(value: any): string # Converts a Lua table or value to a JSON-formatted string. Returns a string representation of the data.
+---@field decode fun(jsonString: string): table # Converts a JSON-formatted string to a Lua table. Returns the parsed table if successful, or nil if the parsing fails.
+json = json
+
+---Provides version information about the currently running CET environment.
 ---@class GetVersion # Not a class — global function only.
 ---@field GetVersion fun(): string # Returns the runtime version as a string, typically formatted like "v1.2.3.4".
 GetVersion = GetVersion
@@ -209,9 +232,3 @@ spdlog = spdlog
 ---@class dir # Not a class — global function only.
 ---@field dir fun(path: string): table # Returns a list of file/folder entries in the specified directory. Each entry is a table with at least a `name` field.
 dir = dir
-
----Provides functions for encoding tables to JSON strings and decoding JSON strings to Lua tables.
----@class json
----@field encode fun(value: any): string # Converts a Lua table or value to a JSON-formatted string. Returns a string representation of the data.
----@field decode fun(jsonString: string): table # Converts a JSON-formatted string to a Lua table. Returns the parsed table if successful, or nil if the parsing fails.
-json = json
