@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-10-09, 22:44 UTC+01:00 (MEZ)
+Version: 2025-10-10, 14:21 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -24,28 +24,51 @@ return {
 	GUI_NONE = "None",
 
 	--GUI: 🚀 Main Controls and Tooltips
-	GUI_TITL = "Third-Person Vehicle Camera Tool",
-	GUI_OLD_VER = "\u{f0026} This mod requires game version 2.21 or higher and CET version 1.35 or higher. You are using at least one outdated version (game: %s; CET: %s), which may cause issues. Any use is at your own risk. Please do not report any problems unless you meet the minimum requirements.",
-	GUI_TGL_MOD = " Toggle Mod Functionality",
-	GUI_TGL_MOD_TIP = "Enables or disables the mod functionality",
-	GUI_GSETS = "\u{F1064} Global Settings ",
+	GUI_TITLE = "Third-Person Vehicle Camera Tool",
+	GUI_VERSION_WARN = "\u{f0026} This mod requires game version 2.21 or higher and CET version 1.35 or higher. You are using at least one outdated version (game: %s; CET: %s), which may cause issues. Any use is at your own risk. Please do not report any problems unless you meet the minimum requirements.",
+	GUI_MOD_TOGGLE = " Toggle Mod Functionality",
+	GUI_MOD_TOGGLE_TIP = "Enables or disables the mod functionality",
+	GUI_SETTINGS = "\u{F1064} Global Settings ",
+	GUI_CREAT_MODE = " Creator Mode",
+	GUI_CREAT_MODE_TIP = "Enables a feature that allows you to create, test, and save your own presets.\n\nAlso controls debug output and overlay visibility:\n\u{f0b39}\u{f00a0} Disabled - running in performance mode\n\u{f0b3a}\u{f018d} Logs basic info to the CET console\n\u{f0b3b}\u{f05b2} Like 1, but keeps the overlay always visible\n\u{f0b3c}\u{f0369} Like 2, plus in-game pop-up notifications\n\u{f0b3d}\u{f1272} Like 3, plus extended debug info and log file output",
 	GUI_PSETS_RLD = "\u{f054d} Reload Presets ",
 	GUI_PSETS_RLD_TIP = "Reloads all preset data. Use this to reset unsaved changes, after enabling or disabling vanilla presets, or when you have changed or added preset files outside of the game.\n\nKeep in mind that changes only take effect after exiting and re-entering the vehicle",
-	GUI_DMODE = " Creator Mode",
-	GUI_DMODE_TIP = "Enables a feature that allows you to create, test, and save your own presets.\n\nAlso controls debug output and overlay visibility:\n\u{f0b39}\u{f00a0} Disabled - running in performance mode\n\u{f0b3a}\u{f018d} Logs basic info to the CET console\n\u{f0b3b}\u{f05b2} Like 1, but keeps the overlay always visible\n\u{f0b3c}\u{f0369} Like 2, plus in-game pop-up notifications\n\u{f0b3d}\u{f1272} Like 3, plus extended debug info and log file output",
-	GUI_NO_VEH = "\u{f02fd} Please enter a vehicle first",
-	GUI_PRE_ON = "\u{f1668} Preset loaded and active",
-	GUI_PRE_OFF = "\u{f11be} No preset available",
-	GUI_APPLY = "\u{f044f} Apply ",
-	GUI_APPLY_TIP = "Applies the configured values without saving them permanently.\n\nThe vehicle must be exited and re-entered for the changes to become active.",
-	GUI_SAVE = "\u{f0193} Save ",
-	GUI_SAVE_TIP = "Applies the configured values and saves them permanently to \"presets/%s.lua\".\n\nChanges will only take effect after exiting and re-entering the vehicle.",
-	GUI_REST_TIP = "Removes the \"presets/%s.lua\" to revert to the default preset.\n\nYou must exit and re-enter the vehicle for the changes to take effect.",
-	GUI_REMOVE_TIP = "Delete this preset",
-	GUI_OVWR_CONFIRM = "Replace existing file \"%s\"?",
-	GUI_FEXP = "\u{f069d} Preset Explorer ",
+	GUI_STATE_NO_VEH = "\u{f02fd} Please enter a vehicle first",
+	GUI_STATE_PSET_ON = "\u{f1668} Preset loaded and active",
+	GUI_STATE_PSET_OFF = "\u{f11be} No preset available",
+	GUI_PSET_EXPL = "\u{f069d} Preset Explorer ",
+	GUI_EDIT_APPLY = "\u{f044f} Apply ",
+	GUI_EDIT_APPLY_TIP = "Applies the configured values without saving them permanently.\n\nThe vehicle must be exited and re-entered for the changes to become active.",
+	GUI_EDIT_SAVE = "\u{f0193} Save ",
+	GUI_EDIT_SAVE_TIP = "Applies the configured values and saves them permanently to \"presets/%s.lua\".\n\nChanges will only take effect after exiting and re-entering the vehicle.",
+	GUI_EDIT_REST_TIP = "Removes the \"presets/%s.lua\" to revert to the default preset.\n\nYou must exit and re-enter the vehicle for the changes to take effect.",
+	GUI_EDIT_OWR_POP = "Replace existing file \"%s\"?",
 
-	--GUI: 📋 Table Label Tooltips
+	--GUI: ⚙️ Global Settings
+	GUI_GSET_DAC = "Disable Auto-Centering",
+	GUI_GSET_DAC_TIP = "Takes effect only after exiting and re-entering the vehicle.",
+	GUI_GSET_DVAN = "Disable Vanilla Presets",
+	GUI_GSET_DVAN_TIP = "Enable this option to leave vanilla vehicles untouched.\n\nSome vanilla vehicles have unusual camera settings that this mod corrects by default.\n\nYou need to reload the presets for the change to fully take effect.",
+	GUI_GSET_FOV = "Field Of View",
+	GUI_GSET_FOV_TIP = "Default:|%d|Min:|%d|Max:|%d",
+	GUI_GSET_ZOOM = "Zoom",
+	GUI_GSET_ZOOM_TIP = "Default:|%.2f|Min:|%.2f|Max:|%.2f",
+	GUI_GSET_RESET = "\u{f054d} Reset",
+	GUI_GSET_RESET_TIP = "You may need to reload the presets for changes to fully take effect, and some changes only apply after exiting and re-entering the vehicle.",
+	GUI_GSET_ADVANCED = "\u{f0169} Advanced",
+	GUI_GSET_ADVANCED_TIP = "Direct access to all raw global parameters. No automatic calibration or value limits applied\n\nDue to a game limitation, changes made while seated in a vehicle take effect only after exiting and re-entering.",
+	GUI_ASET_TITLE = "\u{f0169} Advanced Settings",
+
+	--GUI: 🗂️ Preset Explorer
+	GUI_PSET_EXPL_SEARCH_TIP = "\u{f0232} Search Options| |%s|Shows files of vehicles available in the game|%s|Shows files of available custom vehicles|%s|Shows files of vehicles not available in the game|%s|Shows files of vehicles that have been actively used|%s|Shows files of vehicles that exist but have never been used|%s|Shows files of vanilla vehicles|anything|Normal text search",
+	GUI_PSET_EXPL_NAME_TIP = "\u{f103a} %s",
+	GUI_PSET_EXPL_USAGE_TIP = "\u{f0520} Usage History| |First Used:|%s|Last Used:|%s|Total Uses:|%d",
+	GUI_PSET_EXPL_EMPTY = "No presets have been created yet.",
+	GUI_PSET_EXPL_UNMATCH = "No presets match your search.",
+	GUI_PSET_EXPL_DEL_TIP = "Delete this preset",
+	GUI_PSET_EXPL_DEL_POP = "Delete file \"%s\"?",
+
+	--GUI: 📝 Preset Editor
 	GUI_TBL_LABL_DNAME_TIP = "\u{f0208} Vehicle's display name",
 	GUI_TBL_LABL_STATUS_TIP = "\u{f1975} Vehicle's player status",
 	GUI_TBL_LABL_VEH_TIP = "\u{f1b8d} Vehicle's name",
@@ -56,8 +79,6 @@ return {
 	GUI_TBL_LABL_CLO_TIP = "\u{f0623} Close camera distance",
 	GUI_TBL_LABL_MID_TIP = "\u{f0622} Medium camera distance",
 	GUI_TBL_LABL_FAR_TIP = "\u{f0621} Far camera distance",
-
-	--GUI: 💶 Table Values and Tooltips
 	GUI_TBL_VAL_STATUS_0 = "Vanilla Crowd Vehicle",
 	GUI_TBL_VAL_STATUS_1 = "Vanilla Player Vehicle",
 	GUI_TBL_VAL_STATUS_2 = "Custom Player Vehicle",
@@ -69,28 +90,6 @@ return {
 	GUI_TBL_VAL_X_TIP = "\u{f0d4c} X-Offset| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Left|Increase:|Right",
 	GUI_TBL_VAL_Y_TIP = "\u{f0d51} Y-Offset| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Farther|Increase:|Closer",
 	GUI_TBL_VAL_Z_TIP = "\u{f0d55} Z-Offset| |Default:|%.2f|Min:|%.2f|Max:|%.2f|In Use:|%.2f|Decrease:|Down|Increase:|Up",
-
-	--GUI: ⚙️ Global Options
-	GUI_GOPT_FOV = "Field Of View",
-	GUI_GOPT_FOV_TIP = "Default:|%d|Min:|%d|Max:|%d",
-	GUI_GOPT_NAC = "Disable Auto-Centering",
-	GUI_GOPT_NAC_TIP = "Takes effect only after exiting and re-entering the vehicle.",
-	GUI_GOPT_NVAN = "Disable Vanilla Presets",
-	GUI_GOPT_NVAN_TIP = "Enable this option to leave vanilla vehicles untouched.\n\nSome vanilla vehicles have unusual camera settings that this mod corrects by default.\n\nYou need to reload the presets for the change to fully take effect.",
-	GUI_GOPT_ZOOM = "Zoom",
-	GUI_GOPT_ZOOM_TIP = "Default:|%.2f|Min:|%.2f|Max:|%.2f",
-	GUI_GOPT_RESET = "\u{f054d} Reset",
-	GUI_GOPT_RESET_TIP = "You may need to reload the presets for changes to fully take effect, and some changes only apply after exiting and re-entering the vehicle.",
-	GUI_GOPT_ADVANCED = "\u{f0169} Advanced",
-	GUI_GOPT_ADVANCED_TIP = "Direct access to all raw global parameters. No automatic calibration or value limits applied\n\nDue to a game limitation, changes made while seated in a vehicle take effect only after exiting and re-entering.",
-	GUI_AOPT_TITLE = "\u{f0169} Advanced Settings",
-
-	--GUI: 🗂️ Preset File Explorer
-	GUI_FEXP_DEL_CONFIRM = "Delete file \"%s\"?",
-	GUI_FEXP_NO_PSETS = "No presets have been created yet.",
-	GUI_FEXP_NAME_TIP = "\u{f08b1} %s",
-	GUI_FEXP_SEARCH_TIP = "\u{f0232} Search Options| |%s|Shows files of vehicles available in the game|%s|Shows files of available custom vehicles|%s|Shows files of vehicles not available in the game|%s|Shows files of vehicles that have been actively used|%s|Shows files of vehicles that exist but have never been used|%s|Shows files of vanilla vehicles|anything|Normal text search",
-	GUI_FEXP_USAGE_TIP = "\u{f0520} Usage History| |First Used:|%s|Last Used:|%s|Total Uses:|%d",
 
 	--LOG: ℹ️ Info
 	LOG_CAM_OSET_DONE = "Camera offset '%s' is ready.",

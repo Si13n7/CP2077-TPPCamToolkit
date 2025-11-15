@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-10-09, 22:44 UTC+01:00 (MEZ)
+Version: 2025-10-10, 14:21 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -48,42 +48,11 @@ Development Environment:
 ---Represents available logging levels for categorizing message severity.
 ---@alias LogLevelType 0|1|2
 
----Enumeration of developer debug modes with increasing verbosity.
----@class DevLevelEnum
----@field DISABLED DevLevelType # No debug output (default).
----@field BASIC DevLevelType # Logs output to the CET console only.
----@field OVERLAY DevLevelType # Logs to console and keeps the overlay visible even when CET is hidden.
----@field ALERT DevLevelType # Same as OVERLAY, but also shows pop-up alerts on screen.
----@field FULL DevLevelType # Same as ALERT, but with extended technical output and additional logging to file.
-
----Enumeration of log message severity levels.
----@class LogLevelEnum
----@field INFO LogLevelType # General informational output.
----@field WARN LogLevelType # Non-critical issues or unexpected behavior.
----@field ERROR LogLevelType # Critical failures or important errors that need attention.
-
----Enumeration of predefined color constants used for UI theming and styling.
----@class ColorEnum
----@field CARAMEL integer # Caramel is a warm, golden brown with rich amber tones.
----@field FIR integer # Fir is a dark, cool green with subtle blue undertones.
----@field GARNET integer # Garnet is a deep, muted red with a subtle brown undertone.
----@field MULBERRY integer # Mulberry is a deep, muted purple with rich red undertones and a cool, berry-like hue.
----@field OLIVE integer # Olive is a muted yellow-green with an earthy, natural tone.
-
----Represents folders for different types of camera presets.
----@class PresetLocations
----@field DEFAULTS string # Folder containing base presets representing the standard/default settings.
----@field CUSTOM string # Folder containing presets for modded/custom vehicles.
----@field VANILLA string # Folder containing presets for vanilla vehicles.
-
----Represents search filter commands.
----@class SearchFilterCommands
----@field INSTALLED string # Presets of vehicles that are available in the game.
----@field MODDED string # Presets of custom vehicles that are available in the game.
----@field UNAVAILABLE string # Presets of vehicles not available in the game.
----@field ACTIVE string # Presets of vehicles that were actively used.
----@field INACTIVE string # Presets of vehicles that exist but have never been used.
----@field VANILLA string # Presets of standard vehicles that come with the base game.
+---Represents metadata associated with a specific log level.
+---@class ILogMeta
+---@field TAG string  Text tag prefix shown in console or log output (e.g. "[Error]").
+---@field ICON string Unicode icon code representing the log level visually.
+---@field TOAST integer  Toast notification type constant from `ImGui.ToastType`.
 
 ---Represents a parsed version number in structured format.
 ---@class IVersion
@@ -93,7 +62,7 @@ Development Environment:
 ---@field Revision number # Revision number (optional, defaults to 0 if missing).
 
 ---Represents a recurring asynchronous timer.
----@class AsyncTimer
+---@class IAsyncTimer
 ---@field Interval number # The time interval in seconds between each callback execution.
 ---@field Time number # The next scheduled execution time (typically os.clock() + interval).
 ---@field Callback fun(id: integer) # The function to be executed when the timer triggers; receives the timer's unique ID.
@@ -204,57 +173,105 @@ local format, rep, concat, insert, remove, sort, unpack, abs, ceil, floor, band,
 local Text = dofile("text.lua")
 
 ---Developer mode levels used to control the verbosity and behavior of debug output.
----@type DevLevelEnum
+---@type table<string, DevLevelType>
 local DevLevels = {
+	---No debug output (default).
 	DISABLED = 0,
+
+	---Logs output to the CET console only.
 	BASIC = 1,
+
+	---Logs to console and keeps the overlay visible even when CET is hidden.
 	OVERLAY = 2,
+
+	---Same as OVERLAY, but also shows pop-up alerts on screen.
 	ALERT = 3,
+
+	---Same as ALERT, but with extended technical output and additional logging to file.
 	FULL = 4
 }
 
 ---Log levels used to classify the severity of log messages.
----@type LogLevelEnum
+---@type table<string, LogLevelType>
 local LogLevels = {
+	---General informational output.
 	INFO = 0,
+
+	---Non-critical issues or unexpected behavior.
 	WARN = 1,
+
+	---Critical failures or important errors that need attention.
 	ERROR = 2
 }
 
 ---Contains textual tags, toast icons, and toast types for each log level.
----@type table<LogLevelType, {TAG: string, ICON: string, TOAST: integer}>
+---@type table<LogLevelType, ILogMeta>
 local LogMeta = {
-	[LogLevels.ERROR] = { TAG = "[Error]", ICON = "\u{f0e1c}", TOAST = ImGui.ToastType.Error },
-	[LogLevels.WARN] = { TAG = "[Warn]", ICON = "\u{f0d64}", TOAST = ImGui.ToastType.Warning },
-	[LogLevels.INFO] = { TAG = "[Info]", ICON = "\u{f11be}", TOAST = ImGui.ToastType.Info }
+	[LogLevels.INFO] = {
+		TAG = "[Info]",
+		ICON = "\u{f11be}",
+		TOAST = ImGui.ToastType.Info
+	},
+	[LogLevels.WARN] = {
+		TAG = "[Warn]",
+		ICON = "\u{f0d64}",
+		TOAST = ImGui.ToastType.Warning
+	},
+	[LogLevels.ERROR] = {
+		TAG = "[Error]",
+		ICON = "\u{f0e1c}",
+		TOAST = ImGui.ToastType.Error
+	}
 }
 
----Provides predefined hexadecimal color values for theming and UI interaction states.
----@type ColorEnum
+---Provides predefined hexadecimal color constants used for UI theming and styling.
 local Colors = {
-	CARAMEL = 0x8a295c7a,
-	FIR = 0x8a6a7a29,
-	GARNET = 0x8a29297a,
-	MULBERRY = 0x8a68297a,
-	OLIVE = 0x8a297a68
+	---Caramel is a warm, golden brown with rich amber tones.
+	CARAMEL = 0xab295c7a,
+
+	---Fir is a dark, cool green with subtle blue undertones.
+	FIR = 0xab6a7a29,
+
+	---Garnet is a deep, muted red with a subtle brown undertone.
+	GARNET = 0xbb3d297a,
+
+	---Mulberry is a deep, muted purple with rich red undertones and a cool, berry-like hue.
+	MULBERRY = 0xab68297a,
+
+	---Olive is a muted yellow-green with an earthy, natural tone.
+	OLIVE = 0xab297a68
 }
 
 ---Predefined folder paths for storing camera presets.
----@type PresetLocations
 local PresetFolders = {
+	---Folder containing base presets representing the standard/default settings.
 	DEFAULTS = "defaults",
+
+	---Folder containing presets for modded/custom vehicles.
 	CUSTOM = "presets",
+
+	---Folder containing presets for vanilla vehicles.
 	VANILLA = "presets-vanilla"
 }
 
----Provides a table of Preset File Explorer search filter commands.
----@type SearchFilterCommands
+---Provides a table of Preset Explorer search filter commands.
 local ExplorerCommands = {
+	---Presets of vehicles that are available in the game.
 	INSTALLED = ":installed",
+
+	---Presets of custom vehicles that are available in the game.
 	MODDED = ":installed_mods",
+
+	---Presets of vehicles not available in the game.
 	UNAVAILABLE = ":not_installed",
+
+	---Presets of vehicles that were actively used.
 	ACTIVE = ":active",
+
+	---Presets of vehicles that exist but have never been used.
 	INACTIVE = ":unused",
+
+	---Presets of standard vehicles that come with the base game.
 	VANILLA = ":vanilla"
 }
 
@@ -316,7 +333,6 @@ local DefaultParams = {
 }
 
 ---Camera-related metadata including levels and variable names.
----@type table<string, string[]>
 local CameraData = {
 	---All camera levels, e.g. `High_Close`, `High_DriverCombatMedium`, `Low_Far`, and so on.
 	Levels = {
@@ -333,6 +349,7 @@ local CameraData = {
 		"Low_DriverCombatMedium",
 		"Low_DriverCombatFar"
 	},
+
 	---All camera variable names, e.g. `boomLengthOffset`, `height`, `lookAtOffset`, and so on.
 	Vars = {
 		"airFlowDistortionSizeHorizontal",
@@ -400,7 +417,6 @@ local CameraDataInvalidLevelMap = {
 }
 
 ---Contains base camera levels and corresponding offset keys for presets.
----@type table<string, string[]>
 local PresetInfo = {
 	---Constant array of base camera levels (`Close`, `Medium`, and `Far`).
 	Levels = { "Close", "Medium", "Far" },
@@ -434,7 +450,7 @@ local state = {
 ---Manages recurring asynchronous timers and their status.
 local async = {
 	---Stores all active recurring async timers, indexed by their unique ID.
-	---@type table<integer, AsyncTimer>
+	---@type table<integer, IAsyncTimer>
 	timers = {},
 
 	---Auto-incrementing ID used to assign unique keys to each timer.
@@ -464,15 +480,15 @@ local config = {
 	options = {
 		---Mod-only option: enables or disables all vanilla presets.
 		noVanilla = {
-			DisplayName = Text.GUI_GOPT_NVAN,
-			Tooltip = Text.GUI_GOPT_NVAN_TIP,
+			DisplayName = Text.GUI_GSET_DVAN,
+			Tooltip = Text.GUI_GSET_DVAN_TIP,
 			Default = false
 		},
 
 		---Game option: adjusts the field of view.
 		fov = {
-			DisplayName = Text.GUI_GOPT_FOV,
-			Tooltip = Text.GUI_GOPT_FOV_TIP,
+			DisplayName = Text.GUI_GSET_FOV,
+			Tooltip = Text.GUI_GSET_FOV_TIP,
 			Default = DefaultParams.Vars["fov"],
 			Min = 30,
 			Max = 120,
@@ -482,16 +498,16 @@ local config = {
 
 		---Game option: toggles automatic camera reset.
 		lockedCamera = {
-			DisplayName = Text.GUI_GOPT_NAC,
-			Tooltip = Text.GUI_GOPT_NAC_TIP,
+			DisplayName = Text.GUI_GSET_DAC,
+			Tooltip = Text.GUI_GSET_DAC_TIP,
 			Default = DefaultParams.Vars["lockedCamera"],
 			IsGameOption = true
 		},
 
 		---Game option: adjusts the zoom.
 		zoom = {
-			DisplayName = Text.GUI_GOPT_ZOOM,
-			Tooltip = Text.GUI_GOPT_ZOOM_TIP,
+			DisplayName = Text.GUI_GSET_ZOOM,
+			Tooltip = Text.GUI_GSET_ZOOM_TIP,
 			Default = 1.0,
 			Min = 1.0,
 			Max = 30.0,
@@ -601,12 +617,12 @@ local editor = {
 	isOverwriteConfirmed = false
 }
 
----Tracks state of the Preset File Explorer UI.
+---Tracks state of the Preset Explorer UI.
 local explorer = {
-	---Determines whether the Preset File Explorer is open.
+	---Determines whether the Preset Explorer is open.
 	isOpen = false,
 
-	---Search query entered in the Preset File Explorer.
+	---Search query entered in the Preset Explorer.
 	searchText = ExplorerCommands.INSTALLED,
 
 	---Number of files currently displayed in the file browser.
@@ -1152,17 +1168,39 @@ local function combine(...)
 	return concat({ ... }, "/")
 end
 
----Iterates over a table's keys in sorted order.
----Useful for producing stable output or consistent serialization.
----@param t table # The table to iterate over.
----@return fun(): any, any # An iterator that yields key-value pairs in sorted key order.
-local function opairs(t)
+---Ordered pairs iterator that returns key–value pairs sorted either by key or by one or more given fields.
+---If multiple sort fields are provided, they are applied in order of priority (left to right).
+---If all compared values are equal, the key itself is used as a final fallback for ordering.
+---@param t table # Source table to iterate over.
+---@param ... string # Optional sort fields inside each table entry. The first has highest priority.
+---@return function # Iterator function returning sorted key–value pairs.
+local function opairs(t, ...)
 	t = isTable(t) and t or {}
+	local sortKeys = { ... }
 	local ks = {}
+
 	for k in pairs(t) do
 		insert(ks, k)
 	end
-	sort(ks, alphaNumericCompare)
+
+	if #sortKeys > 0 then
+		sort(ks, function(a, b)
+			local va, vb = t[a], t[b]
+
+			for _, field in ipairs(sortKeys) do
+				local da = (va and va[field]) or ""
+				local db = (vb and vb[field]) or ""
+				if da ~= db then
+					return alphaNumericCompare(da, db)
+				end
+			end
+
+			return alphaNumericCompare(a, b)
+		end)
+	else
+		sort(ks, alphaNumericCompare)
+	end
+
 	local i = 0
 	return function()
 		i = i + 1
@@ -3207,12 +3245,19 @@ local function loadPresetsFrom(path)
 			return
 		end
 
+		local length = #files - 1
+		if length == 0 then
+			task.IsActive = false
+			logF(DevLevels.BASIC, LogLevels.INFO, 0x98e0, Text.LOG_PSETS_LOAD_CUS, 0, 0, 0)
+			logF(DevLevels.ALERT, LogLevels.INFO, 0x98e0, Text.LOG_PSETS_LOAD_DONE, task.Duration)
+			return
+		end
+
 		task.StartTime = os.clock()
 		task.EndTime = task.StartTime
 		task.Duration = task.Duration or 0
 
 		local isBusy = false
-		local length = #files - 1
 		local iterations = ceil(length / 5)
 		local index, file
 
@@ -3873,7 +3918,7 @@ end
 ---@param color? number # Optional 32-bit ABGR color (e.g. 0xffc0c0c0). If provided, temporarily overrides the current text color.
 ---@param heightPadding? number # Optional vertical space (in pixels) added below the text. Defaults to 0 if omitted.
 ---@param contentWidth? number # Optional content width, used to center the text horizontally.
----@param itemSpacing? number # Optional horizontal spacing between UI elements. Used with centering logic.
+---@param itemSpacing? number # Optional horizontal spacing between UI elements. Used for centering logic.
 local function addText(text, color, heightPadding, contentWidth, itemSpacing)
 	if not isStringValid(text) then return end
 
@@ -4038,7 +4083,7 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 	ImGui.SetNextWindowSize(width, height)
 
 	local flags = bor(ImGuiWindowFlags.NoResize, ImGuiWindowFlags.NoMove, ImGuiWindowFlags.NoCollapse)
-	config.isOpen = ImGui.Begin(Text.GUI_GSETS, config.isOpen, flags)
+	config.isOpen = ImGui.Begin(Text.GUI_SETTINGS, config.isOpen, flags)
 	if not config.isOpen then return false end
 
 	if not isTableValid(config.options) or not ImGui.BeginTable("GlobalOptions", 2, ImGuiTableFlags.Borders) then
@@ -4050,7 +4095,7 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 	ImGui.TableSetupColumn(" \u{f189a}", ImGuiTableColumnFlags.WidthFixed)
 	ImGui.TableHeadersRow()
 
-	for key, option in opairs(config.options) do
+	for key, option in opairs(config.options, "DisplayName") do
 		---@cast key string
 		---@cast option IOptionData
 		ImGui.TableNextRow()
@@ -4097,19 +4142,19 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 	local isAdvancedOpening = false
 
 	local buttonWidth = halfContentWidth - (ImGui.GetScrollMaxY() > 0 and sbarWidth / 2 or 0)
-	if ImGui.Button(Text.GUI_GOPT_ADVANCED, buttonWidth, buttonHeight) then
+	if ImGui.Button(Text.GUI_GSET_ADVANCED, buttonWidth, buttonHeight) then
 		config.isAdvancedOpen = not config.isAdvancedOpen
 		isAdvancedOpening = config.isAdvancedOpen
 	end
-	addTooltip(scale, Text.GUI_GOPT_ADVANCED_TIP)
+	addTooltip(scale, Text.GUI_GSET_ADVANCED_TIP)
 	ImGui.SameLine()
 
-	if ImGui.Button(Text.GUI_GOPT_RESET, buttonWidth, buttonHeight) then
+	if ImGui.Button(Text.GUI_GSET_RESET, buttonWidth, buttonHeight) then
 		for key, option in pairs(config.options) do
 			updateConfigDefaultParam(key, option.Default, true)
 		end
 	end
-	addTooltip(scale, Text.GUI_GOPT_RESET_TIP)
+	addTooltip(scale, Text.GUI_GSET_RESET_TIP)
 
 	ImGui.End()
 
@@ -4134,7 +4179,7 @@ local function openAdvancedOptionsWindow(scale, isOpening, maxWidth, maxHeight)
 		ImGui.SetNextWindowSize(width, height)
 	end
 
-	config.isAdvancedOpen = ImGui.Begin(Text.GUI_AOPT_TITLE, config.isAdvancedOpen, ImGuiWindowFlags.NoCollapse)
+	config.isAdvancedOpen = ImGui.Begin(Text.GUI_ASET_TITLE, config.isAdvancedOpen, ImGuiWindowFlags.NoCollapse)
 	if not config.isAdvancedOpen then return end
 
 	if validateWindowBounds(x, y, width, height, maxWidth, maxHeight) then
@@ -4223,7 +4268,7 @@ local function openAdvancedOptionsWindow(scale, isOpening, maxWidth, maxHeight)
 	ImGui.End()
 end
 
----Draws and manages the Preset File Explorer window.
+---Draws and manages the Preset Explorer window.
 ---@param scale number # UI scale factor based on current DPI and font size.
 ---@param isOpening boolean # Whether the window is being opened (to set initial position and size).
 ---@param x number # The initial X position of the window, used only on first opening.
@@ -4231,11 +4276,11 @@ end
 ---@param width number # The initial width of the window.
 ---@param height number # The initial height of the window.
 ---@param maxHeight number # The maximum height allowed for the window.
----@param controlPadding number # Padding used for UI spacing and alignment.
 ---@param halfHeightPadding number # Half of the vertical padding value, used for layout spacing.
 ---@param buttonHeight number # The height for button controls in the file table.
-local function openFileExplorerWindow(scale, isOpening, x, y, width, height, maxHeight, controlPadding, halfHeightPadding, buttonHeight)
-	if not explorer.isOpen or not areNumber(scale, x, y, width, height, maxHeight, controlPadding, halfHeightPadding, buttonHeight) then
+---@param itemSpacing number # Horizontal spacing between UI elements, used for centering logic.
+local function openFileExplorerWindow(scale, isOpening, x, y, width, height, maxHeight, halfHeightPadding, buttonHeight, itemSpacing)
+	if not explorer.isOpen or not areNumber(scale, x, y, width, height, maxHeight, halfHeightPadding, buttonHeight, itemSpacing) then
 		return
 	end
 
@@ -4245,12 +4290,10 @@ local function openFileExplorerWindow(scale, isOpening, x, y, width, height, max
 		PresetFolders.CUSTOM
 	}
 	local files = cache.files or {}
-	local dirCount = cache.dirCount or 0
 	if not isTableValid(files) then
 		for i, location in ipairs(dirs) do
 			local entries = dir(location)
 			if entries then
-				dirCount = dirCount + 1
 				for _, entry in ipairs(entries) do
 					local name = entry.name
 					if name and hasLuaExt(name) then
@@ -4260,15 +4303,8 @@ local function openFileExplorerWindow(scale, isOpening, x, y, width, height, max
 			end
 		end
 		cache.dirs = dirs
-		cache.dirCount = dirCount
 		cache.files = files
 		setCache(0x970b, cache, true)
-	end
-
-	if dirCount ~= #dirs then
-		explorer.isOpen = false
-		logF(DevLevels.FULL, LogLevels.ERROR, 0x970b, Text.LOG_PSETS_DIR_MISS)
-		return
 	end
 
 	height = math.max(height, 400 * scale)
@@ -4278,10 +4314,11 @@ local function openFileExplorerWindow(scale, isOpening, x, y, width, height, max
 	end
 	ImGui.SetNextWindowSizeConstraints(width, height, math.max(width, 400 * scale), maxHeight)
 
-	explorer.isOpen = ImGui.Begin(Text.GUI_FEXP, explorer.isOpen, ImGuiWindowFlags.NoCollapse)
+	explorer.isOpen = ImGui.Begin(Text.GUI_PSET_EXPL, explorer.isOpen, ImGuiWindowFlags.NoCollapse)
 	if not explorer.isOpen then return end
 
-	if validateWindowBounds() then
+	local isValidated, _, _, winWidth, winHeight = validateWindowBounds()
+	if isValidated then
 		ImGui.End()
 		return
 	end
@@ -4310,7 +4347,7 @@ local function openFileExplorerWindow(scale, isOpening, x, y, width, height, max
 
 		local cmds = cache.commands
 		if not cmds then
-			cmds = split(format(Text.GUI_FEXP_SEARCH_TIP,
+			cmds = split(format(Text.GUI_PSET_EXPL_SEARCH_TIP,
 				ExplorerCommands.INSTALLED,
 				ExplorerCommands.MODDED,
 				ExplorerCommands.UNAVAILABLE,
@@ -4336,6 +4373,7 @@ local function openFileExplorerWindow(scale, isOpening, x, y, width, height, max
 		end
 	end
 
+	local columnWidth
 	if ImGui.BeginTable("PresetFiles", 2, bor(ImGuiTableFlags.Borders, ImGuiTableFlags.RowBg)) then
 		ImGui.TableSetupColumn(" \u{f09a8}" .. explorer.totalVisible, ImGuiTableColumnFlags.WidthStretch)
 		ImGui.TableSetupColumn(" \u{f05e9}", ImGuiTableColumnFlags.WidthFixed)
@@ -4383,7 +4421,7 @@ local function openFileExplorerWindow(scale, isOpening, x, y, width, height, max
 				color = pushColors(ImGuiCol.Text, color)
 			end
 
-			local columnWidth = (ImGui.GetColumnWidth(0) - 4) * scale
+			columnWidth = columnWidth or ((ImGui.GetColumnWidth(0) - 4) * scale)
 			local textWidth = ImGui.CalcTextSize(key) * scale
 			local nameTooLong = columnWidth < textWidth
 			if nameTooLong then
@@ -4394,7 +4432,7 @@ local function openFileExplorerWindow(scale, isOpening, x, y, width, height, max
 					short = short:sub(1, -2)
 				end
 				ImGui.Text(short .. dots)
-				addTooltip(scale, format(Text.GUI_FEXP_NAME_TIP, key))
+				addTooltip(scale, format(Text.GUI_PSET_EXPL_NAME_TIP, key))
 			else
 				ImGui.Text(key)
 			end
@@ -4409,7 +4447,7 @@ local function openFileExplorerWindow(scale, isOpening, x, y, width, height, max
 				end
 				local fmt = "%Y-%m-%d %H:%M:%S %p"
 				addTooltip(nil,
-					split(format(Text.GUI_FEXP_USAGE_TIP,
+					split(format(Text.GUI_PSET_EXPL_USAGE_TIP,
 						os.date(fmt, usage.First),
 						os.date(fmt, usage.Last),
 						usage.Total), "|"))
@@ -4417,15 +4455,15 @@ local function openFileExplorerWindow(scale, isOpening, x, y, width, height, max
 
 			ImGui.TableNextColumn()
 			local pushd = pushColors(ImGuiCol.Button, Colors.GARNET)
-			if ImGui.Button("\u{f05e8}##" .. fileName, 0, buttonHeight) then
+			if ImGui.Button("\u{f0a7a}##" .. fileName, 0, buttonHeight) then
 				ImGui.OpenPopup(fileName)
 			end
 			popColors(pushd)
-			addTooltip(scale, format(Text.GUI_REMOVE_TIP, fileName))
+			addTooltip(scale, Text.GUI_PSET_EXPL_DEL_TIP)
 
 			local folder = dirs[dirNum]
 			local path = combine(folder, fileName)
-			if addPopupYesNo(fileName, format(Text.GUI_FEXP_DEL_CONFIRM, path), scale, Colors.GARNET) then
+			if addPopupYesNo(fileName, format(Text.GUI_PSET_EXPL_DEL_POP, path), scale, Colors.GARNET) then
 				if not folder then goto continue end
 
 				local ok, err = os.remove(path)
@@ -4463,14 +4501,22 @@ local function openFileExplorerWindow(scale, isOpening, x, y, width, height, max
 		ImGui.EndTable()
 	end
 
-	if nilOrEmpty(files) then
-		local hPad = ceil(180 * scale)
-		local wPad = floor(controlPadding - 4 * scale)
-		ImGui.Dummy(0, hPad)
-		ImGui.Dummy(wPad, 0)
+	local isEmpty = nilOrEmpty(files)
+	if isEmpty or explorer.totalVisible < 1 then
+		local text = isEmpty and Text.GUI_PSET_EXPL_EMPTY or Text.GUI_PSET_EXPL_UNMATCH
+		local color = isEmpty and Colors.GARNET or Colors.MULBERRY
+
+		local textSize = ImGui.CalcTextSize(text) * scale
+		local conWidth = ImGui.GetContentRegionAvail()
+		local heightPad = math.floor(winHeight * 0.15)
+		local widthPad = math.max((conWidth - textSize) * 0.5 - itemSpacing * 0.5, 8 * scale)
+
+		ImGui.Dummy(0, heightPad)
+		ImGui.Dummy(widthPad, 0)
 		ImGui.SameLine()
-		ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(Colors.GARNET, 0xff))
-		ImGui.Text(Text.GUI_FEXP_NO_PSETS)
+
+		ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(color, 0xff))
+		ImGui.Text(text)
 		ImGui.PopStyleColor()
 	end
 
@@ -4823,7 +4869,7 @@ registerForEvent("onDraw", function()
 	if not gui.isOverlayOpen then
 		flags = bor(flags, ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.NoFocusOnAppearing, ImGuiWindowFlags.NoInputs)
 	end
-	if not ImGui.Begin(Text.GUI_TITL, flags) then return end
+	if not ImGui.Begin(Text.GUI_TITLE, flags) then return end
 
 	--Forces ImGui to rebuild the window on the next frame with fresh metrics.
 	if gui.forceMetricsReset then
@@ -4880,7 +4926,7 @@ registerForEvent("onDraw", function()
 			ImGui.Dummy(0, 0)
 			ImGui.SameLine()
 			ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(Colors.GARNET, 0xff))
-			addTextCenterWrap(format(Text.GUI_OLD_VER, gameVer, cetVer), contentWidth)
+			addTextCenterWrap(format(Text.GUI_VERSION_WARN, gameVer, cetVer), contentWidth)
 			ImGui.PopStyleColor()
 			ImGui.Dummy(0, doubleHeightPadding)
 		end
@@ -4888,8 +4934,8 @@ registerForEvent("onDraw", function()
 		--Checkbox to toggle mod functionality and handle enable/disable logic.
 		ImGui.Dummy(controlPadding, 0)
 		ImGui.SameLine()
-		local isEnabled = ImGui.Checkbox(Text.GUI_TGL_MOD, state.isModEnabled)
-		addTooltip(scale, Text.GUI_TGL_MOD_TIP)
+		local isEnabled = ImGui.Checkbox(Text.GUI_MOD_TOGGLE, state.isModEnabled)
+		addTooltip(scale, Text.GUI_MOD_TOGGLE_TIP)
 		if isEnabled ~= state.isModEnabled then
 			state.isModEnabled = isEnabled
 			if isEnabled then
@@ -4920,7 +4966,7 @@ registerForEvent("onDraw", function()
 		--Button to open the Global Settings window.
 		ImGui.Dummy(controlPadding, 0)
 		ImGui.SameLine()
-		if ImGui.Button(Text.GUI_GSETS, buttonWidth, buttonHeight) then
+		if ImGui.Button(Text.GUI_SETTINGS, buttonWidth, buttonHeight) then
 			config.isOpen = true
 		end
 		ImGui.Dummy(0, halfHeightPadding)
@@ -4943,7 +4989,7 @@ registerForEvent("onDraw", function()
 		ImGui.Dummy(controlPadding, 0)
 		ImGui.SameLine()
 		ImGui.PushItemWidth(sliderWidth)
-		local devMode = ImGui.SliderInt(Text.GUI_DMODE, state.devMode, DevLevels.DISABLED, DevLevels.FULL)
+		local devMode = ImGui.SliderInt(Text.GUI_CREAT_MODE, state.devMode, DevLevels.DISABLED, DevLevels.FULL)
 		if devMode ~= state.devMode then
 			state.devMode = clamp(devMode, DevLevels.DISABLED, DevLevels.FULL)
 			if state.devMode == DevLevels.DISABLED then
@@ -4953,7 +4999,7 @@ registerForEvent("onDraw", function()
 		end
 		ImGui.PopItemWidth()
 		gui.isPaddingLocked = ImGui.IsItemActive()
-		addTooltip(scale, Text.GUI_DMODE_TIP)
+		addTooltip(scale, Text.GUI_CREAT_MODE_TIP)
 
 		--The button that reloads all presets.
 		if state.devMode > DevLevels.DISABLED then
@@ -5069,33 +5115,33 @@ registerForEvent("onDraw", function()
 		state.isLogSuspend = true
 		if state.devMode > DevLevels.DISABLED then
 			if not isLocked and not vehicle then
-				addText(Text.GUI_NO_VEH, Colors.CARAMEL, halfHeightPadding, contentWidth, itemSpacing)
+				addText(Text.GUI_STATE_NO_VEH, Colors.CARAMEL, halfHeightPadding, contentWidth, itemSpacing)
 			end
 		elseif not isLocked and isVehicleMounted() then
 			local text, color
 			if presets.isAnyActive then
-				text = Text.GUI_PRE_ON
+				text = Text.GUI_STATE_PSET_ON
 				color = Colors.FIR
 			else
-				text = Text.GUI_PRE_OFF
+				text = Text.GUI_STATE_PSET_OFF
 				color = Colors.CARAMEL
 			end
 			addText(text, color, halfHeightPadding, contentWidth, itemSpacing)
 		end
 
-		--Create Preset File Explorer button only if CET is open.
+		--Create Preset Explorer button only if CET is open.
 		if isStillVisible then
 			ImGui.End()
 			return
 		end
 
-		--Button to open the Preset File Explorer.
+		--Button to open the Preset Explorer.
 		ImGui.Separator()
 		ImGui.Dummy(0, heightPadding)
 		ImGui.Dummy(controlPadding, 0)
 		ImGui.SameLine()
 		local isExplorerOpening = false
-		if ImGui.Button(Text.GUI_FEXP, buttonWidth, buttonHeight) then
+		if ImGui.Button(Text.GUI_PSET_EXPL, buttonWidth, buttonHeight) then
 			explorer.isOpen = not explorer.isOpen
 			isExplorerOpening = explorer.isOpen
 		end
@@ -5108,7 +5154,7 @@ registerForEvent("onDraw", function()
 		--Main window is done.
 		ImGui.End()
 
-		--Opens the Preset File Explorer window when button triggered.
+		--Opens the Preset Explorer window when button triggered.
 		openFileExplorerWindow(
 			scale,
 			isExplorerOpening,
@@ -5117,9 +5163,9 @@ registerForEvent("onDraw", function()
 			winWidth,
 			winHeight,
 			maxHeight,
-			controlPadding,
 			halfHeightPadding,
-			buttonHeight)
+			buttonHeight,
+			itemSpacing)
 		return
 	end
 
@@ -5411,18 +5457,18 @@ registerForEvent("onDraw", function()
 	--Button to apply previously configured values in-game.
 	local color = tasks.Restore and Colors.OLIVE or Colors.CARAMEL
 	local pushed = tasks.Apply and pushColors(ImGuiCol.Button, color) or 0
-	if ImGui.Button(Text.GUI_APPLY, halfContentWidth, buttonHeight) then
+	if ImGui.Button(Text.GUI_EDIT_APPLY, halfContentWidth, buttonHeight) then
 		--Always applies on user action — even if unnecessary.
 		applyEditorPreset(key, flux, pivot, tasks)
 	end
 	popColors(pushed)
-	addTooltip(scale, Text.GUI_APPLY_TIP)
+	addTooltip(scale, Text.GUI_EDIT_APPLY_TIP)
 	ImGui.SameLine()
 
 	--Button in same line to save configured values to a file for future automatic use.
 	local saveConfirmed = false
 	pushed = (tasks.Save or tasks.Rename) and pushColors(ImGuiCol.Button, color) or 0
-	if ImGui.Button(Text.GUI_SAVE, halfContentWidth, buttonHeight) then
+	if ImGui.Button(Text.GUI_EDIT_SAVE, halfContentWidth, buttonHeight) then
 		if presetFileExists(finale.Name) then
 			editor.isOverwriteConfirmed = true
 			ImGui.OpenPopup(key)
@@ -5431,11 +5477,11 @@ registerForEvent("onDraw", function()
 		end
 	end
 	popColors(pushed)
-	addTooltip(scale, format(tasks.Restore and Text.GUI_REST_TIP or Text.GUI_SAVE_TIP, key))
+	addTooltip(scale, format(tasks.Restore and Text.GUI_EDIT_REST_TIP or Text.GUI_EDIT_SAVE_TIP, key))
 
 	if editor.isOverwriteConfirmed then
 		local path = getPresetFilePath(key, status)
-		local confirmed = addPopupYesNo(key, format(Text.GUI_OVWR_CONFIRM, path), scale, Colors.CARAMEL)
+		local confirmed = addPopupYesNo(key, format(Text.GUI_EDIT_OWR_POP, path), scale, Colors.CARAMEL)
 		if confirmed ~= nil then
 			editor.isOverwriteConfirmed = false
 			saveConfirmed = confirmed
@@ -5448,7 +5494,7 @@ registerForEvent("onDraw", function()
 		applyEditorPreset(key, flux, pivot, tasks)
 
 		--Saving is always performed, even if no changes were made in the editor. The
-		--user could theoretically delete preset files manually outside the game, and
+		--user could theoretically change preset files manually outside the game, and
 		--the mod wouldn't detect that at runtime. It would be problematic if saving
 		--were blocked just because the mod assumes there are no changes.
 		saveEditorPreset(key, flux, finale, tasks, status)
@@ -5456,11 +5502,11 @@ registerForEvent("onDraw", function()
 
 	ImGui.Dummy(0, heightPadding)
 
-	--Button to open the Preset File Explorer.
+	--Button to open the Preset Explorer.
 	ImGui.Separator()
 	ImGui.Dummy(0, halfHeightPadding)
 	local isExplorerOpening = false
-	if ImGui.Button(Text.GUI_FEXP, contentWidth, buttonHeight) then
+	if ImGui.Button(Text.GUI_PSET_EXPL, contentWidth, buttonHeight) then
 		explorer.isOpen = not explorer.isOpen
 		isExplorerOpening = explorer.isOpen
 	end
@@ -5469,7 +5515,7 @@ registerForEvent("onDraw", function()
 	--Well done.
 	ImGui.End()
 
-	--Opens the Preset File Explorer window when toggled.
+	--Opens the Preset Explorer window when toggled.
 	openFileExplorerWindow(
 		scale,
 		isExplorerOpening,
@@ -5478,9 +5524,9 @@ registerForEvent("onDraw", function()
 		winWidth,
 		winHeight,
 		maxHeight,
-		controlPadding,
 		halfHeightPadding,
-		buttonHeight
+		buttonHeight,
+		itemSpacing
 	)
 end)
 
