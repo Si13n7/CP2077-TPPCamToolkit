@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-10-16, 1:35 UTC+01:00 (MEZ)
+Version: 2025-10-17, 18:36 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -30,8 +30,8 @@ return {
 
 	--GUI: 🚀 Main Controls
 	GUI_TITLE = "TPP Vehicle Cam Toolkit",
-	GUI_TITLE_SHORT = "TPPVCamTool",
-	GUI_VERSION_WARN = "\u{f0026} This mod requires game version 2.21 or higher and CET version 1.35 or higher. You are using at least one outdated version (game: %s; CET: %s), which may cause issues. Any use is at your own risk. Please do not report any problems unless you meet the minimum requirements.",
+	GUI_NAME = "TPPVCamTool",
+	GUI_COMP_WARN = "\u{f0026} This mod requires game version 2.21 or higher and CET version 1.35 or higher. You are using at least one outdated version (game: %s; CET: %s), which may cause issues. Any use is at your own risk. Please do not report any problems unless you meet the minimum requirements.",
 	GUI_MOD_TOGGLE = " Toggle Mod Functionality",
 	GUI_MOD_TOGGLE_TIP = "Enables or disables the mod functionality",
 	GUI_SETTINGS = "\u{F1064} Global Settings ",

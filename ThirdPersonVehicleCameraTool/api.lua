@@ -13,7 +13,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-10-16, 1:35 UTC+01:00 (MEZ)
+Version: 2025-10-17, 18:36 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -80,6 +80,7 @@ ______________________________________________
 ---@field BeginPopup fun(id: string): boolean # Starts a popup window with the given ID. Returns true if it should be drawn.
 ---@field CloseCurrentPopup fun() # Closes the currently open popup window. Should be called inside the popup itself.
 ---@field EndPopup fun() # Ends the current popup window. Always call after `BeginPopup()`.
+---@field GetStyleColorVec4 fun(idx: integer): number, number, number, number # Retrieves the RGBA components (x=R, y=G, z=B, w=A) of a given style color as floats [0-1].
 ---@field PushStyleColor fun(idx: integer, color: integer) # Pushes a new color style override for the current ImGui context.
 ---@field PushStyleVar fun(idx: integer, value: number) # Pushes a single style variable override for the current ImGui context. `idx` is the ImGuiStyleVar enum value (e.g., WindowBorderSize, WindowPadding, ItemSpacing), and `value` is the number to set. Must be paired with `PopStyleVar()` to restore the previous style.
 ---@field PopStyleColor fun(count?: integer) # Removes one or more pushed style colors from the stack. Default count is 1.
@@ -129,13 +130,16 @@ ImGuiTableColumnFlags = ImGuiTableColumnFlags
 ---UI color indices used for styling via `ImGui.PushStyleColor()`.
 ---Each index refers to a specific UI element's color.
 ---@class ImGuiCol
----@field Text integer # Color of text.
----@field WindowBg number # The background color of a window. Default is an opaque dark background.
+---@field Text integer # The color of text.
+---@field WindowBg integer # The background color of a window. Default is an opaque dark background.
 ---@field FrameBg integer # Background color of widgets with a frame (e.g., InputText, DragFloat, etc.) when idle.
----@field TitleBg number # The background color of a window's title bar when inactive (not focused).
----@field TitleBgActive number # The background color of a window's title bar when active (focused).
----@field Button integer # Color of button.
----@field TableHeaderBg number # The background color of a table's header row.
+---@field TitleBg integer # The background color of a window's title bar when inactive (not focused).
+---@field TitleBgActive integer # The background color of a window's title bar when active (focused).
+---@field Button integer # The color of button.
+---@field TabActive integer # The color used for an active tab in a tab bar. Indicates which tab is currently selected.
+---@field TableHeaderBg integer # The background color of a table's header row.
+---@field TableBorderStrong integer # Color for strong borders in tables. Typically used for outer or major dividing lines.
+---@field TableBorderLight integer # Color for light borders in tables. Typically used for inner or minor dividing lines.
 ImGuiCol = ImGuiCol
 
 ---Represents the current ImGui style configuration, controlling layout, spacing, padding, rounding, and more.
@@ -178,7 +182,7 @@ TweakDB = TweakDB
 
 ---Represents a TweakDB ID used to reference records in the game database.
 ---@class TDBID
----@field hash number # The hash number.
+---@field hash integer # The hash number.
 ---@field ToStringDEBUG fun(id: TDBID): string? # Converts a TDBID to a readable string, typically starting with a namespace like "Vehicle.".
 TDBID = TDBID
 

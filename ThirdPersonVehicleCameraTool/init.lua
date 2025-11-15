@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-10-16, 1:35 UTC+01:00 (MEZ)
+Version: 2025-10-17, 18:42 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -35,8 +35,9 @@ Examples:
 Development Environment:
  - Editor:    Visual Studio Code
  - Extension: sumneko.lua
-   - Set `Lua.codeLens.enable = true` in `settings.json`.
-   - Make sure to open the entire project folder.
+   - Set `"Lua.runtime.version": "LuaJIT"` in `User Settings (JSON)`
+   - Set `"Lua.codeLens.enable" = true`    in `User Settings (JSON)`
+   - Make sure to open the entire project folder in VS Code
 --]]
 
 
@@ -141,7 +142,7 @@ Development Environment:
 ---@field Preset ICameraPreset # The actual preset data (angles and offsets).
 ---@field Key string # Internal identifier for lookups and invalid name detection.
 ---@field Name string # User-modifiable display name of the preset.
----@field Token number # Adler-53 checksum of `Preset`, used to detect changes.
+---@field Token integer # Adler-53 checksum of `Preset`, used to detect changes.
 ---@field IsPresent boolean # True if a corresponding preset file exists on disk.
 
 ---Represents pending actions for a modified camera preset within the editor workflow.
@@ -238,19 +239,40 @@ local LogMeta = {
 	}
 }
 
----Provides predefined hexadecimal color constants used for UI theming and styling.
+---Provides predefined integer ABGR color constants used for UI theming and styling.
 local Colors = {
-	---A dark, muted blue with subtle grayish undertones.
-	DEFAULT = 0xab7a4a29,
+	---Deep black.
+	BLACK = 0xab000000,
+
+	---Pure white.
+	WHITE = 0xabffffff,
+
+	---Pure Cyan.
+	CYAN = 0xffffff00,
+
+	---Pure green.
+	GREEN = 0xff00ff00,
+
+	---Pure orange.
+	ORANGE = 0xff0080ff,
+
+	---Pure red.
+	RED = 0xff0000ff,
+
+	---Pure yellow.
+	YELLOW = 0xff00ffff,
+
+	---Medium gray.
+	DARKGRAY = 0xab404040,
 
 	---A warm, golden brown with rich amber tones.
 	CARAMEL = 0xab295c7a,
 
 	---A dark, cool green with subtle blue undertones.
-	FIR = 0xab6a7a29,
+	FIR = 0xab849833,
 
 	---A deep, muted red with a subtle brown undertone.
-	GARNET = 0xbb3d297a,
+	GARNET = 0xab3d297a,
 
 	---A deep, muted purple with rich red undertones and a cool, berry-like hue.
 	MULBERRY = 0xab68297a,
@@ -1499,7 +1521,7 @@ end
 ---Computes an Adler-53 checksum over one or more values without allocating a new table.
 ---
 ---This function implements a custom 53-bit variant of the Adler checksum algorithm,
----designed by me (Si13n7) through minimal mathematical adjustments to the original.
+---designed by me through minimal mathematical adjustments to the original.
 ---
 ---It improves upon Adler-32 by using a much larger prime modulus and a wider final hash space,
 ---which significantly reduces the chance of hash collisions, even with shorter inputs.
@@ -1806,7 +1828,7 @@ local function log(lvl, id, fmt, ...)
 		local ok, result = pcall(format, fmt, unpack(args))
 		str = ok and result or Text.LOG_FORMAT_INVALID
 	end
-	local msg = format("[%s]  [%04X]  %s  %s", Text.GUI_TITLE_SHORT, id or 0, tag, str)
+	local msg = format("[%s]  [%04X]  %s  %s", Text.GUI_NAME, id or 0, tag, str)
 
 	if state.devMode >= DevLevels.FULL then
 		(lvl == LogLevels.ERROR and spdlog.error or spdlog.info)(msg)
@@ -2564,7 +2586,7 @@ local function updateAdvancedConfigDefaultParam(sIdx, name, value, updateConfig,
 			TweakDB:SetFlat(key, value)
 		end
 
-		logIf(DevLevels.ALERT, LogLevels.INFO, 0x2e3b, isRestore and Text.LOG_PARAM_REST or Text.LOG_PARAM_SE, key, value)
+		logIf(DevLevels.ALERT, LogLevels.INFO, 0x2e3b, isRestore and Text.LOG_PARAM_REST or Text.LOG_PARAM_SET, key, value)
 	end
 
 	if not updateConfig then return result end
@@ -4058,6 +4080,15 @@ local function alignNext(x, hAlign, vAlign, cellHeight)
 	end
 end
 
+---Sets the alpha channel of a given ABGR color without modifying the RGB components.
+---@param c integer # The original color in 0xAABBGGRR format.
+---@param alpha integer # The new alpha value (0-255) to apply.
+---@return integer # The resulting color with the updated alpha in 0xAABBGGRR format.
+local function setAlpha(c, alpha)
+	if not areNumber(c, alpha) then return 0 end
+	return bor(lshift(band(alpha, 0xff), 24), band(c, 0x00ffffff))
+end
+
 ---Adjusts an ABGR color by modifying its alpha, blue, green, and red (weird order in LUA) components.
 ---@param c integer # The input color in 0xAARRGGBB format.
 ---@param aa integer? # Amount to add to the alpha channel.
@@ -4072,12 +4103,25 @@ local function adjustColor(c, aa, bb, gg, rr)
 	local b = band(rshift(c, 16), 0xff)
 	local g = band(rshift(c, 8), 0xff)
 	local r = band(c, 0xff)
-
 	a = isNumber(aa) and math.min(0xff, a + aa) or a
 	b = isNumber(bb) and math.min(0xff, b + bb) or b
 	g = isNumber(gg) and math.min(0xff, g + gg) or g
 	r = isNumber(rr) and math.min(0xff, r + rr) or r
+	return bor(lshift(a, 24), lshift(b, 16), lshift(g, 8), r)
+end
 
+---Converts an ImGui style color from a Vec4 (floating point RGBA) to a 32-bit ABGR integer.
+---@param col integer # The `ImGuiCol` enum value representing the style color (e.g., ImGuiCol.FrameBg, ImGuiCol.Text).
+---@param alpha? integer # Optional override for the alpha component (0–255). If omitted, the value from the ImGui style color is used.
+---@return integer # Returns the color as a 32-bit integer in the format 0xAABBGGRR. Returns 0 if the input values are invalid.
+local function getStyleColor(col, alpha)
+	local x, y, z, w = ImGui.GetStyleColorVec4(col)
+	if not areNumber(x, y, z, w) then return 0 end
+
+	local a = math.min(0xff, isNumber(alpha) and alpha or floor(w * 0xff))
+	local b = math.min(0xff, floor(z * 0xff))
+	local g = math.min(0xff, floor(y * 0xff))
+	local r = math.min(0xff, floor(x * 0xff))
 	return bor(lshift(a, 24), lshift(b, 16), lshift(g, 8), r)
 end
 
@@ -4103,20 +4147,20 @@ end
 local function pushColors(idx, color)
 	if not areNumber(idx, color) then return 0 end
 
-	if idx ~= ImGuiCol.Button and idx ~= ImGuiCol.FrameBg then
-		ImGui.PushStyleColor(idx, adjustColor(color, 0xff, 32, 32, 32))
-
-		return 1
+	if idx == ImGuiCol.Button or idx == ImGuiCol.FrameBg then
+		local hoveredIdx, activeIdx = idx + 1, idx + 2
+		local base, hover, active = getThreeColorsFrom(idx, color)
+		ImGui.PushStyleColor(idx, base)
+		ImGui.PushStyleColor(hoveredIdx, hover)
+		ImGui.PushStyleColor(activeIdx, active)
+		return 3
 	end
 
-	local hoveredIdx, activeIdx = idx + 1, idx + 2
-	local base, hover, active = getThreeColorsFrom(idx, color)
-
-	ImGui.PushStyleColor(idx, base)
-	ImGui.PushStyleColor(hoveredIdx, hover)
-	ImGui.PushStyleColor(activeIdx, active)
-
-	return 3
+	if idx == ImGuiCol.Text then
+		color = setAlpha(color, 0xff)
+	end
+	ImGui.PushStyleColor(idx, color)
+	return 1
 end
 
 ---Safely pops a number of ImGui style colors from the stack.
@@ -4147,7 +4191,7 @@ local function addText(text, color, heightPadding, contentWidth, itemSpacing)
 
 	local isColor = isNumber(color)
 	if isColor then ---@cast color number
-		ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(color, 0xff))
+		ImGui.PushStyleColor(ImGuiCol.Text, setAlpha(color, 0xff))
 	end
 
 	ImGui.Text(text)
@@ -4254,7 +4298,7 @@ local function addPopupYesNo(id, text, scale, yesBtnColor, noBtnColor)
 	local width, height = ceil(80 * scale), floor(30 * scale)
 
 	---@cast yesBtnColor number
-	local pushed = isNumber(yesBtnColor) and pushColors(ImGuiCol.Button, yesBtnColor) or 0
+	local pushed = pushColors(ImGuiCol.Button, yesBtnColor) + pushColors(ImGuiCol.Text, Colors.WHITE)
 	if ImGui.Button(Text.GUI_YES, width, height) then
 		result = true
 		ImGui.CloseCurrentPopup()
@@ -4264,7 +4308,7 @@ local function addPopupYesNo(id, text, scale, yesBtnColor, noBtnColor)
 	ImGui.SameLine()
 
 	---@cast noBtnColor number
-	pushed = isNumber(noBtnColor) and pushColors(ImGuiCol.Button, noBtnColor) or 0
+	pushed = pushColors(ImGuiCol.Button, noBtnColor)
 	if ImGui.Button(Text.GUI_NO, width, height) then
 		result = false
 		ImGui.CloseCurrentPopup()
@@ -4303,38 +4347,77 @@ local function drawRuler(scale, maxWidth, maxHeight)
 	local zoom = get(config.options.zoom, 1.00, "Value")
 	local ticks = fov > 69 and fov or 62
 
-	local indices = zoom == 1 and ({
-		[69] = { -1, 10, 60, 61, 62 },
-		[75] = { -1, 25, 70, 71, 72 },
-		[80] = { 7, 36, 76, 77, 78 },
-		[85] = { 18, 45, 83, 84, 85 },
-		[90] = { 30, 54, 88, 89, 90 }
-	})[fov] or {}
+	local indices = (function()
+		if not equals(zoom, 1.00) then return end
 
-	local markers = {}
-	if isTableValid(indices) then
+		--Known positions.
+		local map = {
+			[69]  = { -1, 10, 60, 61, 62 },
+			[75]  = { -1, 25, 69, 70, 71 },
+			[80]  = { -1, 35, 76, 77, 78 },
+			[85]  = { 12, 45, 82, 83, 84 },
+			[90]  = { 24, 54, 87, 88, 89 },
+			[95]  = { 34, 62, 92, 93, 94 },
+			[100] = { 44, 69, 98, 99, 100 },
+			[105] = { 53, 76, 101, 102, 103 },
+			[110] = { 61, 82, 105, 106, 107 }
+		}
+
+		if map[fov] then return map[fov] end
+
+		--Using a proportional formula between FOV and known positions to calculate unknown ones.
+		local keys = {}
+		for k in pairs(map) do insert(keys, k) end
+		sort(keys, function(a, b) return a < b end)
+		local p, n
+		for i = 1, #keys do
+			if keys[i] <= fov then p = keys[i] end
+			if keys[i] >= fov and not n then n = keys[i] end
+		end
+		p = p or n
+		n = n or p
+		local t = (fov - p) / (n - p)
+		local r = {}
+		for i = 1, 5 do
+			r[i] = (map[p][i] == -1 or map[n][i] == -1) and -1 or floor(map[p][i] + (map[n][i] - map[p][i]) * t + 0.5)
+		end
+		return r
+	end)()
+
+	local colors = {}
+	if isTableValid(indices) then ---@cast indices table
 		local codes = {
-			0xff00ff00, --green
-			0xffffff00, --cyan
-			0xff00ffff, --yellow
-			0xff00aaff, --orange
-			0xff0000ff --red
+			Colors.GREEN,
+			Colors.CYAN,
+			Colors.YELLOW,
+			Colors.ORANGE,
+			Colors.RED
 		}
 		for i, idx in ipairs(indices) do
 			if idx > 0 then
-				markers[idx] = codes[i]
+				colors[idx] = codes[i]
 			end
 		end
 	end
 
 	for i = 0, ticks do
-		local isMajor = i % 5 == 0
-		local tick = rep("_", isMajor and 4 or 3)
-		local text = isMajor and format(" %3d", i) or ""
-		local osetY = posY + (ticks - i) * lineH
-		ImGui.SetCursorPos(posX, osetY)
-		ImGui.PushStyleColor(ImGuiCol.Text, markers[i] or 0xafffffff)
-		ImGui.Text(isMajor and tick .. text or tick)
+		local isMajor = i % 10 == 0
+		local tick = rep("_", isMajor and 5 or i % 5 == 0 and 4 or 3)
+		local num = isMajor and format(" %3d", i) or ""
+		local px, py = posX, posY + (ticks - i) * lineH
+		local color = colors[i]
+
+		ImGui.SetCursorPos(px, py)
+
+		ImGui.PushStyleColor(ImGuiCol.Text, color or Colors.WHITE)
+
+		ImGui.Text(tick .. num)
+
+		if color then
+			ImGui.SetCursorPos(px, py - 1)
+			ImGui.Text(tick)
+		end
+
 		ImGui.PopStyleColor()
 	end
 
@@ -4367,6 +4450,7 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 	height = math.max(height, 240 * scale)
 	ImGui.SetNextWindowSize(width, height)
 
+	ImGui.PushStyleColor(ImGuiCol.WindowBg, getStyleColor(ImGuiCol.WindowBg, 0xff))
 	local flags = bor(
 		ImGuiWindowFlags.NoResize,
 		ImGuiWindowFlags.NoMove,
@@ -4375,6 +4459,7 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 	)
 	config.isOpen = ImGui.Begin(Text.GUI_SETTINGS, config.isOpen, flags)
 	if not config.isOpen then return false end
+	ImGui.PopStyleColor()
 
 	if not gui.hasInitialized[Text.GUI_SETTINGS] then
 		gui.hasInitialized[Text.GUI_SETTINGS] = true
@@ -4570,15 +4655,19 @@ local function openAdvancedOptionsWindow(scale, isOpening, maxWidth, maxHeight)
 
 					ImGui.TableNextColumn()
 					local isUndoOff = equals(current, default)
-					local pushd = isUndoOff and pushColors(ImGuiCol.Button, 0x40808080) or 0
-					ImGui.BeginDisabled(isUndoOff)
+					if isUndoOff then
+						ImGui.BeginDisabled(true)
+						ImGui.PushStyleColor(ImGuiCol.Button, Colors.DARKGRAY)
+					end
 					ImGui.SetNextItemWidth(-1)
 					if ImGui.Button("\u{f054d}##" .. var .. i) then
 						changed = true
 						recent = default
 					end
-					ImGui.EndDisabled()
-					popColors(pushd)
+					if isUndoOff then
+						ImGui.PopStyleColor()
+						ImGui.EndDisabled()
+					end
 
 					if changed then
 						updateAdvancedConfigDefaultParam(i, var, default, true)
@@ -4649,12 +4738,14 @@ local function openFileExplorerWindow(scale, isOpening, x, y, width, height, max
 	end
 	ImGui.SetNextWindowSizeConstraints(width, height, math.max(width, 400 * scale), maxHeight)
 
+	ImGui.PushStyleColor(ImGuiCol.WindowBg, getStyleColor(ImGuiCol.WindowBg, 0xff))
 	local flags = bor(
 		ImGuiWindowFlags.NoCollapse,
 		ImGuiWindowFlags.NoSavedSettings
 	)
 	explorer.isOpen = ImGui.Begin(Text.GUI_PSET_EXPL, explorer.isOpen, flags)
 	if not explorer.isOpen then return end
+	ImGui.PopStyleColor()
 
 	local isValidated, _, _, _, winHeight = validateWindowBounds()
 	if isValidated then
@@ -4789,7 +4880,7 @@ local function openFileExplorerWindow(scale, isOpening, x, y, width, height, max
 			end
 
 			ImGui.TableNextColumn()
-			local pushd = pushColors(ImGuiCol.Button, Colors.GARNET)
+			local pushd = pushColors(ImGuiCol.Button, Colors.GARNET) + pushColors(ImGuiCol.Text, Colors.WHITE)
 			if ImGui.Button("\u{f0a7a}##" .. fileName, 0, buttonHeight) then
 				ImGui.OpenPopup(fileName)
 			end
@@ -4855,7 +4946,7 @@ local function openFileExplorerWindow(scale, isOpening, x, y, width, height, max
 		ImGui.Dummy(widthPad, 0)
 		ImGui.SameLine()
 
-		ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(color, 0xff))
+		ImGui.PushStyleColor(ImGuiCol.Text, setAlpha(color, 0xff))
 		ImGui.Text(text)
 		ImGui.PopStyleColor()
 	end
@@ -5090,8 +5181,8 @@ registerForEvent("onInit", function()
 	end)
 
 	--When control over the player character is gained (e.g. after loading a save).
-	Observe("PlayerPuppet", "OnTakeControl", function(self)
-		if not state.isModEnabled or gui.isOverlayLocked or self:GetEntityID().hash ~= 1 then return end
+	Observe("PlayerPuppet", "OnTakeControl", function(player)
+		if not state.isModEnabled or gui.isOverlayLocked or player:GetEntityID().hash ~= 1ULL then return end
 
 		onUnmount(true)
 
@@ -5184,7 +5275,7 @@ registerForEvent("onInit", function()
 		if not native then return end
 		config.nativeInstance = native
 
-		local tab = "/" .. Text.GUI_TITLE_SHORT
+		local tab = "/" .. Text.GUI_NAME
 		if not native.pathExists(tab) then
 			native.addTab(tab, Text.GUI_TITLE)
 		end
@@ -5379,12 +5470,22 @@ registerForEvent("onDraw", function()
 	if gui.isOverlaySuppressed and isStillVisible then return end
 
 	--If CET is closed but the window should stay visible, apply transparent styling.
+	local pushedColors = 0
 	if isStillVisible then
-		ImGui.PushStyleColor(ImGuiCol.WindowBg, 0x60000000)
-		ImGui.PushStyleColor(ImGuiCol.TitleBg, 0x60000000)
-		ImGui.PushStyleColor(ImGuiCol.TitleBgActive, 0x60000000)
-		ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, 0x40000000)
-		ImGui.PushStyleColor(ImGuiCol.FrameBg, 0x20000000)
+		local bl20 = setAlpha(Colors.BLACK, 0x20)
+		local bl40 = setAlpha(Colors.BLACK, 0x40)
+		local bl60 = setAlpha(Colors.BLACK, 0x60)
+		local wh30 = setAlpha(Colors.WHITE, 0x30)
+		local wh40 = setAlpha(Colors.WHITE, 0x40)
+		pushedColors =
+			pushColors(ImGuiCol.Text, Colors.WHITE) +
+			pushColors(ImGuiCol.WindowBg, bl60) +
+			pushColors(ImGuiCol.FrameBg, bl20) +
+			pushColors(ImGuiCol.TitleBg, bl60) +
+			pushColors(ImGuiCol.TitleBgActive, bl60) +
+			pushColors(ImGuiCol.TableHeaderBg, bl40) +
+			pushColors(ImGuiCol.TableBorderStrong, wh40) +
+			pushColors(ImGuiCol.TableBorderLight, wh30)
 	end
 
 	--Main window begins.
@@ -5392,11 +5493,15 @@ registerForEvent("onDraw", function()
 	if not gui.isOverlayOpen then
 		flags = bor(flags, ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.NoInputs)
 	end
-	if not ImGui.Begin(Text.GUI_TITLE, flags) then return end
+	if not ImGui.Begin(Text.GUI_TITLE, flags) then
+		popColors(pushedColors)
+		return
+	end
 
 	--Forces ImGui to rebuild the window on the next frame with fresh metrics.
 	if gui.forceMetricsReset then
 		gui.forceMetricsReset = false
+		popColors(pushedColors)
 		ImGui.End()
 		return
 	end
@@ -5405,6 +5510,7 @@ registerForEvent("onDraw", function()
 	local isValidated, winX, winY, winWidth, winHeight, maxWidth, maxHeight = validateWindowBounds()
 	gui.isValidating = isValidated
 	if isValidated then
+		popColors(pushedColors)
 		ImGui.End()
 		return
 	end
@@ -5454,8 +5560,8 @@ registerForEvent("onDraw", function()
 			local gameVer, cetVer = serialize(state.gameVersion), serialize(state.cetVersion)
 			ImGui.Dummy(0, 0)
 			ImGui.SameLine()
-			ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(Colors.GARNET, 0xff))
-			addTextCenterWrap(format(Text.GUI_VERSION_WARN, gameVer, cetVer), contentWidth)
+			ImGui.PushStyleColor(ImGuiCol.Text, setAlpha(Colors.GARNET, 0xff))
+			addTextCenterWrap(format(Text.GUI_COMP_WARN, gameVer, cetVer), contentWidth)
 			ImGui.PopStyleColor()
 			ImGui.Dummy(0, doubleHeightPadding)
 		end
@@ -5488,6 +5594,7 @@ registerForEvent("onDraw", function()
 		ImGui.Dummy(0, halfHeightPadding)
 		if not state.isModEnabled then
 			--Mod is disabled — nothing left to add.
+			popColors(pushedColors)
 			ImGui.End()
 			return
 		end
@@ -5684,6 +5791,7 @@ registerForEvent("onDraw", function()
 
 		--Create Preset Explorer button only if CET is open.
 		if isStillVisible then
+			popColors(pushedColors)
 			ImGui.End()
 			return
 		end
@@ -5706,6 +5814,7 @@ registerForEvent("onDraw", function()
 		end
 
 		--Main window is done.
+		popColors(pushedColors)
 		ImGui.End()
 
 		--Opens the Preset Explorer window when button triggered.
@@ -5726,6 +5835,7 @@ registerForEvent("onDraw", function()
 	local bundle = getEditorBundle(name, appName, id, key) ---@cast bundle IEditorBundle
 	if not isTableValid(bundle) then
 		--Nothing else to display.
+		popColors(pushedColors)
 		ImGui.End()
 	end
 	editor.lastBundle = bundle
@@ -5737,6 +5847,7 @@ registerForEvent("onDraw", function()
 	local tasks = bundle.Tasks ---@cast tasks IEditorTasks
 	if not areTableValid(flux, pivot, finale, nexus, tasks) then
 		--No further controls required.
+		popColors(pushedColors)
 		ImGui.End()
 	end
 
@@ -5955,7 +6066,7 @@ registerForEvent("onDraw", function()
 			alignNext(rowHeight)
 
 			if isGameDefault then
-				color = not isStillVisible and Colors.DEFAULT
+				color = not isStillVisible and getStyleColor(ImGuiCol.TabActive)
 			elseif isStillVisible and tasks.Save then
 				color = tasks.Restore and Colors.OLIVE or Colors.CARAMEL
 			else
@@ -6004,7 +6115,6 @@ registerForEvent("onDraw", function()
 					local origVal = get(pivot.Preset, defVal, level, field)
 					addTooltip(nil, split(format(tip, defVal, minVal, maxVal, origVal), "|"))
 				end
-
 			end
 		end
 
@@ -6014,6 +6124,7 @@ registerForEvent("onDraw", function()
 
 	--Create bottom controls only if CET is open
 	if isStillVisible then
+		popColors(pushedColors)
 		ImGui.End()
 		return
 	end
@@ -6092,6 +6203,7 @@ registerForEvent("onDraw", function()
 	ImGui.Dummy(0, halfHeightPadding)
 
 	--Well done.
+	popColors(pushedColors)
 	ImGui.End()
 
 	--Opens the Preset Explorer window when toggled.
