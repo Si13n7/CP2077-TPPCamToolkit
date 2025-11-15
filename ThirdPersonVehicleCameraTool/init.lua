@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-28, 22:35 UTC+01:00 (MEZ)
+Version: 2025-05-03, 00:00 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -19,74 +19,32 @@ ______________________________________________
 
 --#region 🚧 Core Definitions
 
---Aliases for commonly used standard library functions to simplify code.
-local format, rep, concat, insert, unpack, ceil, floor, max, min, band, bor, lshift, rshift =
-	string.format,
-	string.rep,
-	table.concat,
-	table.insert,
-	table.unpack,
-	math.ceil,
-	math.floor,
-	math.max,
-	math.min,
-	bit32.band,
-	bit32.bor,
-	bit32.lshift,
-	bit32.rshift
-
----Loads all static UI and log string constants from `text.lua` into the global `Text` table.
----This is the most efficient way to manage display strings separately from logic and code.
----@type table<string, string>
-local Text = dofile("text.lua")
-
----Developer mode levels used to control the verbosity and behavior of debug output.
+---Represents available developer debug modes used to control logging and feedback behavior.
 ---@alias DevLevelType 0|1|2|3
----@class DevLevelEnum
----@field DISABLED DevLevelType # No debug output.
----@field BASIC DevLevelType # Print only.
----@field ALERT DevLevelType # Print + alert.
----@field FULL DevLevelType # Print + alert + log.
----@type DevLevelEnum
-local DevLevels = {
-	DISABLED = 0,
-	BASIC = 1,
-	ALERT = 2,
-	FULL = 3
-}
 
----Log levels used to classify the severity of log messages.
+---Represents available logging levels for categorizing message severity.
 ---@alias LogLevelType 0|1|2
+
+---Enumeration of developer debug modes with increasing verbosity.
+---@class DevLevelEnum
+---@field DISABLED DevLevelType # No debug output (default).
+---@field BASIC DevLevelType # Output is printed to console only.
+---@field ALERT DevLevelType # Output is printed and shown as in-game alerts.
+---@field FULL DevLevelType # Output is printed, alerted, and written to the log file.
+
+---Enumeration of log message severity levels.
 ---@class LogLevelEnum
 ---@field INFO LogLevelType # General informational output.
 ---@field WARN LogLevelType # Non-critical issues or unexpected behavior.
 ---@field ERROR LogLevelType # Critical failures or important errors that need attention.
----@type LogLevelEnum
-local LogLevels = {
-	INFO = 0,
-	WARN = 1,
-	ERROR = 2
-}
 
----Defines color constants used for theming and UI interaction states.
+---Enumeration of predefined color constants used for UI theming and styling.
 ---@class ColorEnum
 ---@field CARAMEL integer # Caramel is a warm, golden brown with rich amber tones.
 ---@field FIR integer # Fir is a dark, cool green with subtle blue undertones.
 ---@field GARNET integer # Garnet is a deep, muted red with a subtle brown undertone.
 ---@field MULBERRY integer # Mulberry is a deep, muted purple with rich red undertones and a cool, berry-like hue.
 ---@field OLIVE integer # Olive is a muted yellow-green with an earthy, natural tone.
----@type ColorEnum
-local Colors = {
-	CARAMEL = 0x8a295c7a,
-	FIR = 0x8a6a7a29,
-	GARNET = 0x8a29297a,
-	MULBERRY = 0x8a68297a,
-	OLIVE = 0x8a297a68
-}
-
----Determines whether the mod is enabled.
----@type boolean
-local mod_enabled = true
 
 ---Represents a parsed version number in structured format.
 ---@class IVersion
@@ -94,87 +52,6 @@ local mod_enabled = true
 ---@field Minor number # Minor version number (optional, defaults to 0 if missing).
 ---@field Build number # Build number (optional, defaults to 0 if missing).
 ---@field Revision number # Revision number (optional, defaults to 0 if missing).
-
----Indicates whether the running CET version meets the minimum required version.
----@type boolean
-local runtime_min = false
-
----Indicates whether the running CET version supports all required features.
----@type boolean
-local runtime_full = false
-
----The current debug mode level controlling logging and alerts:
----0 = Disabled
----1 = Print
----2 = Print + Alert
----3 = Print + Alert + Log
----@type DevLevelType
-local dev_mode = DevLevels.DISABLED
-
----If true, temporarily suppresses all logging output regardless of `dev_mode`.
----Useful to avoid log spam during mass operations or invalid intermediate states.
----@type boolean
-local log_suspend = false
-
----Indicates whether there are active toast notifications pending.
----@type boolean
-local toaster_active = false
-
----Maps `ImGui.ToastType` to their combined message strings.
----@type table<ImGui.ToastType, string>
-local toaster_bumps = {}
-
----Determines whether the CET overlay is open.
----@type boolean
-local overlay_open
-
----Current horizontal padding value used for centering UI elements.
----Dynamically adjusted based on available window width.
----@type number
-local padding_width
-
----When set to true, disables dynamic window padding adjustments and uses the fixed `padding_width` value.
----@type boolean
-local padding_locked
-
----Constant array of all camera levels.
----@type string[]
-local CameraLevels = {
-	"High_Close",
-	"High_Medium",
-	"High_Far",
-	"High_DriverCombatClose",
-	"High_DriverCombatMedium",
-	"High_DriverCombatFar",
-	"Low_Close",
-	"Low_Medium",
-	"Low_Far",
-	"Low_DriverCombatClose",
-	"Low_DriverCombatMedium",
-	"Low_DriverCombatFar"
-}
-
----Constant array of base camera levels.
----@type string[]
-local PresetLevels = { "Close", "Medium", "Far" }
-
----Constant array of `IOffsetData` keys.
----@type string[]
-local PresetOffsets = { "a", "x", "y", "z" }
-
----Stores original custom parameter values before resetting them to global defaults.
----Keys are TweakDB paths (string), and values are the original values.
----Allows potential restoration of vehicle-specific parameters on shutdown.
----@type table<string, any>
-local custom_params = {}
-
----Determines whether a vehicle is currently mounted.
----@type boolean
-local vehicle_mounted = false
-
----List of camera preset IDs that were modified at runtime to enable selective restoration.
----@type string[]
-local used_presets = {}
 
 ---Represents a camera offset configuration with rotation and positional data.
 ---@class IOffsetData
@@ -195,15 +72,11 @@ local used_presets = {}
 ---@field Close IOffsetData? # The offset data for close camera view.
 ---@field Medium IOffsetData? # The offset data for medium camera view.
 ---@field Far IOffsetData? # The offset data for far camera view.
----@field Link string? # The name of another vehicle appearance to link to (if applicable).
+---@field Link string? # The name of another camera preset to link to (if applicable).
 ---@field Overrides ICameraAccessOverrides? # Optional overrides for TweakDB access, used when a custom record key is specified.
 ---@field IsDefault boolean? # Determines whether this camera preset is a vanilla one.
 
----Contains all camera presets and linked vehicles.
----@type table<string, ICameraPreset>
-local camera_presets = {}
-
----A single camera preset entry in the editor, including its data and metadata.
+---Represents a single camera preset entry used in the editor, including its metadata and file state.
 ---@class IEditorPreset
 ---@field Preset ICameraPreset # The actual preset data (angles and offsets).
 ---@field Key string # Internal identifier for lookups and invalid name detection.
@@ -211,7 +84,7 @@ local camera_presets = {}
 ---@field Token number # Adler‑32 checksum of `Preset`, used to detect changes.
 ---@field IsPresent boolean # True if a corresponding preset file exists on disk.
 
----Flags for pending editor actions on a modified camera preset.
+---Tracks pending actions for a modified camera preset within the editor workflow.
 ---@class IEditorTasks
 ---@field Rename boolean # True if the preset has been renamed but the file itself still needs to be renamed.
 ---@field Validate boolean # True if angles or offsets have changed, used to highlight buttons.
@@ -219,13 +92,159 @@ local camera_presets = {}
 ---@field Save boolean # True if there are unsaved modifications that need to be written to disk.
 ---@field Restore boolean # True if saving will revert the preset back to its default configuration.
 
----Represents all versions and pending actions for a vehicle’s camera preset in the UI editor.
+---Holds multiple versions of a vehicle camera preset within the editor.
+---Each version represents a different state in the edit/apply/save workflow.
 ---@class IEditorBundle
 ---@field Nexus IEditorPreset # Immutable default preset for the mounted vehicle.
 ---@field Flux IEditorPreset # Live preset reflecting current UI edits.
 ---@field Pivot IEditorPreset # Snapshot of Flux at the last apply action.
 ---@field Finale IEditorPreset # Snapshot of Flux at the last save action.
 ---@field Tasks IEditorTasks # Flags for pending rename, validate, apply, save, or restore actions.
+
+--Aliases for commonly used standard library functions to simplify code.
+local format, rep, concat, insert, sort, unpack, abs, ceil, floor, max, min, band, bor, lshift, rshift =
+	string.format,
+	string.rep,
+	table.concat,
+	table.insert,
+	table.sort,
+	table.unpack,
+	math.abs,
+	math.ceil,
+	math.floor,
+	math.max,
+	math.min,
+	bit32.band,
+	bit32.bor,
+	bit32.lshift,
+	bit32.rshift
+
+---Loads all static UI and log string constants from `text.lua` into the global `Text` table.
+---This is the most efficient way to manage display strings separately from logic and code.
+---@type table<string, string>
+local Text = dofile("text.lua")
+
+---Developer mode levels used to control the verbosity and behavior of debug output.
+---@type DevLevelEnum
+local DevLevels = {
+	DISABLED = 0,
+	BASIC = 1,
+	ALERT = 2,
+	FULL = 3
+}
+
+---Log levels used to classify the severity of log messages.
+---@type LogLevelEnum
+local LogLevels = {
+	INFO = 0,
+	WARN = 1,
+	ERROR = 2
+}
+
+---Provides predefined hexadecimal color values for theming and UI interaction states.
+---@type ColorEnum
+local Colors = {
+	CARAMEL = 0x8a295c7a,
+	FIR = 0x8a6a7a29,
+	GARNET = 0x8a29297a,
+	MULBERRY = 0x8a68297a,
+	OLIVE = 0x8a297a68
+}
+
+---Constant array of all camera levels.
+---@type string[]
+local CameraLevels = {
+	"High_Close",
+	"High_Medium",
+	"High_Far",
+	"High_DriverCombatClose",
+	"High_DriverCombatMedium",
+	"High_DriverCombatFar",
+	"Low_Close",
+	"Low_Medium",
+	"Low_Far",
+	"Low_DriverCombatClose",
+	"Low_DriverCombatMedium",
+	"Low_DriverCombatFar"
+}
+
+---Constant array of base camera levels.
+---@type string[]
+local PresetLevels = {
+	"Close",
+	"Medium",
+	"Far"
+}
+
+---Constant array of `IOffsetData` keys.
+---@type string[]
+local PresetOffsets = {
+	"a",
+	"x",
+	"y",
+	"z"
+}
+
+---Determines whether the mod is enabled.
+---@type boolean
+local mod_enabled = true
+
+---Indicates whether the running CET version meets the minimum required version.
+---@type boolean
+local runtime_min = false
+
+---Indicates whether the running CET version supports all required features.
+---@type boolean
+local runtime_full = false
+
+---Current developer mode level controlling debug output and behavior.
+---@type DevLevelType
+local dev_mode = DevLevels.DISABLED
+
+---If true, temporarily suppresses all logging output regardless of `dev_mode`.
+---Useful to avoid log spam during mass operations or invalid intermediate states.
+---@type boolean
+local log_suspend = false
+
+---Generic shared cache used to store intermediate or computed values by key.
+---Primarily used to avoid redundant computation or repeated method calls.
+---@type table<string, any>
+local shared_cache = {}
+
+---Indicates whether there are active toast notifications pending.
+---@type boolean
+local toaster_active = false
+
+---Maps `ImGui.ToastType` to their combined message strings.
+---@type table<ImGui.ToastType, string>
+local toaster_bumps = {}
+
+---Determines whether the CET overlay is open.
+---@type boolean
+local overlay_open = false
+
+---Current horizontal padding value used for centering UI elements.
+---Dynamically adjusted based on available window width.
+---@type number
+local padding_width = 0
+
+---When set to true, disables dynamic window padding adjustments and uses the fixed `padding_width` value.
+---@type boolean
+local padding_locked = false
+
+---Stores original custom parameter values before resetting them to global defaults.
+---Keys are TweakDB paths (string), and values are the original values.
+---Allows potential restoration of vehicle-specific parameters on shutdown.
+---@type table<string, any>
+local custom_params = {}
+
+---List of camera preset IDs that were modified at runtime to enable selective restoration.
+---@type string[]
+local used_presets = {}
+
+---Contains all camera presets and linked vehicles.
+---@type table<string, ICameraPreset>
+local camera_presets = {}
 
 ---Holds per-vehicle editor state for all mounted and recently edited vehicles.
 ---The key is always the vehicle name and appearance name, separated by an asterisk (*).
@@ -235,11 +254,11 @@ local editor_bundles = {}
 
 ---Stores the most recently accessed editor bundle.
 ---@type IEditorBundle?
-local editor_last_bundle
+local editor_last_bundle = nil
 
 ---Determines whether overwriting the preset file is allowed.
 ---@type boolean
-local overwrite_confirm
+local overwrite_confirm = false
 
 ---Determines whether the Preset File Manager is open.
 ---@type boolean
@@ -248,54 +267,6 @@ local file_man_open = false
 --#endregion
 
 --#region 🔧 Utility Functions
-
----Parses a version string or returns an existing IVersion table.
----Accepts version formats like "[v]Major[.Minor[.Build[.Revision]]]".
----@param x table|string # A version input as a string, or IVersion table.
----@return IVersion # A table with Major, Minor, Build, and Revision fields as numbers.
-local function getVersion(x)
-	if type(x) == "table" and type(x.Major) == "number" then return x end
-	if type(x) ~= "string" then x = tostring(x) end
-	local v1, v2, v3, v4 = x:match("^v?(%d+)%.?(%d*)%.?(%d*)%.?(%d*)$")
-	return {
-		Major = tonumber(v1) or 0,
-		Minor = tonumber(v2) or 0,
-		Build = tonumber(v3) or 0,
-		Revision = tonumber(v4) or 0
-	}
-end
-
----Compares two version strings in "[v]Major[.Minor[.Build[.Revision]]]" format.
----Returns 1 if a > b, -1 if a < b, or 0 if equal.
----@param a IVersion|string # First version.
----@param b IVersion|string # Second version.
----@return integer # 1 if `a > b`, -1 if `a < b`, 0 if equal.
-local function compareVersion(a, b)
-	local v1 = getVersion(a)
-	local v2 = getVersion(b)
-	for _, k in ipairs({
-		"Major",
-		"Minor",
-		"Build",
-		"Revision"
-	}) do
-		local n1 = v1[k] or 0
-		local n2 = v2[k] or 0
-		if n1 > n2 then
-			return 1
-		elseif n1 < n2 then
-			return -1
-		end
-	end
-	return 0
-end
-
----Checks if the runtime version is greater than or equal to a specified minimum version.
----@param v string # Minimum required version in "[v]major[.minor[.build[.revision]]]" format.
----@return boolean # `true` if the runtime version is >= the specified version, `false` otherwise.
-local function isRuntimeVersionAtLeast(v)
-	return compareVersion(GetVersion(), v) >= 0
-end
 
 ---Logs and displays messages based on the current `dev_mode` level.
 ---Messages can be written to the log file, printed to the console, or shown as in-game alerts.
@@ -318,7 +289,7 @@ local function log(lvl, id, fmt, ...)
 	else
 		msg = msg .. "[Info]  "
 	end
-	msg = format(msg .. (fmt or "Format in log() is empty!"), ...)
+	msg = format(msg .. (fmt or "Format string in log() is empty!"), ...)
 
 	if dev_mode >= DevLevels.FULL then
 		if lvl == LogLevels.ERROR then
@@ -372,87 +343,145 @@ local function logF(mode, lvl, id, fmt, ...)
 	dev_mode = prev
 end
 
+---Checks whether the provided argument is of the specified type.
+---@param t string # The expected type name.
+---@param v any # The value to check against the specified type.
+---@return boolean # Returns `true` if the argument match the specified type, `false` otherwise.
+local function isType(t, v)
+	return type(v) == t
+end
+
+---Checks whether the provided argument is of type `boolean`.
+---@param b any # Value to check.
+---@return boolean # True if the argument is a voolean, false otherwise.
+local function isBoolean(b)
+	return isType("boolean", b)
+end
+
+---Checks whether all provided arguments is of type `number`.
+---@param n any # Value to check.
+---@return boolean # True if the argument is a number, false otherwise.
+local function isNumber(n)
+	return isType("number", n)
+end
+
+---Checks whether the provided argument is of type `string`.
+---@param s any # Value to check.
+---@return boolean # True if the argument is a string, false otherwise.
+local function isString(s)
+	return isType("string", s)
+end
+
+---Checks whether the provided argument is of type `table`.
+---@param t any # Value to check.
+---@return boolean # True if the argument is a table, false otherwise.
+local function isTable(t)
+	return isType("table", t)
+end
+
+---Checks whether the provided argument is non-empty tables.
+---Returns false if any argument is not a table or is an empty table.
+---@param t any # Value to check.
+---@return boolean # True if the argument is a non-empty table, false otherwise.
+local function isTableNotEmpty(t)
+	return (isTable(t) and next(t)) and true or false
+end
+
+---Checks whether the provided argument is of type 'userdata'.
+---@param u any Value to check.
+---@return boolean # True if the argument is an userdata, false otherwise.
+local function isUserdata(u)
+	return isType("userdata", u)
+end
+
+---Checks whether the provided argument is of the specified custom type
+---(by matching `__name` from metatables for userdata objects).
+---@param t string # The expected type name.
+---@param v any # The value to check against the specified type.
+---@return boolean # Returns `true` if the argument match the specified type, `false` otherwise.
+local function isMetaType(t, v)
+	if type(v) ~= "userdata" then return false end
+
+	local m = getmetatable(v)
+	return m and m.__name == t
+end
+
+---Checks whether the provided argument is of type `Vector3`.
+---@param v any # Value to check.
+---@return boolean # Returns true only if the argument is Vector3.
+local function isVector3(v)
+	return isMetaType("sol.Vector3", v)
+end
+
 ---Checks whether all provided arguments are of the specified type.
----Supports both built-in Lua types (e.g., "number", "string", "table", etc.)
----and custom types (by matching `__name` from metatables for userdata objects).
----@param t string # The expected type name (either a Lua base type or a custom `__name` string).
+---@param t string # The expected type name.
 ---@param ... any # A variable number of values to check against the specified type.
 ---@return boolean # Returns `true` if all arguments match the specified type, `false` otherwise.
-local function isType(t, ...)
-	local special = ({
-		["function"] = true,
-		boolean = true,
-		number = true,
-		string = true,
-		table = true,
-		userdata = true,
-		thread = true
-	})[t] == nil
+local function areType(t, ...)
 	for i = 1, select("#", ...) do
 		local v = select(i, ...)
-
-		if special then
-			if type(v) ~= "userdata" then
-				return false
-			end
-
-			local m = getmetatable(v)
-			if not (m and m.__name == t) then
-				return false
-			end
-
-			goto continue
-		end
-
-		if type(v) ~= t then
+		if not isType(t, v) then
 			return false
 		end
-
-		::continue::
 	end
 	return true
 end
 
----Checks whether all provided arguments are of type `boolean`.
----@param ... any # A variable number of values to check.
----@return boolean # Returns true only if all arguments are booleans.
-local function isBoolean(...)
-	return isType("boolean", ...)
-end
-
 ---Checks whether all provided arguments are of type `number`.
----@param ... any # A variable number of values to check.
----@return boolean # Returns true only if all arguments are numbers.
-local function isNumber(...)
-	return isType("number", ...)
+---@param ... any # Values to check.
+---@return boolean # True if all arguments are numbers, false otherwise.
+local function areNumber(...)
+	return areType("number", ...)
 end
 
 ---Checks whether all provided arguments are of type `string`.
----@param ... any # A variable number of values to check.
----@return boolean # Returns true only if all arguments are strings.
-local function isString(...)
-	return isType("string", ...)
+---@param ... any # Values to check.
+---@return boolean # True if all arguments are strings, false otherwise.
+local function areString(...)
+	return areType("string", ...)
 end
 
 ---Checks whether all provided arguments are of type `table`.
----@param ... any # A variable number of values to check.
----@return boolean # Returns true only if all arguments are tables.
-local function isTable(...)
-	return isType("table", ...)
+---@param ... any # Values to check.
+---@return boolean # True if all arguments are tables, false otherwise.
+local function areTable(...)
+	return areType("table", ...)
 end
 
 ---Checks whether all provided arguments are non-empty tables.
 ---Returns false if any argument is not a table or is an empty table.
----@param ... any # A variable number of values to check.
+---@param ... any # Values to check.
 ---@return boolean # True if all arguments are non-empty tables, false otherwise.
-local function isTableNotEmpty(...)
+local function areTableNotEmpty(...)
 	for i = 1, select("#", ...) do
 		local t = select(i, ...)
-		if type(t) ~= "table" or not next(t) then
+		if not isTableNotEmpty(t) then
 			return false
 		end
 	end
 	return true
+end
+
+---Checks whether all provided arguments are of the specified custom type
+---(by matching `__name` from metatables for userdata objects).
+---@param t string # The expected type name (a custom `__name` string).
+---@param ... any # A variable number of values to check against the specified type.
+---@return boolean # Returns `true` if all arguments match the specified type, `false` otherwise.
+local function areMetaType(t, ...)
+	for i = 1, select("#", ...) do
+		local v = select(i, ...)
+		if not isMetaType(t, v) then
+			return false
+		end
+	end
+	return true
+end
+
+---Checks whether all provided arguments are of type `Vector3`.
+---@param ... any # Values to check.
+---@return boolean # True if all arguments are `Vector3`, false otherwise.
+local function areVector3(...)
+	return areMetaType("sol.Vector3", ...)
 end
 
 ---Determines whether a table is a pure sequence (array) with contiguous integer keys 1..#t.
@@ -464,8 +493,8 @@ local function isArray(t)
 	---@cast t table
 	local n = #t
 	local c = 0
-	for k in pairs(t) do
-		if type(k) ~= "number" then
+	for i in pairs(t) do
+		if not isNumber(i) then
 			return false
 		end
 		c = c + 1
@@ -473,42 +502,58 @@ local function isArray(t)
 	return c == n
 end
 
----Checks whether all provided arguments are of type `Vector3`.
----@param ... any # A variable number of values to check.
----@return boolean # Returns true only if all arguments are Vector3s.
-local function isVector3(...)
-	return isType("sol.Vector3", ...)
+---Checks whether the given value represents a valid number (integer or float).
+---@param x number|string The value to check.
+---@return boolean # True if the value can be converted to a number, false otherwise.
+local function isNumeric(x)
+	return tonumber(x) ~= nil
 end
 
----Checks whether a given string represents a valid number (integer or float).
----@param s string # The input string to check.
----@return boolean # True if the string is a valid number, false otherwise.
-local function hasNumber(s)
-	return tonumber(s) ~= nil
+---Checks whether all provided values represent valid numbers (integers or floats).
+---@param ... number|string The values to check.
+---@return boolean # True if all values can be converted to numbers, false otherwise.
+local function areNumeric(...)
+	for i = 1, select("#", ...) do
+		if not isNumeric(select(i, ...)) then
+			return false
+		end
+	end
+	return true
 end
 
----Compares two values for equality with special handling for numbers and tables.
----Number values are compared with a small tolerance to account for floating-point imprecision.
----Tables are compared recursively, including all nested keys and values.
----Other types (string, boolean, etc.) use strict equality.
----@param a any # The first value to compare.
----@param b any # The second value to compare.
----@return boolean # True if the values are considered equal, false otherwise.
-local function equals(a, b)
+---Compares two Lua values for equality, including support for numbers with tolerance and nested tables.
+---Performs deep comparison for tables and numeric tolerance (1e-4) for numbers or number-like strings.
+---Also supports booleans, nil, functions, userdata, and threads using standard equality (`==`).
+---Handles recursive tables safely using a visited map to prevent infinite loops.
+---@param a any The first value to compare.
+---@param b any The second value to compare.
+---@param visited? table<any, any> Internal cache to handle cyclic table references (do not provide manually).
+---@return boolean # True if values are considered equal, false otherwise.
+local function equals(a, b, visited)
 	if a == b then return true end
-
 	if type(a) ~= type(b) then return false end
 
 	if isNumber(a) then
-		return math.abs(a - b) < 1e-4
-	elseif hasNumber(a) then
-		return math.abs(tonumber(a) - tonumber(b)) < 1e-4
+		return abs(a - b) < 1e-4
+	elseif isString(a) and areNumeric(a, b) then
+		local na, nb = tonumber(a), tonumber(b)
+		return abs(na - nb) < 1e-4
 	elseif isTable(a) then
+		visited = visited or {}
+		if visited[a] and visited[a] == b then
+			return true
+		end
+		visited[a] = b
+
 		for k, va in pairs(a) do
-			if not equals(va, b[k]) then return false end
+			if not equals(va, b[k], visited) then
+				return false
+			end
 		end
 		for k, vb in pairs(b) do
-			if not equals(vb, a[k]) then return false end
+			if not equals(vb, a[k], visited) then
+				return false
+			end
 		end
 		return true
 	end
@@ -516,24 +561,42 @@ local function equals(a, b)
 	return false
 end
 
----Checks whether a value exists in a table (list or map) or as a substring in a string.
----@param x table|string # The table or string to search.
----@param v any # The value or substring to search for.
----@return boolean # True if found, false otherwise.
+---Checks whether a given value is contained within another value.
+---For strings and numbers, it checks containment (prefix match for numbers, substring for strings).
+---For tables, it distinguishes between arrays and key-value tables:
+--- - Arrays: checks if any value equals the target.
+--- - Key-value tables: checks if the key equals the target, or the value contains the target.
+---@param x any The container value (string, number, or table).
+---@param v any The value to search for.
+---@return boolean # True if the value is found, false otherwise.
 local function contains(x, v)
 	if x == nil or v == nil then return false end
+	if x == v then return true end
 
-	if isString(x, v) then
-		---@cast x string
-		---@cast v string
-		if #x == #v then return x == v end
-		return #x > #v and x:find(v, 1, true) ~= nil
-	elseif isTable(x) then
-		---@cast x table
-		for k, e in pairs(x) do
-			if k == v or e == v then
+	if areNumeric(x, v) then
+		local xs, vs = tostring(x), tostring(v)
+		return #xs >= #vs and xs:sub(1, #vs) == vs
+	end
+
+	if isString(x) then
+		local vs = tostring(v)
+		return #x >= #vs and x:find(vs, 1, true) ~= nil
+	end
+
+	if not isTable(x) then return false end
+
+	if isArray(x) then
+		for _, e in ipairs(x) do
+			if equals(e, v) then
 				return true
 			end
+		end
+		return false
+	end
+
+	for k, e in pairs(x) do
+		if equals(k, v) or contains(e, v) then
+			return true
 		end
 	end
 
@@ -577,7 +640,7 @@ end
 ---@return boolean # Returns `true` if the filename ends with `.lua`, otherwise `false`.
 local function hasLuaExt(s)
 	if not s then return false end
-	return endsWith(s, ".lua")
+	return endsWith(s, ".lua", true)
 end
 
 ---Returns the file name with a `.lua` extension. If the input already ends with `.lua`, it is returned unchanged.
@@ -595,7 +658,7 @@ end
 local function trimLuaExt(s)
 	if not s then return "" end
 	s = tostring(s)
-	return hasLuaExt(s) and s:gsub("%.lua$", "") or s
+	return hasLuaExt(s) and s:sub(1, -5) or s
 end
 
 ---Splits a string into a list of substrings using a specified separator.
@@ -635,13 +698,13 @@ end
 ---Useful for producing stable output or consistent serialization.
 ---@param t table # The table to iterate over.
 ---@return fun(): any, any # An iterator that yields key-value pairs in sorted key order.
-local function kpairs(t)
+local function opairs(t)
 	t = isTable(t) and t or {}
 	local ks = {}
 	for k in pairs(t) do
 		insert(ks, k)
 	end
-	table.sort(ks, function(a, b)
+	sort(ks, function(a, b)
 		return tostring(a) < tostring(b)
 	end)
 	local i = 0
@@ -677,7 +740,7 @@ local function clone(t, seen)
 	return result
 end
 
----Ensures a nested table path exists and returns the deepest subtable.
+---Ensures a nested table path exists and returns the deepest subtable if `t` is a valid table.
 ---@param t table # The table to access.
 ---@param ... any # Keys leading to the nested table
 ---@return any # The final nested subtable if `t` is a table; otherwise `nil`.
@@ -733,7 +796,7 @@ local function serialize(x)
 	if not isTable(x) then
 		if isString(x) then
 			return format("%q", x)
-		elseif hasNumber(x) then
+		elseif isNumeric(x) then
 			local str = format("%.3f", x):gsub("0+$", ""):gsub("%.$", "")
 			return str
 		elseif isVector3(x) then
@@ -741,7 +804,7 @@ local function serialize(x)
 			for _, a in ipairs({ "x", "y", "z" }) do
 				insert(t, serialize(x[a]))
 			end
-			return format("Vector3{ x = %s, y = %s, z = %s }", unpack(t))
+			return format("Vector3 { x = %s, y = %s, z = %s }", unpack(t))
 		else
 			return tostring(x)
 		end
@@ -756,7 +819,7 @@ local function serialize(x)
 	end
 
 	local parts = {}
-	for k, v in kpairs(x) do
+	for k, v in opairs(x) do
 		local key
 		if isString(k) and k:match("^[%a_][%w_]*$") ~= nil then
 			key = k
@@ -798,6 +861,59 @@ local function fileExists(path)
 	return false
 end
 
+---Parses a version string or returns an existing IVersion table.
+---Accepts version formats like "[v]Major[.Minor[.Build[.Revision]]]".
+---@param x table|string # A version input as a string, or IVersion table.
+---@return IVersion # A table with Major, Minor, Build, and Revision fields as numbers.
+local function getVersion(x)
+	if isTable(x) and isNumber(x.Major) then
+		---@cast x IVersion
+		return x
+	end
+	if not isString(x) then
+		x = tostring(x) ---@cast x string
+	end
+	local v1, v2, v3, v4 = x:match("^v?(%d+)%.?(%d*)%.?(%d*)%.?(%d*)$")
+	return {
+		Major = tonumber(v1) or 0,
+		Minor = tonumber(v2) or 0,
+		Build = tonumber(v3) or 0,
+		Revision = tonumber(v4) or 0
+	}
+end
+
+---Compares two version strings in "[v]Major[.Minor[.Build[.Revision]]]" format.
+---Returns 1 if a > b, -1 if a < b, or 0 if equal.
+---@param a IVersion|string # First version.
+---@param b IVersion|string # Second version.
+---@return integer # 1 if `a > b`, -1 if `a < b`, 0 if equal.
+local function compareVersion(a, b)
+	local v1 = getVersion(a)
+	local v2 = getVersion(b)
+	for _, k in ipairs({
+		"Major",
+		"Minor",
+		"Build",
+		"Revision"
+	}) do
+		local n1 = v1[k] or 0
+		local n2 = v2[k] or 0
+		if n1 > n2 then
+			return 1
+		elseif n1 < n2 then
+			return -1
+		end
+	end
+	return 0
+end
+
+---Checks if the runtime version is greater than or equal to a specified minimum version.
+---@param v string # Minimum required version in "[v]major[.minor[.build[.revision]]]" format.
+---@return boolean # `true` if the runtime version is >= the specified version, `false` otherwise.
+local function isRuntimeVersionAtLeast(v)
+	return compareVersion(GetVersion(), v) >= 0
+end
+
 --#endregion
 
 --#region 🧬 Tweak Accessors
@@ -811,7 +927,7 @@ local function getCameraTweakKey(preset, path, var)
 	if not isTable(preset) then return nil end
 
 	local id = preset.ID
-	if not isString(id, path, var) then return nil end
+	if not areString(id, path, var) then return nil end
 
 	local overrides = preset.Overrides ---@cast overrides ICameraAccessOverrides
 	if isTable(overrides) and overrides.Due then
@@ -878,7 +994,7 @@ local function setCameraDefaultRotationPitch(preset, path, value)
 	if overrideDue and not custom_params[key] then
 		custom_params[key] = fallback
 		if dev_mode >= DevLevels.ALERT then
-			log(LogLevels.INFO, 865, Text.LOG_PARAM_CAM, key, fallback, value)
+			log(LogLevels.INFO, 981, Text.LOG_PARAM_CAM, key, fallback, value)
 		end
 	end
 
@@ -914,7 +1030,7 @@ local function setCameraLookAtOffset(preset, path, x, y, z)
 	if get(preset, {}, "Overrides").Due and not custom_params[key] then
 		custom_params[key] = fallback
 		if dev_mode >= DevLevels.ALERT then
-			log(LogLevels.INFO, 905, Text.LOG_PARAM_CAM, key, serialize(fallback), serialize(value))
+			log(LogLevels.INFO, 1021, Text.LOG_PARAM_CAM, key, serialize(fallback), serialize(value))
 		end
 	end
 
@@ -926,6 +1042,7 @@ end
 ---This operation is destructive and cannot be undone once executed.
 ---@param vehicle Vehicle? The vehicle whose camera behavior should be reset.
 local function resetCustomCameraParams(vehicle)
+	vehicle = vehicle or shared_cache.MountedVehicle
 	if not vehicle then return end
 
 	local vtid = vehicle:GetTDBID()
@@ -959,7 +1076,7 @@ local function resetCustomCameraParams(vehicle)
 
 			TweakDB:SetFlat(path, ref)
 
-			logF(DevLevels.ALERT, LogLevels.INFO, 928, Text.LOG_PARAM_MANIP, path, val, ref)
+			logF(DevLevels.ALERT, LogLevels.INFO, 1044, Text.LOG_PARAM_MANIP, path, val, ref)
 		end
 
 		::continue::
@@ -977,11 +1094,11 @@ local function restoreCustomCameraParams()
 		if not equals(value, v) then
 			TweakDB:SetFlat(k, v)
 
-			if isVector3(value, v) then
+			if areVector3(value, v) then
 				value, v = serialize(value), serialize(v)
-				log(LogLevels.INFO, 972, Text.LOG_PARAM_REST, k, value, v)
+				log(LogLevels.INFO, 1089, Text.LOG_PARAM_REST, k, value, v)
 			else
-				logF(DevLevels.ALERT, LogLevels.INFO, 972, Text.LOG_PARAM_REST, k, value, v)
+				logF(DevLevels.ALERT, LogLevels.INFO, 1089, Text.LOG_PARAM_REST, k, value, v)
 			end
 		end
 	end
@@ -1005,17 +1122,20 @@ end
 ---Internally retrieves the player instance and checks for an active vehicle.
 ---@return Vehicle? # The currently mounted vehicle instance, or nil if the player is not mounted.
 local function getMountedVehicle()
+	local cache = shared_cache.MountedVehicle
+	if isUserdata(cache) then return cache end
+
 	local player = Game.GetPlayer()
 	if not player then
-		vehicle_mounted = false
 		if dev_mode >= DevLevels.ALERT then
-			log(LogLevels.WARN, 1007, Text.LOG_NO_PLAYER)
+			log(LogLevels.WARN, 1124, Text.LOG_NO_PLAYER)
 		end
 		return nil
 	end
-	local vehicle = Game.GetMountedVehicle(player)
-	vehicle_mounted = vehicle ~= nil
-	return vehicle
+
+	local result = Game.GetMountedVehicle(player)
+	shared_cache.MountedVehicle = result
+	return result
 end
 
 ---Retrieves the list of third-person camera preset keys for a given vehicle.
@@ -1023,12 +1143,16 @@ end
 ---@param vehicle Vehicle? # The vehicle object to extract camera keys from.
 ---@return string[]? # Array of camera preset keys, or `nil` if not found.
 local function getVehicleCameraKeys(vehicle)
+	local cache = shared_cache.VehicleCameraKeys
+	if isTableNotEmpty(cache) then return cache end
+
+	vehicle = vehicle or getMountedVehicle()
 	if not vehicle then return nil end
 
 	local vid = vehicle:GetRecordID()
 	if not vid then
 		if dev_mode >= DevLevels.ALERT then
-			log(LogLevels.ERROR, 1025, Text.LOG_NO_RECID)
+			log(LogLevels.ERROR, 1145, Text.LOG_NO_RECID)
 		end
 		return nil
 	end
@@ -1036,7 +1160,7 @@ local function getVehicleCameraKeys(vehicle)
 	local vname = getRecordName(vid)
 	if not vname then
 		if dev_mode >= DevLevels.ALERT then
-			log(LogLevels.ERROR, 1025, Text.LOG_NO_RECN)
+			log(LogLevels.ERROR, 1145, Text.LOG_NO_RECN)
 		end
 		return nil
 	end
@@ -1054,20 +1178,29 @@ local function getVehicleCameraKeys(vehicle)
 		::continue::
 	end
 
-	return next(list) and list or nil
+	if next(list) then
+		shared_cache.VehicleCameraKeys = list
+		return list
+	end
+
+	return nil
 end
 
 ---Attempts to retrieve the camera ID associated with a given vehicle.
 ---@param vehicle Vehicle? # The vehicle from which to extract the camera ID.
 ---@return string? # The extracted camera ID (e.g., "4w_911") or nil if not found.
 local function getVehicleCameraID(vehicle)
+	local cache = shared_cache.VehicleCameraID
+	if isString(cache) then return cache end
+
 	local keys = getVehicleCameraKeys(vehicle)
 	if not isTable(keys) then return nil end ---@cast keys string[]
 
 	for _, v in pairs(keys) do
-		local match, _ = v:match("^[%a]+%.VehicleTPP_([%w_]+)_[%w_]+_[%w_]+")
-		if match then
-			return match
+		local m = v:match("^[%a]+%.VehicleTPP_([%w_]+)_[%w_]+_[%w_]+")
+		if m then
+			shared_cache.VehicleCameraID = m
+			return m
 		end
 	end
 
@@ -1079,6 +1212,9 @@ end
 ---@return string? customID # The extracted prefix representing the custom camera ID, or nil if not found.
 ---@return string[]? levels # A list of level suffixes (e.g., "High_Close", "Low_Far") associated with the custom ID.
 local function getCustomCameraRecordKeyData(vehicle)
+	local cache = shared_cache.CustomCameraRecordKeyData
+	if isTableNotEmpty(cache) then return cache[1], cache[2] end
+
 	local keys = getVehicleCameraKeys(vehicle) ---@cast keys string[]
 	if not isTableNotEmpty(keys) then return nil, nil end
 
@@ -1093,8 +1229,8 @@ local function getCustomCameraRecordKeyData(vehicle)
 		local parts = split(s, "_")
 		if #parts < 3 then goto continue end
 
-		local prefix = table.concat(parts, "_", 1, #parts - 2)
-		local suffix = table.concat(parts, "_", #parts - 1)
+		local prefix = concat(parts, "_", 1, #parts - 2)
+		local suffix = concat(parts, "_", #parts - 1)
 
 		if not customID then
 			customID = prefix
@@ -1104,7 +1240,8 @@ local function getCustomCameraRecordKeyData(vehicle)
 		::continue::
 	end
 
-	if customID then
+	if customID and next(levels) then
+		shared_cache.CustomCameraRecordKeyData = { customID, levels }
 		return customID, levels
 	end
 
@@ -1115,6 +1252,10 @@ end
 ---@param vehicle Vehicle? # The vehicle object to retrieve the name from.
 ---@return string? # The resolved vehicle name as a string, or `nil` if it could not be determined.
 local function getVehicleName(vehicle)
+	local cache = shared_cache.VehicleName
+	if isString(cache) then return cache end
+
+	vehicle = vehicle or getMountedVehicle()
 	if not vehicle then return nil end
 
 	local tid = vehicle:GetTDBID()
@@ -1123,7 +1264,8 @@ local function getVehicleName(vehicle)
 	local str = TDBID.ToStringDEBUG(tid)
 	if not str then return nil end
 
-	local result, _ = str:gsub("^Vehicle%.", "")
+	local result = str:gsub("^Vehicle%.", "")
+	shared_cache.VehicleName = result
 	return result
 end
 
@@ -1131,12 +1273,18 @@ end
 ---@param vehicle Vehicle? # The vehicle object to retrieve the appearance name from.
 ---@return string? # The resolved vehicle name as a string, or `nil` if it could not be determined.
 local function getVehicleAppearanceName(vehicle)
+	local cache = shared_cache.VehicleAppearanceName
+	if isString(cache) then return cache end
+
+	vehicle = vehicle or getMountedVehicle()
 	if not vehicle then return nil end
 
 	local name = vehicle:GetCurrentAppearanceName()
 	if not name then return nil end
 
-	return Game.NameToString(name)
+	local result = Game.NameToString(name)
+	shared_cache.VehicleAppearanceName = result
+	return result
 end
 
 --#endregion
@@ -1179,14 +1327,14 @@ end
 ---@param newKey string? # The newly entered preset key that should be validated.
 ---@return string # Returns the validated preset key (without `.lua` extension), or `currentKey` if validation fails.
 local function validatePresetKey(vehicleName, appearanceName, currentKey, newKey)
-	if not isString(vehicleName, appearanceName) then return currentKey end
+	if not areString(vehicleName, appearanceName) then return currentKey end
 	if not isString(currentKey) then return vehicleName end
 	if not isString(newKey) then return currentKey end
 
 	local name = trimLuaExt(newKey)
 	if #name < 1 then
 		if dev_mode >= DevLevels.ALERT then
-			log(LogLevels.WARN, 1181, Text.LOG_BLANK_NAME)
+			log(LogLevels.WARN, 1329, Text.LOG_BLANK_NAME)
 		end
 		return currentKey
 	end
@@ -1198,9 +1346,9 @@ local function validatePresetKey(vehicleName, appearanceName, currentKey, newKey
 
 	if dev_mode >= DevLevels.ALERT then
 		if vehicleName ~= appearanceName then
-			log(LogLevels.WARN, 1181, Text.LOG_NAMES_MISM, vehicleName, appearanceName)
+			log(LogLevels.WARN, 1329, Text.LOG_NAMES_MISM, vehicleName, appearanceName)
 		else
-			log(LogLevels.WARN, 1181, Text.LOG_NAME_MISM, vehicleName)
+			log(LogLevels.WARN, 1329, Text.LOG_NAME_MISM, vehicleName)
 		end
 	end
 
@@ -1230,7 +1378,7 @@ local function getPreset(id)
 
 		if preset.Far and preset.Medium and preset.Close then
 			if dev_mode >= DevLevels.FULL then
-				log(LogLevels.INFO, 1213, Text.LOG_CAM_OSET_DONE, id)
+				log(LogLevels.INFO, 1361, Text.LOG_CAM_OSET_DONE, id)
 			end
 			return preset
 		end
@@ -1238,7 +1386,7 @@ local function getPreset(id)
 		::continue::
 	end
 
-	log(LogLevels.ERROR, 1213, Text.LOG_NO_CAM_OSET, id)
+	log(LogLevels.ERROR, 1361, Text.LOG_NO_CAM_OSET, id)
 	return nil
 end
 
@@ -1254,13 +1402,13 @@ local function getDefaultPreset(preset)
 	for _, item in pairs(camera_presets) do
 		if item.IsDefault and item.ID == id then
 			if dev_mode >= DevLevels.FULL then
-				log(LogLevels.INFO, 1248, Text.LOG_FOUND_DEF, id)
+				log(LogLevels.INFO, 1396, Text.LOG_FOUND_DEF, id)
 			end
 			return item
 		end
 	end
 
-	log(LogLevels.ERROR, 1248, Text.LOG_MISS_DEF, id)
+	log(LogLevels.ERROR, 1396, Text.LOG_MISS_DEF, id)
 
 	local fallback = getPreset(id)
 	if not fallback then return nil end
@@ -1280,7 +1428,7 @@ end
 ---@return number z # The Z offset value. Falls back to a default per level (Close = 1.115, Medium = 1.65, Far = 2.25).
 local function getOffsetData(preset, fallback, level)
 	if not isTable(preset) or not contains(PresetLevels, level) then
-		logF(DevLevels.FULL, LogLevels.ERROR, 1281, Text.LOG_NO_PSET_FOR_LVL, level)
+		logF(DevLevels.FULL, LogLevels.ERROR, 1429, Text.LOG_NO_PSET_FOR_LVL, level)
 		return 0, 0, 0, 0 --Should never be returned with the current code.
 	end
 
@@ -1323,7 +1471,7 @@ local function applyPreset(preset, id, count)
 		if not cid then return end
 
 		if dev_mode >= DevLevels.ALERT then
-			log(LogLevels.INFO, 1308, Text.LOG_CAM_PSET, key)
+			log(LogLevels.INFO, 1456, Text.LOG_CAM_PSET, key)
 		end
 
 		local pre = camera_presets[key]
@@ -1340,7 +1488,7 @@ local function applyPreset(preset, id, count)
 	if preset and preset.Link then
 		count = (count or 0) + 1
 		if dev_mode >= DevLevels.FULL then
-			log(LogLevels.INFO, 1308, Text.LOG_LINK_PSET, count, preset.Link)
+			log(LogLevels.INFO, 1456, Text.LOG_LINK_PSET, count, preset.Link)
 		end
 		preset = camera_presets[preset.Link]
 		if preset and preset.Link and count < 8 then
@@ -1350,13 +1498,13 @@ local function applyPreset(preset, id, count)
 	end
 
 	if not preset or not isString(preset.ID) then
-		logF(DevLevels.BASIC, LogLevels.ERROR, 1308, Text.LOG_FAIL_APPLY)
+		logF(DevLevels.BASIC, LogLevels.ERROR, 1456, Text.LOG_FAIL_APPLY)
 		return
 	end
 
 	if isString(id) and id ~= preset.ID then
 		if dev_mode >= DevLevels.ALERT then
-			log(LogLevels.WARN, 1308, Text.LOG_CAMID_MISM, preset.ID, id)
+			log(LogLevels.WARN, 1456, Text.LOG_CAMID_MISM, preset.ID, id)
 		end
 		return
 	end
@@ -1403,7 +1551,7 @@ local function restoreAllPresets()
 	end
 	used_presets = {}
 
-	log(LogLevels.INFO, 1398, Text.LOG_REST_ALL)
+	log(LogLevels.INFO, 1546, Text.LOG_REST_ALL)
 end
 
 ---Restores modified camera offset presets to their default values.
@@ -1417,13 +1565,13 @@ local function restoreModifiedPresets()
 		if preset.IsDefault and contains(changed, preset.ID) then
 			applyPreset(preset)
 			restored = restored + 1
-			log(LogLevels.INFO, 1410, Text.LOG_REST_PSET, preset.ID)
+			log(LogLevels.INFO, 1558, Text.LOG_REST_PSET, preset.ID)
 		end
 		if restored >= amount then break end
 	end
 	used_presets = {}
 
-	log(LogLevels.INFO, 1410, Text.LOG_REST_PSETS, restored, amount)
+	log(LogLevels.INFO, 1558, Text.LOG_REST_PSETS, restored, amount)
 end
 
 ---Validates whether the given camera offset preset is structurally valid.
@@ -1451,7 +1599,7 @@ local function isPresetValid(preset)
 	end
 
 	if isString(preset.Link) then
-		for k, _ in pairs(preset) do
+		for k in pairs(preset) do
 			if k ~= "Link" then
 				return false
 			end
@@ -1514,20 +1662,20 @@ end
 local function purgePresets(key)
 	if not isString(key) then
 		camera_presets = {}
-		log(LogLevels.WARN, 1514, Text.LOG_CLEAR_PSETS)
+		log(LogLevels.WARN, 1662, Text.LOG_CLEAR_PSETS)
 		return
 	end
 
 	---@cast key string
 	local c = 0
-	for k, _ in pairs(camera_presets) do
+	for k in pairs(camera_presets) do
 		if startsWith(k, key) then
 			camera_presets[k] = nil
 			c = c + 1
 		end
 	end
 
-	log(LogLevels.WARN, 1514, Text.LOG_CLEAR_NPSETS, c, key)
+	log(LogLevels.WARN, 1662, Text.LOG_CLEAR_NPSETS, c, key)
 end
 
 ---Loads camera offset presets from `defaults` (first) and `presets` (second).
@@ -1538,7 +1686,7 @@ local function loadPresets(refresh)
 	local function loadFrom(path)
 		local files = dir(path)
 		if not files then
-			logF(DevLevels.FULL, LogLevels.ERROR, 1537, Text.LOG_DIR_NOT_EXIST, path)
+			logF(DevLevels.FULL, LogLevels.ERROR, 1685, Text.LOG_DIR_NOT_EXIST, path)
 			return -1
 		end
 
@@ -1551,25 +1699,25 @@ local function loadPresets(refresh)
 			local key = trimLuaExt(name)
 			if camera_presets[key] then
 				count = count + 1
-				logF(DevLevels.BASIC, LogLevels.WARN, 1537, Text.LOG_SKIP_PSET, key, path, name)
+				logF(DevLevels.BASIC, LogLevels.WARN, 1685, Text.LOG_SKIP_PSET, key, path, name)
 				goto continue
 			end
 
 			local chunk, err = loadfile(path .. "/" .. name)
 			if not chunk then
-				logF(DevLevels.BASIC, LogLevels.ERROR, 1537, Text.LOG_FAIL_LOAD, path, name, err)
+				logF(DevLevels.BASIC, LogLevels.ERROR, 1685, Text.LOG_FAIL_LOAD, path, name, err)
 				goto continue
 			end
 
 			local ok, result = pcall(chunk)
 			if not ok or (isDef and not result.IsDefault) or not setPresetEntry(key, result) then
-				logF(DevLevels.BASIC, LogLevels.ERROR, 1537, Text.LOG_BAD_PSET, path, name)
+				logF(DevLevels.BASIC, LogLevels.ERROR, 1685, Text.LOG_BAD_PSET, path, name)
 				goto continue
 			end
 
 			count = count + 1
 			if dev_mode >= DevLevels.FULL then
-				log(LogLevels.INFO, 1537, Text.LOG_LOAD_PSET, key, path, name)
+				log(LogLevels.INFO, 1685, Text.LOG_LOAD_PSET, key, path, name)
 			end
 
 			::continue::
@@ -1584,7 +1732,7 @@ local function loadPresets(refresh)
 
 	if loadFrom("defaults") < 39 then
 		mod_enabled = false
-		logF(DevLevels.FULL, LogLevels.ERROR, 1537, Text.LOG_DEFS_INCOMP)
+		logF(DevLevels.FULL, LogLevels.ERROR, 1685, Text.LOG_DEFS_INCOMP)
 		return
 	end
 
@@ -1606,7 +1754,7 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 		local check = io.open(path, "r")
 		if check then
 			check:close()
-			log(LogLevels.WARN, 1601, Text.LOG_FILE_EXIST, path)
+			log(LogLevels.WARN, 1749, Text.LOG_FILE_EXIST, path)
 			return false
 		end
 	end
@@ -1636,14 +1784,14 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 	end
 
 	if not save then
-		log(LogLevels.WARN, 1601, Text.LOG_PSET_NOT_CHANGED, name, default.ID)
+		log(LogLevels.WARN, 1749, Text.LOG_PSET_NOT_CHANGED, name, default.ID)
 
 		if not saveAsDefault then
 			local ok, err = os.remove(path)
 			if ok then
-				logF(DevLevels.ALERT, LogLevels.WARN, 1601, Text.LOG_DEL_SUCCESS, path)
+				logF(DevLevels.ALERT, LogLevels.WARN, 1749, Text.LOG_DEL_SUCCESS, path)
 			else
-				logF(DevLevels.FULL, LogLevels.ERROR, 1601, Text.LOG_DEL_FAILURE, path, err)
+				logF(DevLevels.FULL, LogLevels.ERROR, 1749, Text.LOG_DEL_FAILURE, path, err)
 			end
 			return ok and setPresetEntry(name)
 		end
@@ -1675,7 +1823,7 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 	file:write(concat(parts))
 	file:close()
 
-	logF(DevLevels.ALERT, LogLevels.INFO, 1601, Text.LOG_PSET_SAVED, name)
+	logF(DevLevels.ALERT, LogLevels.INFO, 1749, Text.LOG_PSET_SAVED, name)
 
 	return true
 end
@@ -1724,10 +1872,10 @@ end
 local function getEditorBundle(vehicle, name, appName, id, key)
 	local bundle = deep(editor_bundles, format("%s*%s", name, appName)) ---@cast bundle IEditorBundle
 
-	if not isTable(bundle.Flux, bundle.Pivot, bundle.Finale, bundle.Nexus, bundle.Tasks) then
+	if not areTable(bundle.Flux, bundle.Pivot, bundle.Finale, bundle.Nexus, bundle.Tasks) then
 		local flux = getPreset(id)
 		if not flux then
-			log(LogLevels.WARN, 1724, Text.LOG_NO_PSET_FOUND, id)
+			log(LogLevels.WARN, 1872, Text.LOG_NO_PSET_FOUND, id)
 			return
 		end
 
@@ -1775,7 +1923,7 @@ local function clearLastEditorBundle()
 	if key and hash and hash == get(bundle, {}, "Nexus").Token then
 		camera_presets[key] = nil
 
-		log(LogLevels.INFO, 1762, Text.LOG_DEL_SUCCESS, key)
+		log(LogLevels.INFO, 1910, Text.LOG_DEL_SUCCESS, key)
 	end
 
 	bundle.Flux = nil
@@ -1785,7 +1933,7 @@ local function clearLastEditorBundle()
 
 	editor_last_bundle = nil
 
-	log(LogLevels.INFO, 1762, Text.LOG_DEL_EPSET)
+	log(LogLevels.INFO, 1910, Text.LOG_DEL_EPSET)
 end
 
 ---Replaces an existing editor preset entry with values from another and updating its checksum.
@@ -1793,7 +1941,7 @@ end
 ---@param dest IEditorPreset # The preset entry to overwrite (modified in place).
 ---@param verify boolean? # If true, recomputes `IsPresent` by checking the file system for `src.Key`.
 local function replaceEditorPreset(src, dest, verify)
-	if not isTable(src, dest) then return end
+	if not areTable(src, dest) then return end
 
 	local preset = clone(src.Preset)
 	dest.Preset = preset
@@ -1801,6 +1949,8 @@ local function replaceEditorPreset(src, dest, verify)
 	dest.Name = src.Name
 	dest.Token = getEditorPresetToken(preset)
 	dest.IsPresent = verify and presetFileExists(src.Key) or false
+
+	shared_cache = {}
 end
 
 ---Applies the current UI-edited camera preset to the internal preset registry.
@@ -1810,7 +1960,7 @@ end
 ---@param pivot IEditorPreset # The previously applied preset; will be overwritten with `flux`.
 ---@param tasks IEditorTasks # Tracks pending editor actions; `Apply` will be cleared here.
 local function applyEditorPreset(key, flux, pivot, tasks)
-	if not isString(key) or not isTable(flux, pivot, tasks) then return end
+	if not isString(key) or not areTable(flux, pivot, tasks) then return end
 
 	tasks.Apply = false
 
@@ -1821,7 +1971,7 @@ local function applyEditorPreset(key, flux, pivot, tasks)
 
 	replaceEditorPreset(flux, pivot)
 
-	logF(DevLevels.ALERT, LogLevels.INFO, 1812, Text.LOG_PSET_UPD, key)
+	logF(DevLevels.ALERT, LogLevels.INFO, 1962, Text.LOG_PSET_UPD, key)
 end
 
 ---Saves the current camera preset to disk and updates the saved (finale) state.
@@ -1831,10 +1981,10 @@ end
 ---@param finale IEditorPreset # The last saved version of the preset; will be updated to match `flux`.
 ---@param tasks IEditorTasks # Tracks pending editor actions; will reset `Save`, `Restore`, and optionally `Rename`.
 local function saveEditorPreset(key, flux, finale, tasks)
-	if not isString(key) or not isTable(flux, finale, tasks) then return end
+	if not isString(key) or not areTable(flux, finale, tasks) then return end
 
 	if not savePreset(key, flux.Preset, true) then
-		logF(DevLevels.ALERT, LogLevels.WARN, 1833, Text.LOG_PSET_NOT_SAVED, key)
+		logF(DevLevels.ALERT, LogLevels.WARN, 1983, Text.LOG_PSET_NOT_SAVED, key)
 		return
 	end
 
@@ -1847,7 +1997,7 @@ local function saveEditorPreset(key, flux, finale, tasks)
 		local path = getPresetFilePath(finale.Name) ---@cast path string
 		local ok, err = os.remove(path)
 		if not ok then
-			logF(DevLevels.FULL, LogLevels.ERROR, 1833, Text.LOG_MOVE_FAILURE, finale.Name, flux.Name, err)
+			logF(DevLevels.FULL, LogLevels.ERROR, 1983, Text.LOG_MOVE_FAILURE, finale.Name, flux.Name, err)
 		end
 
 		camera_presets[finale.Key] = nil
@@ -1942,7 +2092,7 @@ end
 ---@param color integer # The base color in 0xAAGGBBRR format.
 ---@return integer # The number of style colors pushed. Returns 0 if arguments are invalid.
 local function pushColors(idx, color)
-	if not isNumber(idx, color) then return 0 end
+	if not areNumber(idx, color) then return 0 end
 
 	local hoveredIdx = idx + 1
 	local activeIdx = idx + 2
@@ -2097,11 +2247,11 @@ registerForEvent("onInit", function()
 	applyPreset()
 
 	--When the player mounts a vehicle, automatically apply the matching camera preset if available.
-	--This event can fire even if the player is already mounted, so we guard with `vehicle_mounted`.
+	--This event can fire even if the player is already mounted.
 	Observe("VehicleComponent", "OnMountingEvent", function()
-		if not mod_enabled or vehicle_mounted then return end
+		if not mod_enabled or isUserdata(shared_cache.MountedVehicle) then return end
 		log_suspend = false
-		vehicle_mounted = true
+		shared_cache = {}
 		applyPreset()
 	end)
 
@@ -2109,7 +2259,7 @@ registerForEvent("onInit", function()
 	Observe("VehicleComponent", "OnUnmountingEvent", function()
 		if not mod_enabled then return end
 		log_suspend = false
-		vehicle_mounted = false
+		shared_cache = {}
 		restoreModifiedPresets()
 		clearLastEditorBundle()
 	end)
@@ -2119,7 +2269,7 @@ registerForEvent("onInit", function()
 	Observe("PlayerPuppet", "OnTakeControl", function(self)
 		if not mod_enabled or self:GetEntityID().hash ~= 1 then return end
 		log_suspend = false
-		vehicle_mounted = false
+		shared_cache = {}
 		applyPreset()
 	end)
 end)
@@ -2138,6 +2288,7 @@ end)
 registerForEvent("onDraw", function()
 	--Notification system (requires at least CET 1.35.1).
 	if runtime_full and toaster_active and next(toaster_bumps) then
+		toaster_active = false
 		for k, v in pairs(toaster_bumps) do
 			local toast = ImGui.Toast.new(k, v)
 			ImGui.ShowToast(toast)
@@ -2183,14 +2334,15 @@ registerForEvent("onDraw", function()
 		if isEnabled then
 			loadPresets()
 			applyPreset()
-			logF(DevLevels.ALERT, LogLevels.INFO, 2138, Text.LOG_MOD_ON)
+			logF(DevLevels.ALERT, LogLevels.INFO, 2288, Text.LOG_MOD_ON)
 		else
-			editor_bundles = {}
 			restoreCustomCameraParams()
 			restoreAllPresets()
 			purgePresets()
+			editor_bundles = {}
+			shared_cache = {}
 			dev_mode = DevLevels.DISABLED
-			logF(DevLevels.ALERT, LogLevels.INFO, 2138, Text.LOG_MOD_OFF)
+			logF(DevLevels.ALERT, LogLevels.INFO, 2288, Text.LOG_MOD_OFF)
 		end
 	end
 	ImGui.Dummy(0, halfHeightPadding)
@@ -2206,10 +2358,11 @@ registerForEvent("onDraw", function()
 	ImGui.SameLine()
 	if ImGui.Button(Text.GUI_RLD_ALL, rldBtnWidth, buttonHeight) then
 		editor_bundles = {}
+		shared_cache = {}
 		loadPresets(true)
 		restoreAllPresets()
 		applyPreset()
-		logF(DevLevels.ALERT, LogLevels.INFO, 2138, Text.LOG_PSETS_RLD)
+		logF(DevLevels.ALERT, LogLevels.INFO, 2288, Text.LOG_PSETS_RLD)
 	end
 	addTooltip(Text.GUI_RLD_ALL_TIP)
 	ImGui.Dummy(0, halfHeightPadding)
@@ -2229,41 +2382,55 @@ registerForEvent("onDraw", function()
 	local vehicle, name, appName, id, key
 	local steps = {
 		function()
-			return dev_mode > DevLevels.DISABLED and vehicle_mounted
+			return dev_mode > DevLevels.DISABLED and isUserdata(shared_cache.MountedVehicle)
 		end,
 		function()
 			vehicle = getMountedVehicle()
+
 			if not vehicle then
-				log(LogLevels.WARN, 2138, Text.LOG_NO_VEH)
+				log(LogLevels.WARN, 2288, Text.LOG_NO_VEH)
 			end
+
 			return vehicle
 		end,
 		function()
 			name = getVehicleName(vehicle)
+
 			if not name then
-				log(LogLevels.ERROR, 2138, Text.LOG_NO_NAME)
+				log(LogLevels.ERROR, 2288, Text.LOG_NO_NAME)
 			end
+
 			return name
 		end,
 		function()
 			appName = getVehicleAppearanceName(vehicle)
+
 			if not appName then
-				log(LogLevels.ERROR, 2138, Text.LOG_NO_APP)
+				log(LogLevels.ERROR, 2288, Text.LOG_NO_APP)
 			end
+
 			return appName
 		end,
 		function()
 			id = getVehicleCameraID(vehicle)
+
 			if not id then
-				log(LogLevels.ERROR, 2138, Text.LOG_NO_ID)
+				log(LogLevels.ERROR, 2288, Text.LOG_NO_ID)
 			end
+
 			return id
 		end,
 		function()
+			local cache = shared_cache.OnDrawPresetKey
+			if isString(cache) then return cache end
+
 			key = name ~= appName and findPresetKey(name, appName) or findPresetKey(name) or name
+			shared_cache.OnDrawPresetKey = key
+
 			if not key then
-				log(LogLevels.ERROR, 2138, Text.LOG_NO_ID)
+				log(LogLevels.ERROR, 2288, Text.LOG_NO_ID)
 			end
+
 			return key
 		end
 	}
@@ -2299,7 +2466,7 @@ registerForEvent("onDraw", function()
 	local finale = bundle.Finale ---@cast finale IEditorPreset
 	local nexus = bundle.Nexus ---@cast nexus IEditorPreset
 	local tasks = bundle.Tasks ---@cast tasks IEditorTasks
-	if not isTableNotEmpty(flux, pivot, finale, nexus, tasks) then
+	if not areTableNotEmpty(flux, pivot, finale, nexus, tasks) then
 		--GUI closed — no further controls required.
 		ImGui.End()
 	end
@@ -2333,7 +2500,7 @@ registerForEvent("onDraw", function()
 
 		local maxInputWidth = floor((contentWidth - 38) * scale)
 		for _, row in ipairs(rows) do
-			if not isString(row.label, row.value) then goto continue end
+			if not areString(row.label, row.value) then goto continue end
 
 			ImGui.TableNextRow(0, rowHeight)
 			ImGui.TableSetColumnIndex(0)
@@ -2362,8 +2529,8 @@ registerForEvent("onDraw", function()
 
 				addTooltip(row.valTip)
 			elseif row.editable then
-				local namWidth, _ = ImGui.CalcTextSize(name)
-				local appWidth, _ = ImGui.CalcTextSize(appName)
+				local namWidth = ImGui.CalcTextSize(name)
+				local appWidth = ImGui.CalcTextSize(appName)
 				local maxWidth = max(namWidth, appWidth)
 				local width = min(maxWidth, maxInputWidth) + doubleHeightPadding
 				ImGui.PushItemWidth(width)
@@ -2424,7 +2591,7 @@ registerForEvent("onDraw", function()
 	--Camera preset editor allowing adjustments to Angle, X, Y, and Z coordinates — if certain conditions are met.
 	if ImGui.BeginTable("PresetEditor", 5, ImGuiTableFlags.Borders) then
 		local headers = {
-			"\u{f066a}",
+			"\u{f066a}", --Levels
 			"\u{f10f3}\u{f0aee}", --Angles
 			"\u{f0d4c}\u{f0b05}", --X-axis
 			"\u{f0d51}\u{f0b06}", --Y-axis
@@ -2583,7 +2750,7 @@ registerForEvent("onDraw", function()
 	local files = dir("presets")
 	if not files then
 		file_man_open = false
-		logF(DevLevels.FULL, LogLevels.ERROR, 2138, Text.LOG_DIR_NOT_EXIST, "presets")
+		logF(DevLevels.FULL, LogLevels.ERROR, 2288, Text.LOG_DIR_NOT_EXIST, "presets")
 		return
 	end
 
@@ -2639,7 +2806,7 @@ registerForEvent("onDraw", function()
 				local path = getPresetFilePath(file) ---@cast path string
 				local ok, err = os.remove(path)
 				if ok then
-					for n, _ in pairs(editor_bundles) do
+					for n in pairs(editor_bundles) do
 						local parts = split(n, "*")
 						if #parts < 2 then goto continue end
 
@@ -2651,9 +2818,9 @@ registerForEvent("onDraw", function()
 						::continue::
 					end
 					setPresetEntry(k)
-					logF(DevLevels.ALERT, LogLevels.INFO, 2138, Text.LOG_DEL_SUCCESS, file)
+					logF(DevLevels.ALERT, LogLevels.INFO, 2288, Text.LOG_DEL_SUCCESS, file)
 				else
-					logF(DevLevels.FULL, LogLevels.WARN, 2138, Text.LOG_DEL_FAILURE, file, err)
+					logF(DevLevels.FULL, LogLevels.WARN, 2288, Text.LOG_DEL_FAILURE, file, err)
 				end
 			end
 
