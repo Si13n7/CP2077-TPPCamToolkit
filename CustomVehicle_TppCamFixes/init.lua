@@ -10,7 +10,7 @@ offsets for specific custom vehicles.
 ----------------------------------------------
 
 Filename: init.lua
-Version: 2025-03-31, 12:31 UTC+01:00 (MEZ)
+Version: 2025-03-31, 16:56 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -49,6 +49,8 @@ ______________________________________________
 ---@field EndTable fun(): nil -- Ends the creation of the current table. Must always be called after `ImGui.BeginTable()`.
 ---@field GetWindowSize fun(): number -- Returns the current width of the window as a floating-point number.
 ---@field CalcTextSize fun(text: string): number -- Calculates the width of a given text string as it would be displayed using the current font. Returns the width in pixels as a floating-point number.
+---@field PushStyleColor fun(index: number, color: number): nil -- Pushes a style color onto the stack. The color should be specified as an `ImGuiCol` constant.
+---@field PopStyleColor fun(count?: number): nil -- Pops one or more style colors from the stack. Defaults to popping one color if `count` is not specified.
 ImGui = ImGui
 
 --- ImGuiWindowFlags Definition
@@ -120,6 +122,7 @@ registerForEvent = registerForEvent
 --- spdlog Definition
 ---@class spdlog
 --- Provides logging functionality, allowing messages to be printed to the console or log files for debugging purposes.
+---@field info fun(message: string) -- Logs an informational message, typically used for general debug output.
 ---@field error fun(message: string) -- Logs an error message, usually when something goes wrong.
 spdlog = spdlog
 
@@ -135,6 +138,7 @@ dir = dir
 						MOD START
 =======================================================]]
 
+
 ---@type string
 -- The window title.
 local _title = "Custom Vehicle - TPP Camera Fixes"
@@ -149,8 +153,7 @@ local _isEnabled = true
 
 ---@type number
 -- The current debug mode level controlling logging and alerts:
--- 0 = Disabled; 1 = Alert; 2 = Alert, and Print; 3 = Alert,
--- Print, and Log
+-- 0 = Disabled; 1 = Print; 2 = Print, and Alert; 3 = Print, Alert, and Log
 local _devMode = 0
 
 ---@type CameraOffsetPreset|nil
@@ -172,44 +175,44 @@ local _mountedVehicleName = nil
 ---@type table<string>|nil
 ---The default camera IDs used for preloading.
 local _defaultVehicleCamIDs = {
+	"Default_Preset",
 	"2w_Preset",
 	"4w_911",
+	"4w_aerondight",
 	"4w_Alvarado_Preset",
 	"4w_Archer_Hella",
 	"4w_Archer_Quartz",
 	"4w_BMF",
+	"4w_caliburn",
 	"4w_Columbus",
 	"4w_Cortes_Preset",
-	"4w_Galena",
 	"4w_Galena_Nomad",
+	"4w_Galena",
+	"4w_herrera_outlaw",
+	"4w_herrera_riptide",
 	"4w_Hozuki",
 	"4w_Limo_Thrax",
 	"4w_Mahir_Supron_Kurtz",
 	"4w_Makigai",
 	"4w_Medium_Preset",
-	"4w_Quadra66",
-	"4w_Quadra66_Nomad",
+	"4w_mizutani_Preset",
 	"4w_Quadra",
-	"4w_Shion",
+	"4w_Quadra66_Nomad",
+	"4w_Quadra66",
 	"4w_Shion_Nomad",
+	"4w_Shion",
 	"4w_SubCompact_Preset",
 	"4w_Tanishi",
-	"4w_Thorton_Colby",
-	"4w_Thorton_Colby_Pickup",
 	"4w_Thorton_Colby_Pickup_Kurtz",
+	"4w_Thorton_Colby_Pickup",
+	"4w_Thorton_Colby",
 	"4w_Truck_Preset",
-	"4w_aerondight",
-	"4w_caliburn",
-	"4w_herrera_outlaw",
-	"4w_herrera_riptide",
-	"4w_mizutani_Preset",
-	"Default_Preset",
+	"v_militech_basilisk_CameraPreset",
 	"v_standard25_mahir_supron_CameraPreset",
 	"v_utilitruck4_mainh_supron_CameraPreset",
 	"v_utility4_kaukaz_bratsk_Preset",
 	"v_utility4_kaukaz_zenya_Preset",
-	"v_utility4_zeya_behemoth_Preset",
-	"v_militech_basilisk_CameraPreset"
+	"v_utility4_zeya_behemoth_Preset"
 }
 
 ---@class CameraOffsetPreset
@@ -240,25 +243,23 @@ local _cameraOffsetPaths = {
 	"Low_DriverCombatFar"
 }
 
----@param msg string -- The message to display to the player.
----@param secs number|nil -- The duration in seconds for which the message is displayed.
----Displays a warning message to the player for a specified duration using the 'SetWarningMessage' function.
-local function alert(msg, secs)
-	if not msg then return end
-
-	local player = Game.GetPlayer()
-	if player then
-		player:SetWarningMessage(msg, secs or 5)
-	end
-end
-
+---@param level number -- Controls the logging level (0 = Info, 1 = Warning, 2 = Error).
 ---@param format string -- The format string for the message.
 ---@vararg any -- Additional arguments for formatting the message.
----Logs and displays messages based on the current `_devMode` level. Messages can be logged to the console, printed, or shown as alerts.
-local function write(format, ...)
-	if _devMode <= 0 then return end
+---Logs and displays messages based on the current `_devMode` level. Messages can be logged to the log file, printed to the console output, or shown as in-game alerts.
+local function log(level, format, ...)
+	if _devMode < 1 then return end
 
-	local msg = "[CVTPPCF] " .. format
+	local msg = "[CVTPPCF]  "
+	if level > 1 then
+		msg = msg .. "[Error]  "
+	elseif level == 1 then
+		msg = msg .. "[Warn]  "
+	else
+		msg = msg .. "[Info]  "
+	end
+	msg = msg .. format
+
 	local args = { ... }
 	if #args > 0 then
 		for i = 1, #args do
@@ -267,9 +268,24 @@ local function write(format, ...)
 		msg = string.format(msg, table.unpack(args))
 	end
 
-	if _devMode >= 3 then spdlog.error(msg) end
-	if _devMode >= 2 then print(msg) end
-	if _devMode >= 1 then alert(msg) end
+	if _devMode > 2 then
+		if level > 1 then
+			spdlog.error(msg)
+		elseif level > 0 then
+			spdlog.info(msg)
+		else
+			spdlog.info(msg)
+		end
+	end
+	if _devMode > 1 then
+		local player = Game.GetPlayer()
+		if player then
+			player:SetWarningMessage(msg, 5)
+		end
+	end
+	if _devMode > 0 then
+		print(msg)
+	end
 end
 
 ---Creates a deep copy of a table, including all nested tables.
@@ -364,6 +380,16 @@ end
 local function loadCustomCameraOffsetPresets(reload)
 	if reload == nil then reload = false end
 
+	if reload then
+		for key, entry in pairs(_cameraOffsetPresets) do
+			if not entry.Shutdown then
+				_cameraOffsetPresets[key] = nil
+			end
+		end
+		_currentEntryEdit = nil
+		_originalEntries = nil
+	end
+
 	local files = dir("./presets")
 	for _, file in ipairs(files) do
 		local name = file.name
@@ -376,7 +402,7 @@ local function loadCustomCameraOffsetPresets(reload)
 
 		local chunk, err = loadfile("presets/" .. name)
 		if not chunk then
-			write("Failed to load preset '%s': %s", name, err)
+			log(2, "Failed to load preset '%s': %s", name, err)
 			goto continue
 		end
 
@@ -384,7 +410,7 @@ local function loadCustomCameraOffsetPresets(reload)
 		if success and type(result) == "table" then
 			_cameraOffsetPresets[key] = result
 		else
-			write("Failed to execute preset '%s'", name)
+			log(2, "Failed to execute preset '%s'", name)
 		end
 
 		::continue::
@@ -498,19 +524,21 @@ local function autoApplyCameraOffsetPreset()
 	_mountedVehicleName = name;
 
 	if _devMode > 1 then
-		write("Mounted vehicle: '%s'", name)
+		log(0, "Mounted vehicle: '%s'", name)
 
 		local vehicleID = getVehicleCameraID(vehicle)
 		if vehicleID then
-			write("Camera preset ID: '%s'", vehicleID)
+			log(0, "Camera preset ID: '%s'", vehicleID)
 		end
 	end
 
-	for key, entry in pairs(_cameraOffsetPresets) do
-		if name == key or stringStartsWith(name, key) then
-			write("Apply camera preset: '%s'", entry.Link or name)
-			applyCameraOffsetPreset(entry)
-			break
+	for pass = 1, 2 do
+		for key, entry in pairs(_cameraOffsetPresets) do
+			if pass == 1 and name == key or pass == 2 and stringStartsWith(name, key) then
+				log(0, "Apply camera preset: '%s'", entry.Link or name)
+				applyCameraOffsetPreset(entry)
+				return
+			end
 		end
 	end
 end
@@ -528,7 +556,7 @@ local function savePreset(name, preset, overwrite)
 		local check = io.open(path, "r")
 		if check then
 			check:close()
-			write("File already exists and overwrite is disabled: '%s'", path)
+			log(1, "File '%s' already exists, and overwrite is disabled.", path)
 			return false
 		end
 	end
@@ -542,7 +570,7 @@ local function savePreset(name, preset, overwrite)
 	end
 
 	local function round(v)
-		return string.format("%.3f", v)
+		return string.format("%.3f", v):gsub("(%..-%)0+$", "%1"):gsub("%.$", "")
 	end
 
 	local norm = _originalEntries and _originalEntries[name] or {}
@@ -608,6 +636,12 @@ registerForEvent("onInit", function()
 		_currentEntryEdit = nil
 		applyDefaultCameraOffsetPresets()
 	end)
+
+	-- Resets '_currentEntryEdit' when the player takes control of their character after loading a save.
+	Observe("PlayerPuppet", "OnTakeControl", function(self)
+		if self:GetEntityID().hash ~= 1 then return end
+		_currentEntryEdit = nil
+	end)
 end)
 
 -- Detects when the CET overlay is opened.
@@ -657,7 +691,7 @@ registerForEvent("onDraw", function()
 	ImGui.SameLine()
 	if ImGui.Button("Reload All Presets", 192, 24) then
 		loadCustomCameraOffsetPresets(true)
-		alert("Presets have been reloaded!")
+		log(0, "Presets have been reloaded!")
 	end
 	if ImGui.IsItemHovered() then
 		ImGui.BeginTooltip()
@@ -669,15 +703,17 @@ registerForEvent("onDraw", function()
 
 	ImGui.Dummy(padding, 0)
 	ImGui.SameLine()
-	ImGui.PushItemWidth(103)
-	_devMode = ImGui.SliderInt("  Debug Level", _devMode, 0, 3)
+	ImGui.PushItemWidth(77)
+	_devMode = ImGui.SliderInt("  Developer Mode", _devMode, 0, 3)
 	if ImGui.IsItemHovered() then
 		ImGui.BeginTooltip()
-		ImGui.Text("Adjust the level of debugging output:")
+		ImGui.Text("Enables a feature that allows you to create, test, and save your own presets.")
+		ImGui.Text("")
+		ImGui.Text("Also adjusts the level of debug output:")
 		ImGui.Text(" 0 = Disabled")
-		ImGui.Text(" 1 = Alert only")
-		ImGui.Text(" 2 = Alert & Print")
-		ImGui.Text(" 3 = Alert, Print & Log")
+		ImGui.Text(" 1 = Print only")
+		ImGui.Text(" 2 = Print & Alert")
+		ImGui.Text(" 3 = Print, Alert & Log")
 		ImGui.EndTooltip()
 	end
 	ImGui.PopItemWidth()
@@ -714,7 +750,7 @@ registerForEvent("onDraw", function()
 
 		local data = {
 			{ key = "Vehicle", value = name },
-			{ key = "Cam ID", value = id }
+			{ key = "Cam ID",  value = id }
 		}
 
 		for _, item in ipairs(data) do
@@ -752,26 +788,36 @@ registerForEvent("onDraw", function()
 		ImGui.TableHeadersRow()
 
 		for _, key in ipairs({ "Close", "Medium", "Far" }) do
-			local value = entry[key]
-			if type(value) == "table" then
+			local offsets = entry[key]
+			if type(offsets) == "table" then
 				ImGui.TableNextRow()
 
 				ImGui.TableSetColumnIndex(0)
 				ImGui.Text(key)
 
-				ImGui.TableSetColumnIndex(1)
-				value.y = value.y or 0.0
-				local y = value.y
-				ImGui.PushItemWidth(102)
-				y = ImGui.SliderFloat("##" .. key .. "_y", y, 0.0, 5.0)
-				if y ~= value.y then value.y = y end
+				local original = _originalEntries[name] and _originalEntries[name][key] or {}
+				for i, axis in ipairs({ "y", "z" }) do
+					local current = offsets[axis] or 0.0
+					local changed = math.abs(current - (original[axis] or 0.0)) > 0.0001
 
-				ImGui.TableSetColumnIndex(2)
-				value.z = value.z or 0.0
-				local z = value.z
-				ImGui.PushItemWidth(102)
-				z = ImGui.SliderFloat("##" .. key .. "_z", z, 0.0, 5.0)
-				if z ~= value.z then value.z = z end
+					ImGui.TableSetColumnIndex(i)
+
+					if changed then
+						ImGui.PushStyleColor(0, 0xff0080ff)
+					end
+
+					ImGui.PushItemWidth(102)
+					local minVal = i == 1 and -10 or 0
+					local maxVal = i == 1 and 10 or 32
+					local newVal = ImGui.SliderFloat(string.format("##%s_%s", key, axis), current, minVal, maxVal)
+					ImGui.PopItemWidth()
+
+					if changed then
+						ImGui.PopStyleColor()
+					end
+
+					offsets[axis] = newVal
+				end
 			end
 		end
 
@@ -783,7 +829,7 @@ registerForEvent("onDraw", function()
 
 	if ImGui.Button("Apply Changes", width, 24) then
 		_cameraOffsetPresets[name] = entry
-		write("The preset has been updated.", name)
+		log(0, "The preset has been updated.", name)
 	end
 	if ImGui.IsItemHovered() then
 		ImGui.BeginTooltip()
@@ -795,15 +841,16 @@ registerForEvent("onDraw", function()
 
 	if ImGui.Button("Save Changes to File", width, 24) then
 		if savePreset(name, entry) then
-			write("File 'presets/%s.lua' was saved successfully.", name)
+			log(0, "File 'presets/%s.lua' was saved successfully.", name)
 		else
-			write("File 'presets/%s.lua' could not be saved.", name)
+			log(1, "File 'presets/%s.lua' could not be saved.", name)
 		end
 	end
 	if ImGui.IsItemHovered() then
 		ImGui.BeginTooltip()
 		ImGui.Text(string.format("Saves the modified preset permanently under 'presets/%s.lua'.", name))
-		ImGui.Text("Please note that existing files cannot be overwritten to prevent accidental changes to existing presets.\nIf you want to overwrite a preset, you must delete the existing file manually first.")
+		ImGui.Text("Please note that overwriting existing presets is not allowed to prevent accidental loss.")
+		ImGui.Text("If you want to overwrite a preset, you must delete the existing file manually first.")
 		ImGui.EndTooltip()
 	end
 	ImGui.Dummy(0, 1)
