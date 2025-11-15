@@ -9,11 +9,26 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-09-18, 19:16 UTC+01:00 (MEZ)
+Version: 2025-09-20, 08:07 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
 ______________________________________________
+
+Naming Conventions in this codebase:
+	- snake_case:           Global variables (non-constants)
+	- SCREAMINGCASE:        Single-word constants
+	- SCREAMING_SNAKE_CASE: Multi-word constants
+	- PascalCase:           Constant arrays
+	- camelCase:            Local variables in code blocks (multi-word)
+	- flatcase:             Local variables in code blocks (single word/letters)
+
+Examples:
+	- mod_enabled (global variable)
+	- DevLevels (constant array)
+	- DISABLED (constant)
+	- vehicleName (local multi-word)
+	- i, x, v (local single chars)
 --]]
 
 
@@ -46,6 +61,12 @@ ______________________________________________
 ---@field GARNET integer # Garnet is a deep, muted red with a subtle brown undertone.
 ---@field MULBERRY integer # Mulberry is a deep, muted purple with rich red undertones and a cool, berry-like hue.
 ---@field OLIVE integer # Olive is a muted yellow-green with an earthy, natural tone.
+
+---Represents folders for different types of camera presets.
+---@class PresetLocations
+---@field DEFAULTS string # Folder containing base presets representing the standard/default settings.
+---@field CUSTOM string # Folder containing presets for modded/custom vehicles.
+---@field VANILLA string # Folder containing presets for vanilla vehicles.
 
 ---Represents search filter commands.
 ---@class SearchFilterCommands
@@ -128,11 +149,13 @@ ______________________________________________
 ---@field Tasks IEditorTasks # Flags for pending rename, validate, apply, save, or restore actions.
 
 --Aliases for commonly used standard library functions to simplify code.
-local format, rep, concat, insert, unpack, abs, ceil, floor, max, min, band, bor, lshift, rshift =
+local format, rep, concat, insert, remove, sort, unpack, abs, ceil, floor, max, min, band, bor, lshift, rshift =
 	string.format,
 	string.rep,
 	table.concat,
 	table.insert,
+	table.remove,
+	table.sort,
 	table.unpack,
 	math.abs,
 	math.ceil,
@@ -175,6 +198,14 @@ local Colors = {
 	GARNET = 0x8a29297a,
 	MULBERRY = 0x8a68297a,
 	OLIVE = 0x8a297a68
+}
+
+---Predefined folder paths for storing camera presets.
+---@type PresetLocations
+local PresetFolders = {
+	DEFAULTS = "defaults",
+	CUSTOM = "presets",
+	VANILLA = "presets-vanilla"
 }
 
 ---Provides a table of search filter commands.
@@ -256,6 +287,57 @@ local CameraLevels = {
 	"Low_DriverCombatClose",
 	"Low_DriverCombatMedium",
 	"Low_DriverCombatFar"
+}
+
+---Maps vehicle preset IDs to camera paths that are considered invalid.
+---If a camera ID exists in the map and a corresponding camera level is
+---found, the next operation should be aborted.
+---@type table<string, table<string, boolean>>
+local InvalidCameraLevelMap = {
+	["4w_Medium_Preset"] = {
+		High_DriverCombatClose = true,
+		High_DriverCombatMedium = true,
+		High_DriverCombatFar = true,
+		Low_Close = true,
+		Low_Medium = true,
+		Low_Far = true,
+		Low_DriverCombatClose = true,
+		Low_DriverCombatMedium = true,
+		Low_DriverCombatFar = true
+	},
+	["4w_SubCompact_Preset"] = {
+		High_DriverCombatClose = true,
+		High_DriverCombatMedium = true,
+		High_DriverCombatFar = true,
+		Low_Close = true,
+		Low_Medium = true,
+		Low_Far = true,
+		Low_DriverCombatClose = true,
+		Low_DriverCombatMedium = true,
+		Low_DriverCombatFar = true
+	},
+	["Default_Preset"] = {
+		High_DriverCombatClose = true,
+		High_DriverCombatMedium = true,
+		High_DriverCombatFar = true,
+		Low_DriverCombatClose = true,
+		Low_DriverCombatMedium = true,
+		Low_DriverCombatFar = true
+	},
+	["v_utility4_kaukaz_bratsk_Preset"] = {
+		Low_Medium = true,
+		Low_Far = true,
+		Low_DriverCombatClose = true,
+		Low_DriverCombatMedium = true,
+		Low_DriverCombatFar = true
+	},
+	["v_utility4_militech_behemoth_Preset"] = {
+		Low_Medium = true,
+		Low_Far = true,
+		Low_DriverCombatClose = true,
+		Low_DriverCombatMedium = true,
+		Low_DriverCombatFar = true
+	}
 }
 
 ---Constant array of all camera variables.
@@ -357,8 +439,8 @@ local toaster_bumps = {}
 local overlay_open = false
 
 ---Indicates whether the CET overlay UI should be temporarily disabled.
----Used to trigger `ImGui.BeginDisabled(true)` in frames where no user interaction is allowed,
----e.g., during loading sequences or pending asynchronous operations.
+---Used to trigger `ImGui.BeginDisabled(true)` in frames where no user interaction
+---is allowed, e.g., during loading sequences or pending asynchronous operations.
 ---@type boolean
 local overlay_locked = false
 
@@ -372,7 +454,8 @@ local metrics_reset = false
 ---@type number
 local padding_width = 0
 
----When set to true, disables dynamic window padding adjustments and uses the fixed `padding_width` value.
+---When set to true, disables dynamic window padding
+---adjustments and uses the fixed `padding_width` value.
 ---@type boolean
 local padding_locked = false
 
@@ -408,6 +491,16 @@ local global_params_changed = false
 ---Allows potential restoration of vehicle-specific parameters on shutdown.
 ---@type table<string, any>
 local custom_params = {}
+
+---Holds the state of the asynchronous preset loading task.
+---@type table
+local presets_loader_task = {
+	---@type boolean # True if presets are currently being loaded asynchronously.
+	isActive = false,
+
+	---@type function # Called at the very end of the execution. Always exists, but may be defined later.
+	finalCall = nil,
+}
 
 ---Contains all camera presets.
 ---@type table<string, ICameraPreset>
@@ -603,7 +696,7 @@ end
 local function areStringValid(...)
 	for i = 1, select("#", ...) do
 		local s = select(i, ...)
-		if nilOrEmpty(s) then
+		if not isStringValid(s) then
 			return false
 		end
 	end
@@ -624,7 +717,7 @@ end
 local function areTableValid(...)
 	for i = 1, select("#", ...) do
 		local t = select(i, ...)
-		if nilOrEmpty(t) then
+		if not isTableValid(t) then
 			return false
 		end
 	end
@@ -654,11 +747,10 @@ end
 
 ---Determines whether a table is a pure sequence (array) with contiguous integer keys 1..#t.
 ---Returns false if any key is non-numeric or if there are gaps in the numeric index.
----@param t table? # The table to test (nil or non-table will be treated as not an array).
+---@param t table # The table to test (nil or non-table will be treated as not an array).
 ---@return boolean # True if `t` is an array of length `#t` with no non-numeric keys.
 local function isArray(t)
 	if not isTable(t) then return false end
-	---@cast t table
 	local n = #t
 	local c = 0
 	for i in pairs(t) do
@@ -875,10 +967,20 @@ local function chopUnderscoreParts(s)
 	return concat(t, "_", 1, n)
 end
 
+---Concatenates multiple path segments into a single path using '/' as separator.
+---@vararg string # The path segments to combine.
+---@return string # The combined path. Returns an empty string if no arguments are given.
+local function combine(...)
+	local len = select("#", ...)
+	if len < 1 then return "" end
+	if len == 1 then return select(1, ...) end
+	return concat({ ... }, "/")
+end
+
 ---Removes a substring from a string either globally, only at the start, or only at the end.
 ---@param s string The input string to process.
 ---@param sub string The substring to remove.
----@param mode number? # 1 = start only, -1 = end only, or nil = remove all.
+---@param mode number? # 1 = start only, -1 = end only, or anything else = remove all.
 ---@param caseInsensitive boolean? # If true, ignores case when matching the substring. Has no effect if mode is nil (removal anywhere).
 ---@return string The modified string with the specified removal.
 local function stripSub(s, sub, mode, caseInsensitive)
@@ -910,7 +1012,7 @@ local function opairs(t)
 	for k in pairs(t) do
 		insert(ks, k)
 	end
-	table.sort(ks, function(a, b)
+	sort(ks, function(a, b)
 		return tostring(a) < tostring(b)
 	end)
 	local i = 0
@@ -925,14 +1027,10 @@ end
 
 ---Creates a deep copy of a given table, including nested subtables.
 ---@param t table # The table to copy.
----@param seen table|nil # Internal table to track already-copied references (prevents cycles).
+---@param seen table? # Internal table to track already-copied references (prevents cycles).
 ---@return table # A new table with the same structure and values as the original.
 local function clone(t, seen)
-	if not isTable(t) then
-		---@cast t any
-		return t
-	end
-
+	if not isTable(t) then return t end
 	if seen and seen[t] then return seen[t] end
 
 	local result = {}
@@ -962,13 +1060,13 @@ end
 
 ---Safely retrieves a nested value from a table (e.g., table[one][two][three]).
 ---Returns a default value if any level is missing or invalid.
----@param t table? # The root table to access.
+---@param t table # The root table to access.
 ---@param fallback any # The fallback value if the lookup fails.
 ---@param ... any # One or more keys representing the path.
 ---@return any # The nested value if it exists, or the default value.
 local function get(t, fallback, ...)
 	if not isTable(t) then return fallback end
-	local v = t ---@cast v table
+	local v = t
 	for i = 1, select("#", ...) do
 		local k = select(i, ...)
 		if not isTable(v) or k == nil then
@@ -1099,8 +1197,7 @@ end
 ---@param x table|string # A version input as a string, or IVersion table.
 ---@return IVersion # A table with Major, Minor, Build, and Revision fields as numbers.
 local function parseVersion(x)
-	if isTable(x) and isNumber(x.Major) then
-		---@cast x IVersion
+	if isTable(x) and isNumber(x.Major) then ---@cast x IVersion
 		return x
 	end
 	if not isString(x) then
@@ -1187,7 +1284,7 @@ end
 ---@param lvl LogLevelType # Logging level (0 = Info, 1 = Warning, 2 = Error).
 ---@param id integer # The ID used for location tracing.
 ---@param fmt string # A format string for the message.
----@vararg any # Additional arguments for formatting the message.
+---@vararg any # Additional arguments for formatting the message. Tables and userdata will be serialized automatically.
 local function log(lvl, id, fmt, ...)
 	if log_suspend or dev_mode <= DevLevels.DISABLED then return end
 
@@ -1210,7 +1307,19 @@ local function log(lvl, id, fmt, ...)
 		lvl == LogLevels.WARN and "[Warn]" or
 		"[Info]"
 
-	local str = (select("#", ...) > 0 and fmt:find("%%")) and format(fmt, ...) or fmt
+	local len = select("#", ...)
+	local str
+	if len < 1 then
+		str = fmt
+	else
+		local args = {}
+		for i = 1, select("#", ...) do
+			local v = select(i, ...)
+			args[i] = (isTable(v) or isUserdata(v)) and serialize(v) or v
+		end
+		local ok, result = pcall(string.format, fmt, unpack(args))
+		str = ok and result or Text.LOG_FORMAT_BROKEN
+	end
 	local msg = format("[TPVCamTool]  [%04X]  %s  %s", id or 0, tag, str)
 
 	if dev_mode >= DevLevels.FULL then
@@ -1219,7 +1328,10 @@ local function log(lvl, id, fmt, ...)
 
 	if dev_mode >= DevLevels.ALERT then
 		if runtime_full then
-			local tm = "\u{f035f} " .. msg
+			local tm = format("%s %s",
+				lvl == LogLevels.ERROR and "\u{f0e1c}" or
+				lvl == LogLevels.WARN and "\u{f0d64}" or
+				"\u{f11be}", str)
 			local tt =
 				lvl == LogLevels.ERROR and ImGui.ToastType.Error or
 				lvl == LogLevels.WARN and ImGui.ToastType.Warning or
@@ -1241,11 +1353,11 @@ end
 ---Forces a log message to be emitted using a temporary `dev_mode` override.
 ---Useful for outputting messages regardless of the current developer mode setting.
 ---Internally calls `log()` with the given parameters, then restores the previous `dev_mode`.
----@param mode DevLevelType # Temporary debug mode to use.
+---@param mode DevLevelType # Temporary development mode to use.
 ---@param lvl LogLevelType # Log level passed to `log()`.
 ---@param id integer # The ID used for location tracing.
 ---@param fmt string # Format string for the message.
----@vararg any # Optional arguments for formatting the message.
+---@vararg any # Optional arguments for formatting the message. Tables and userdata will be serialized automatically.
 local function logF(mode, lvl, id, fmt, ...)
 	if mode <= DevLevels.DISABLED then return end
 	local prev = dev_mode
@@ -1254,11 +1366,23 @@ local function logF(mode, lvl, id, fmt, ...)
 	dev_mode = prev
 end
 
+---Logs a formatted message if the current `dev_mode` meets or exceeds the specified threshold.
+---Internally calls `log()` with the given parameters.
+---@param mode DevLevelType # Minimum development mode required to output the log.
+---@param lvl LogLevelType # Log level passed to `log()`.
+---@param id integer # The ID used for location tracing.
+---@param fmt string # Format string for the message.
+---@vararg any # Optional arguments for formatting the message. Tables and userdata will be serialized automatically.
+local function logIf(mode, lvl, id, fmt, ...)
+	if dev_mode == DevLevels.DISABLED or dev_mode < mode then return end
+	log(lvl, id, fmt, ...)
+end
+
 ---Creates a recurring timer that executes a callback every `interval` seconds.
 ---@param interval number Time in seconds between executions.
 ---@param callback fun(id: integer) The function to call each time, receives its timer ID.
 ---@return integer timerID
-local function callEvery(interval, callback)
+local function callAsync(interval, callback)
 	if not isNumber(interval) or not isFunction(callback) then
 		return -1
 	end
@@ -1283,12 +1407,22 @@ end
 ---@param id integer Timer ID to halt.
 local function callHalt(id)
 	call_timers[id] = nil
-	call_is_active = not nilOrEmpty(call_timers)
+	call_is_active = isTableValid(call_timers)
 end
 
 --#endregion
 
 --#region 🚗 Vehicle Metadata
+
+---Returns the number of vanilla vehicles in the game, depending on the game version.
+---@return number # The total count of vanilla vehicles.
+local function getVanillaVehicleCount()
+	local cache = shared_cache.getVanillaVehicleCount
+	if cache then return cache end
+	cache = isVersionAtMost(getGameVersion(), "2.20") and 85 or 105
+	shared_cache.getVanillaVehicleCount = cache
+	return cache
+end
 
 ---Returns a list of all player vehicles from the game database.
 ---@param excludeVanilla boolean? # If true, vanilla vehicles are excluded from the result.
@@ -1305,7 +1439,7 @@ local function getPlayerVehicles(excludeVanilla)
 		return cache[full]
 	end
 
-	local skip = isVersionAtMost(getGameVersion(), "2.20") and 87 or 106
+	local skip = getVanillaVehicleCount()
 	cache[part] = {}
 	for i, v in ipairs(cache[full]) do
 		if i > skip then
@@ -1335,6 +1469,51 @@ local function findVehicleName(tid)
 	return getRecordName(tid)
 end
 
+---Retrieves all appearance entries for a given vehicle name.
+---@param name string # The name of the vehicle.
+---@return table? # A table of appearance entries if found, or `nil` if the name is invalid or the resource cannot be loaded.
+local function getVehicleApperancesByName(name)
+	if not isStringValid(name) then return nil end
+
+	local path = TweakDB:GetFlat(name .. ".entityTemplatePath")
+	if not path then return nil end
+
+	---@diagnostic disable-next-line
+	local depot = Game.GetResourceDepot()
+	if not depot then return nil end
+
+	local loader = depot:LoadResource(path)
+	if not loader then return nil end
+
+	local resource = loader:GetResource()
+	if not resource then return nil end
+
+	return resource.appearances
+end
+
+---Searches for a vehicle appearance matching a given key within a vehicle's appearances.
+---@param name string # The name of the vehicle.
+---@param key string # The key or prefix to match against appearance names.
+---@param steps number? # Optional step size for sampling the appearances table. Defaults to roughly one-third of the total entries.
+---@return TDBID? # Returns the matching appearance name if found, otherwise `nil`.
+local function findVehicleApperanceByName(name, key, steps)
+	local appearances = getVehicleApperancesByName(name)
+	if not isTableValid(appearances) then return nil end
+	---@cast appearances table
+	---@cast steps number
+
+	steps = isNumber(steps) and abs(steps) or ceil(#appearances / 3)
+	for i = 1, #appearances, steps do
+		local app = appearances[i]
+		local nam = app and app.name
+		if nam and startsWith(Game.NameToString(nam), key) then
+			return nam
+		end
+	end
+
+	return nil
+end
+
 ---Checks if the player is currently inside a vehicle.
 ---@return boolean # True if the player exists and is mounted in a vehicle, otherwise false.
 local function isVehicleMounted()
@@ -1351,9 +1530,7 @@ local function getMountedVehicle()
 
 	local player = Game.GetPlayer()
 	if not player then
-		if dev_mode >= DevLevels.ALERT then
-			log(LogLevels.WARN, 0xecd7, Text.LOG_NO_PLAYER)
-		end
+		logIf(DevLevels.ALERT, LogLevels.WARN, 0xecd7, Text.LOG_PLAYER_UNDEFINED)
 		return nil
 	end
 
@@ -1363,21 +1540,32 @@ local function getMountedVehicle()
 end
 
 ---Determines the status of a mounted vehicle.
----@return integer # -1 = error (no TDBID or list lookup failed), 0 = crowd vehicle (not in player list), 1 = vanilla vehicle (index <= 105), 2 = modded vehicle (index > 105).
+---@return integer # Vehicle status code:
+--- - -1: No valid vehicle found (missing TDBID or lookup failed)
+--- - 0: Crowd vehicle (vanilla, but not part of the player vehicle list)
+--- - 1: Player vanilla vehicle (index <= 105, or <= 86 on game version <= 2.20)
+--- - 2: Custom/modded vehicle (index above threshold)
 local function getVehicleStatus()
+	local cache = vehicle_cache.getVehicleStatus
+	if cache then return cache end
+
+	local result = -1
 	local vehicle = getMountedVehicle()
-	if not vehicle then return -1 end
-
-	local tid = vehicle:GetTDBID()
-	if not tid then return -1 end
-
-	for i, v in ipairs(getPlayerVehicles()) do
-		if v.hash == tid.hash then
-			return i < (isVersionAtMost(getGameVersion(), "2.20") and 87 or 106) and 1 or 2
+	if vehicle then
+		local tid = vehicle:GetTDBID()
+		if tid then
+			for i, v in ipairs(getPlayerVehicles()) do
+				if v.hash == tid.hash then
+					result = i <= getVanillaVehicleCount() and 1 or 2
+					break
+				end
+			end
+			result = result > 0 and result or 0
 		end
 	end
 
-	return 0
+	vehicle_cache.getVehicleStatus = result
+	return result
 end
 
 ---Retrieves the list of third-person camera preset keys for the mounted vehicle.
@@ -1392,17 +1580,13 @@ local function getVehicleCameraKeys()
 
 	local vid = vehicle:GetRecordID()
 	if not vid then
-		if dev_mode >= DevLevels.ALERT then
-			log(LogLevels.ERROR, 0xe98c, Text.LOG_NO_RECID)
-		end
+		logIf(DevLevels.ALERT, LogLevels.ERROR, 0xe98c, Text.LOG_VEH_REC_ID_MISS)
 		return nil
 	end
 
 	local vname = findVehicleName(vid)
 	if not vname then
-		if dev_mode >= DevLevels.ALERT then
-			log(LogLevels.ERROR, 0xe98c, Text.LOG_NO_RECN)
-		end
+		logIf(DevLevels.ALERT, LogLevels.ERROR, 0xe98c, Text.LOG_VEH_REC_NAME_MISS)
 		return nil
 	end
 
@@ -1419,7 +1603,7 @@ local function getVehicleCameraKeys()
 		::continue::
 	end
 
-	if not nilOrEmpty(list) then
+	if isTableValid(list) then
 		vehicle_cache.getVehicleCameraKeys = list
 		return list
 	end
@@ -1431,7 +1615,7 @@ end
 ---@return string? # The extracted custom camera ID (e.g., "lotus_camera") or nil if not found.
 local function getCustomVehicleCameraID()
 	local cache = vehicle_cache.getCustomVehicleCameraID
-	if isString(cache) then return not nilOrEmpty(cache) and cache or nil end
+	if isString(cache) then return isStringValid(cache) and cache or nil end
 
 	local keys = getVehicleCameraKeys()
 	if not isTable(keys) then return nil end ---@cast keys string[]
@@ -1475,7 +1659,7 @@ local function getCustomVehicleCameraID()
 
 		for i = #ids, 1, -1 do
 			if startsWith(p.ID, ids[i]) then
-				table.remove(ids, i)
+				remove(ids, i)
 				break
 			end
 		end
@@ -1560,7 +1744,7 @@ local function getVehicleCameraMap()
 		::continue::
 	end
 
-	if not nilOrEmpty(map) then
+	if isTableValid(map) then
 		vehicle_cache.getVehicleCameraMap = map
 		return map
 	end
@@ -1684,12 +1868,13 @@ local function getCameraTweakKey(preset, path, var, skipCustom)
 	if not isTable(preset) then return nil, nil end
 
 	local id = preset.ID
-	if not areString(id, path, var) then return nil, nil end
+	if not areString(id, path, var) or InvalidCameraLevelMap[id] and InvalidCameraLevelMap[id][path] then
+		return nil, nil
+	end
 
 	if not skipCustom and isString(getCustomVehicleCameraID()) then
 		local map = getVehicleCameraMap()
-		if isTableValid(map) then
-			---@cast map table
+		if isTableValid(map) then ---@cast map table
 			local key = map[path]
 			if isString(key) then
 				return format("%s.%s", key, var), getCameraTweakKey(preset, path, var, true)
@@ -1755,10 +1940,7 @@ local function setCameraDefaultRotationPitch(preset, path, value)
 	--Adjust low camera.
 	if startsWith(path, "Low_") then
 		value = value - 7
-
-		if dev_mode >= DevLevels.FULL then
-			log(LogLevels.INFO, 0x5c19, Text.LOG_PARAM_LH, key, path)
-		end
+		logIf(DevLevels.FULL, LogLevels.INFO, 0x5c19, Text.LOG_PARAM_IS_LOW, key)
 	end
 
 	if equals(value, fallback) then return end
@@ -1766,17 +1948,12 @@ local function setCameraDefaultRotationPitch(preset, path, value)
 	--Backup default value for shutdown.
 	if isCustom and not custom_params[key] then
 		custom_params[key] = fallback
-
-		if dev_mode >= DevLevels.ALERT then
-			log(LogLevels.INFO, 0x5c19, Text.LOG_PARAM_BAK, key, fallback)
-		end
+		logIf(DevLevels.ALERT, LogLevels.INFO, 0x5c19, Text.LOG_PARAM_BACKUP, key, fallback)
 	end
 
 	--Finally, set the new value.
-	if dev_mode >= DevLevels.FULL then
-		log(LogLevels.INFO, 0x5c19, Text.LOG_PARAM_SET, key, value)
-	end
 	TweakDB:SetFlat(key, value)
+	logIf(DevLevels.FULL, LogLevels.INFO, 0x5c19, Text.LOG_PARAM_SET, key, value)
 end
 
 ---Gets the look-at offset value for a given camera preset and path.
@@ -1814,17 +1991,12 @@ local function setCameraLookAtOffset(preset, path, x, y, z)
 	--Backup default value for shutdown.
 	if isCustom and not custom_params[key] then
 		custom_params[key] = fallback
-
-		if dev_mode >= DevLevels.ALERT then
-			log(LogLevels.INFO, 0xb786, Text.LOG_PARAM_BAK, key, serialize(fallback))
-		end
+		logIf(DevLevels.ALERT, LogLevels.INFO, 0xb786, Text.LOG_PARAM_BACKUP, key, fallback)
 	end
 
 	--Finally, set the new value.
-	if dev_mode >= DevLevels.FULL then
-		log(LogLevels.INFO, 0xb786, Text.LOG_PARAM_SET, key, serialize(value))
-	end
 	TweakDB:SetFlat(key, value)
+	logIf(DevLevels.FULL, LogLevels.INFO, 0xb786, Text.LOG_PARAM_SET, key, value)
 end
 
 ---Gets the boom length offset value for a given camera preset and path.
@@ -1857,17 +2029,12 @@ local function setCameraBoomLengthOffset(preset, path, value)
 	--Backup default value for shutdown.
 	if isCustom and not custom_params[key] then
 		custom_params[key] = fallback
-
-		if dev_mode >= DevLevels.ALERT then
-			log(LogLevels.INFO, 0x25a4, Text.LOG_PARAM_BAK, key, serialize(fallback))
-		end
+		logIf(DevLevels.ALERT, LogLevels.INFO, 0x25a4, Text.LOG_PARAM_BACKUP, key, fallback)
 	end
 
 	--Finally, set the new value.
-	if dev_mode >= DevLevels.FULL then
-		log(LogLevels.INFO, 0x25a4, Text.LOG_PARAM_SET, key, serialize(value))
-	end
 	TweakDB:SetFlat(key, value)
+	logIf(DevLevels.FULL, LogLevels.INFO, 0x25a4, Text.LOG_PARAM_SET, key, value)
 end
 
 ---Resets custom camera behavior values for the mounted vehicle to their global defaults.
@@ -1962,14 +2129,12 @@ end
 ---Only re-applies values if they differ from the current ones in TweakDB.
 ---Requires `custom_params` to contain valid entries; otherwise, nothing happens.
 local function restoreAllCustomCameraData()
-	if nilOrEmpty(custom_params) then return end
+	if not isTableValid(custom_params) then return end
 
 	for k, v in pairs(custom_params) do
 		local value = TweakDB:GetFlat(k)
 		if not equals(value, v) then
 			TweakDB:SetFlat(k, v)
-
-			if isVector3(v) then v = serialize(v) end
 			logF(DevLevels.BASIC, LogLevels.INFO, 0x09ea, Text.LOG_PARAM_REST, k, v)
 		end
 	end
@@ -2041,9 +2206,7 @@ local function validatePresetKey(vehicleName, appearanceName, currentKey, newKey
 
 	local name = trimLuaExt(newKey)
 	if #name < 1 then
-		if dev_mode >= DevLevels.ALERT then
-			log(LogLevels.WARN, 0x19fd, Text.LOG_BLANK_NAME)
-		end
+		logIf(DevLevels.ALERT, LogLevels.WARN, 0x19fd, Text.LOG_PSET_BLANK_NAME)
 		return currentKey
 	end
 
@@ -2052,12 +2215,10 @@ local function validatePresetKey(vehicleName, appearanceName, currentKey, newKey
 		return name
 	end
 
-	if dev_mode >= DevLevels.ALERT then
-		if vehicleName ~= appearanceName then
-			log(LogLevels.WARN, 0x19fd, Text.LOG_NAMES_MISM, vehicleName, appearanceName)
-		else
-			log(LogLevels.WARN, 0x19fd, Text.LOG_NAME_MISM, vehicleName)
-		end
+	if vehicleName ~= appearanceName then
+		logIf(DevLevels.ALERT, LogLevels.WARN, 0x19fd, Text.LOG_PSET_NAMES_MISM, vehicleName, appearanceName)
+	else
+		logIf(DevLevels.ALERT, LogLevels.WARN, 0x19fd, Text.LOG_PSET_NAME_MISM, vehicleName)
 	end
 
 	return currentKey
@@ -2087,16 +2248,14 @@ local function getPreset(id)
 		}
 
 		if preset.Far and preset.Medium and preset.Close then
-			if dev_mode >= DevLevels.ALERT then
-				log(LogLevels.INFO, 0x198c, Text.LOG_CAM_OSET_DONE, id)
-			end
+			logIf(DevLevels.ALERT, LogLevels.INFO, 0x198c, Text.LOG_CAM_OSET_DONE, id)
 			return preset
 		end
 
 		::continue::
 	end
 
-	log(LogLevels.ERROR, 0x198c, Text.LOG_NO_CAM_OSET, id)
+	log(LogLevels.ERROR, 0x198c, Text.LOG_CAM_OSET_MISS, id)
 	return nil
 end
 
@@ -2111,14 +2270,12 @@ local function getDefaultPreset(preset)
 
 	for _, item in pairs(camera_presets) do
 		if item.IsDefault and item.ID == id then
-			if dev_mode >= DevLevels.ALERT then
-				log(LogLevels.INFO, 0xaced, Text.LOG_FOUND_DEF, id)
-			end
+			logIf(DevLevels.ALERT, LogLevels.INFO, 0xaced, Text.LOG_PSET_DEF_FOUND, id)
 			return item
 		end
 	end
 
-	log(LogLevels.WARN, 0xaced, Text.LOG_MISS_DEF, id)
+	log(LogLevels.WARN, 0xaced, Text.LOG_PSET_DEF_MISS, id)
 
 	local fallback = getPreset(id)
 	if not fallback then return nil end
@@ -2130,7 +2287,7 @@ local function getDefaultPreset(preset)
 	fallback.IsJoined = true
 	camera_presets[key] = fallback
 
-	log(LogLevels.INFO, 0xaced, Text.LOG_ADD_DEF, key)
+	log(LogLevels.INFO, 0xaced, Text.LOG_PSET_DEF_JOINED, key)
 
 	return fallback
 end
@@ -2146,11 +2303,10 @@ end
 ---@return number d # The distance value. Falls back to a default per level (Close = 0, Medium = 1.5, Far = 4).
 local function getOffsetData(preset, fallback, level)
 	if not isTable(preset) or not contains(PresetLevels, level) then
-		logF(DevLevels.FULL, LogLevels.ERROR, 0x21d6, Text.LOG_NO_PSET_FOR_LVL, level)
+		logF(DevLevels.FULL, LogLevels.ERROR, 0x21d6, Text.LOG_PSET_LVL_MISS, level)
 		return 0, 0, 0, 0, 0 --Should never be returned with the current code.
-	end
+	end ---@cast preset ICameraPreset
 
-	---@cast preset ICameraPreset
 	local p = preset[level]
 	local f = (fallback and fallback[level]) or {}
 
@@ -2183,12 +2339,10 @@ local function applyPreset(preset, id)
 		local cid = getVehicleCameraID()
 		if not cid then return end
 
-		if dev_mode >= DevLevels.ALERT then
-			log(LogLevels.INFO, 0x9583, Text.LOG_CAM_PSET, key)
-		end
+		logIf(DevLevels.ALERT, LogLevels.INFO, 0x9583, Text.LOG_CAM_PSET, key)
 
 		local pset = camera_presets[key]
-		if nilOrEmpty(pset) then return end
+		if not isTableValid(pset) then return end
 
 		if pset.IsVanilla and get(global_params, false, "noVanilla", "Value") then
 			return
@@ -2208,15 +2362,13 @@ local function applyPreset(preset, id)
 		return
 	end
 
-	if nilOrEmpty(preset.ID) then
-		logF(DevLevels.BASIC, LogLevels.ERROR, 0x9583, Text.LOG_FAIL_APPLY)
+	if not isStringValid(preset.ID) then
+		logF(DevLevels.BASIC, LogLevels.ERROR, 0x9583, Text.LOG_PSET_APPLY_FAIL)
 		return
 	end
 
 	if isString(id) and id ~= preset.ID then
-		if dev_mode >= DevLevels.ALERT then
-			log(LogLevels.WARN, 0x9583, Text.LOG_CAMID_MISM, preset.ID, id)
-		end
+		logIf(DevLevels.ALERT, LogLevels.WARN, 0x9583, Text.LOG_CAM_ID_MISM, preset.ID, id)
 		return
 	end
 
@@ -2246,13 +2398,13 @@ local function restoreAllPresets()
 	end
 	used_presets = {}
 
-	log(LogLevels.INFO, 0x8438, Text.LOG_REST_ALL)
+	log(LogLevels.INFO, 0x8438, Text.LOG_PSETS_REST_DEF)
 end
 
 ---Restores modified camera offset presets to their default values.
 local function restoreModifiedPresets()
 	local changed = used_presets
-	if nilOrEmpty(changed) then return end
+	if not isTableValid(changed) then return end
 
 	local amount = #changed
 	local restored = 0
@@ -2260,13 +2412,13 @@ local function restoreModifiedPresets()
 		if preset.IsDefault and contains(changed, preset.ID) then
 			applyPreset(preset)
 			restored = restored + 1
-			log(LogLevels.INFO, 0xe126, Text.LOG_REST_PSET, preset.ID)
+			log(LogLevels.INFO, 0xe126, Text.LOG_PSET_REST, preset.ID)
 		end
 		if restored >= amount then break end
 	end
 	used_presets = {}
 
-	log(LogLevels.INFO, 0xe126, Text.LOG_REST_PSETS, restored, amount)
+	log(LogLevels.INFO, 0xe126, Text.LOG_PSETS_REST, restored, amount)
 end
 
 ---Validates whether the given camera offset preset is structurally valid.
@@ -2275,7 +2427,7 @@ end
 ---@param preset ICameraPreset # The preset to validate.
 ---@return boolean # True if the preset is valid, false otherwise.
 local function isPresetValid(preset)
-	if not isTable(preset) or nilOrEmpty(preset.ID) then return false end
+	if not isTable(preset) or not isStringValid(preset.ID) then return false end
 
 	for _, e in ipairs(PresetLevels) do
 		local offset = preset[e]
@@ -2318,14 +2470,28 @@ end
 
 --#region 💾 Preset File Control
 
----Generates the full file path to a preset file, optionally pointing to the default directory.
----Automatically appends the `.lua` extension if not already present.
+---Builds the absolute path to a preset file based on its name and vehicle status.
 ---@param name string # The base name of the preset file (with or without `.lua` extension).
----@param isDefault boolean? # If true, returns the path in the `defaults` directory; otherwise in `presets`.
----@return string? # The full file path to the preset, or `nil` if the name is invalid.
-local function getPresetFilePath(name, isDefault)
-	if not isString(name) then return nil end
-	return (isDefault and "defaults/" or "presets/") .. ensureLuaExt(name)
+---@param status integer # Vehicle status code. Matches getVehicleStatus(), with one exception:
+--- - -1 = defaults (special case, not equal by getVehicleStatus)
+--- -  0 = crowd vanilla vehicle
+--- -  1 = player vanilla vehicle
+--- -  2 = custom/modded vehicle
+--- - any other value is treated as custom
+---@return string # The full path to the preset file, or an empty string if name is invalid.
+local function getPresetFilePath(name, status)
+	if not isString(name) then return "" end
+
+	local path
+	if status == -1 then
+		path = PresetFolders.DEFAULTS
+	elseif status == 0 or status == 1 then
+		path = PresetFolders.VANILLA
+	else
+		path = PresetFolders.CUSTOM
+	end
+
+	return combine(path, ensureLuaExt(name))
 end
 
 ---Checks whether a preset file with the given name exists in the appropriate folder.
@@ -2334,9 +2500,24 @@ end
 ---@param isDefault boolean? # If true, checks the "defaults" directory instead of "presets".
 ---@return boolean # True if the file exists, false otherwise.
 local function presetFileExists(name, isDefault)
-	local path = getPresetFilePath(name, isDefault)
-	if not path then return false end
-	return fileExists(path)
+	if not isStringValid(name) then return false end
+
+	if isDefault then
+		local path = getPresetFilePath(name, -1)
+		return fileExists(path)
+	end
+
+	name = ensureLuaExt(name)
+	for key, value in pairs(PresetFolders) do
+		if key ~= "DEFAULTS" then
+			local path = combine(value, name)
+			if fileExists(path) then
+				return true
+			end
+		end
+	end
+
+	return false
 end
 
 ---Removes camera presets from the global `camera_presets` table.
@@ -2346,11 +2527,10 @@ end
 local function purgePresets(key)
 	if not isString(key) then
 		camera_presets = {}
-		log(LogLevels.WARN, 0x176b, Text.LOG_CLEAR_PSETS)
+		log(LogLevels.WARN, 0x176b, Text.LOG_CAMS_ALL_CLEARED)
 		return
-	end
+	end ---@cast key string
 
-	---@cast key string
 	local c = 0
 	for k in pairs(camera_presets) do
 		if startsWith(k, key) then
@@ -2359,126 +2539,169 @@ local function purgePresets(key)
 		end
 	end
 
-	log(LogLevels.WARN, 0x176b, Text.LOG_CLEAR_NPSETS, c, key)
+	log(LogLevels.WARN, 0x176b, Text.LOG_CAMS_CLEARED, c, key)
 end
 
----Loads camera offset presets from `defaults` (first) and `presets` (second).
----Each `.lua` file must return a `ICameraPreset` table with at least an `ID` field.
----Skips already loaded presets unless `refresh` is true (then clears and reloads all).
----@param refresh boolean? # If true, clears existing presets before loading (default: false).
-local function loadPresets(refresh)
-	local function appMatch(name, key)
-		if nilOrEmpty(name) then return false end
+---Loads a single camera preset file, validates it, and registers it if applicable.
+---Checks if the preset is relevant for custom/modded vehicles.
+---@param file string # The preset filename (with `.lua` extension).
+---@param folder string # Directory where the preset file is located.
+---@param count integer # Current number of successfully loaded presets.
+---@param vehicles table? # Optional list of vehicles to validate the preset against.
+---@return integer # Updated count of successfully loaded presets.
+local function loadPresetFile(file, folder, count, vehicles)
+	if not mod_enabled or not file or not hasLuaExt(file) then return count end
 
-		local path = TweakDB:GetFlat(name .. ".entityTemplatePath")
-		if not path then return false end
-
-		---@diagnostic disable-next-line
-		local data = Game.GetResourceDepot():LoadResource(path)
-		if not data then return false end
-
-		local resource = data:GetResource()
-		if not resource then return false end
-
-		for _, app in ipairs(resource.appearances) do
-			if startsWith(Game.NameToString(app.name), key) then
-				return true
-			end
-		end
-
-		return false
+	local key = trimLuaExt(file)
+	if camera_presets[key] then
+		count = count + 1
+		logF(DevLevels.BASIC, LogLevels.WARN, 0x0305, Text.LOG_PSET_SKIPPED, key, folder, file)
+		return count
 	end
 
-	local function loadFrom(path)
-		local files = dir(path)
-		if not files then
-			logF(DevLevels.FULL, LogLevels.ERROR, 0x372a, Text.LOG_DIR_NOT_EXIST, path)
-			return -1
+	--Ensures that presets are only loaded for vehicles that are actually installed.
+	if isTableValid(vehicles) then ---@cast vehicles table
+		local isValid = false
+
+		local start = getVanillaVehicleCount() + 1
+		local length = #vehicles
+		start = (start > length) and 1 or start
+		for i = start, length do
+			local name = findVehicleName(vehicles[i])
+			if isStringValid(name) then ---@cast name string
+				local search = "Vehicle." .. key
+				if startsWith(name, search) or findVehicleApperanceByName(name, key, 1) then
+					isValid = true
+					break
+				end
+			end
 		end
 
-		local fromDefDir = path == "defaults"
-		local count = 0
-		local vehicles
-		for _, entry in ipairs(files) do
-			local name = entry.name
-			if not name or not hasLuaExt(name) then goto continue end
+		if not isValid then
+			log(LogLevels.INFO, 0x0305, Text.LOG_PSET_IGNORED, key, folder, file)
+			return count
+		end
+	end
 
-			local key = trimLuaExt(name)
-			if camera_presets[key] then
-				count = count + 1
-				logF(DevLevels.BASIC, LogLevels.WARN, 0x372a, Text.LOG_SKIP_PSET, key, path, name)
-				goto continue
-			end
+	local path = combine(folder, file)
+	local chunk, err = loadfile(path)
+	if not chunk then
+		logF(DevLevels.BASIC, LogLevels.ERROR, 0x0305, Text.LOG_PSET_LOAD_FAIL, folder, file, err)
+		return count
+	end
 
-			--Ensures that presets are only loaded for vehicles that are actually installed.
-			if not fromDefDir then
-				local isValid = false
-				vehicles = vehicles or getPlayerVehicles(get(global_params, false, "noVanilla", "Value"))
-				for _, v in ipairs(vehicles) do
-					local vname = findVehicleName(v)
-					if isStringValid(vname) then ---@cast vname string
-						local search = "Vehicle." .. key
-						if startsWith(vname, search) or appMatch(vname, key) then
-							isValid = true
-							break
-						end
-					end
-				end
+	local ok, result = pcall(chunk)
+	if not ok or not result then
+		logF(DevLevels.BASIC, LogLevels.WARN, 0x0305, Text.LOG_PSET_EXE_FAIL, folder, file)
 
-				if not isValid then
-					log(LogLevels.INFO, 0x372a, Text.LOG_IGNO_PSET, key, path, name)
-					goto continue
-				end
-			end
-
-			local file = path .. "/" .. name
-			local chunk, err = loadfile(file)
-			if not chunk then
-				logF(DevLevels.BASIC, LogLevels.ERROR, 0x372a, Text.LOG_FAIL_LOAD, path, name, err)
-				goto continue
-			end
-
-			local ok, result = pcall(chunk)
-			if not ok or not result then
-				logF(DevLevels.BASIC, LogLevels.WARN, 0x372a, Text.LOG_FAIL_EXE, path, name)
-
-				local success, error = pcall(os.remove, file)
-				if success then
-					logF(DevLevels.BASIC, LogLevels.INFO, 0x372a, Text.LOG_DEL_SUCCESS, file)
-				else
-					logF(DevLevels.BASIC, LogLevels.WARN, 0x372a, Text.LOG_DEL_FAILURE, file, error)
-				end
-
-				goto continue
-			end
-
-			if not setPresetEntry(key, result) then
-				logF(DevLevels.BASIC, LogLevels.ERROR, 0x372a, Text.LOG_BAD_PSET, path, name)
-				goto continue
-			end
-
-			count = count + 1
-			if dev_mode >= DevLevels.FULL then
-				log(LogLevels.INFO, 0x372a, Text.LOG_LOAD_PSET, key, path, name)
-			end
-
-			::continue::
+		local success, error = pcall(os.remove, path)
+		if success then
+			logF(DevLevels.BASIC, LogLevels.INFO, 0x0305, Text.LOG_PSET_DELETED, path)
+		else
+			logF(DevLevels.BASIC, LogLevels.WARN, 0x0305, Text.LOG_PSET_DEL_FAIL, path, error)
 		end
 
 		return count
 	end
 
-	if refresh then
-		purgePresets()
+	if not setPresetEntry(key, result) then
+		logF(DevLevels.BASIC, LogLevels.ERROR, 0x0305, Text.LOG_PSET_INVALID, folder, file)
+		return count
 	end
 
-	if loadFrom("defaults") < 39 then
-		mod_enabled = false
-		logF(DevLevels.FULL, LogLevels.ERROR, 0x372a, Text.LOG_DEFS_INCOMP)
+	count = count + 1
+	logIf(DevLevels.FULL, LogLevels.INFO, 0x0305, Text.LOG_PSET_LOAD, key, folder, file)
+	return count
+end
+
+---Loads all valid preset files from the specified folder.
+---Automatically handles all different location folders differently.
+---For custom folders, files are loaded asynchronously in small batches to avoid blocking,
+---due to the verification process that checks if each preset matches an installed vehicle.
+---@param path string # One of the paths from `PresetFolders` (DEFAULTS, VANILLA, CUSTOM) indicating which folder to load presets from.
+local function loadPresetsFrom(path)
+	if not mod_enabled then return end
+
+	local isVan = path == PresetFolders.VANILLA
+	local noVan = get(global_params, false, "noVanilla", "Value")
+	if isVan and noVan then return end
+
+	local isDef = path == PresetFolders.DEFAULTS
+	local files = dir(path)
+	if files then
+		local count = 0
+
+		if isDef or isVan then
+			for _, v in ipairs(files) do
+				count = loadPresetFile(v.name, path, count)
+			end
+
+			if isDef and count < 39 then
+				mod_enabled = false
+				logF(DevLevels.FULL, LogLevels.ERROR, 0x98e0, Text.LOG_PSETS_DEF_BROKEN)
+			end
+
+			log_suspend = false
+			local text = isDef and Text.LOG_PSETS_LOAD_DEF or Text.LOG_PSETS_LOAD_VAN
+			logF(DevLevels.BASIC, LogLevels.INFO, 0x98e0, text, count, #files - 1)
+			return
+		end
+
+		local task = presets_loader_task
+		task.isActive = true
+
+		local index, file
+		local startTime = os.clock()
+		local endTime = startTime
+		local vehicles = getPlayerVehicles(noVan)
+
+		callAsync(0, function(id)
+			index, file = next(files, index)
+			if not file then
+				callHalt(id)
+				task.isActive = false
+				endTime = os.clock()
+				return
+			end
+			count = loadPresetFile(file.name, path, count, vehicles)
+		end)
+
+		callAsync(1, function(id)
+			if task.isActive then return end
+
+			local length = #files - 1
+			log_suspend = false
+			logF(DevLevels.BASIC, LogLevels.INFO, 0x98e0, Text.LOG_PSETS_LOAD_CUS, count, length)
+			logF(DevLevels.BASIC, LogLevels.INFO, 0x98e0, Text.LOG_PSETS_LOAD_IGNO, length - count)
+			logF(DevLevels.ALERT, LogLevels.INFO, 0x98e0, Text.LOG_PSETS_LOAD_DONE, endTime - startTime)
+
+			if isFunction(task.finalCall) then
+				task.finalCall()
+			end
+
+			callHalt(id)
+		end)
+
 		return
 	end
 
-	mod_enabled = loadFrom("presets") >= 0
+	mod_enabled = false
+	logF(DevLevels.FULL, LogLevels.ERROR, 0x98e0, Text.LOG_PSETS_DIR_MISS, path)
+end
+
+---Loads all camera presets from the defaults, vanilla, and custom folders.
+---@param refresh boolean? # Whether to clear existing presets before loading.
+---@param delay number? # Optional delay before execution.
+local function loadPresets(refresh, delay)
+	delay = (isNumber(delay) and delay > 0) and delay or 0
+	callAsync(delay, function(id)
+		callHalt(id)
+
+		if refresh then purgePresets() end
+		loadPresetsFrom(PresetFolders.DEFAULTS)
+		loadPresetsFrom(PresetFolders.VANILLA)
+		loadPresetsFrom(PresetFolders.CUSTOM)
+	end)
 end
 
 ---Saves a camera preset to file, either as a regular preset or as a default.
@@ -2486,11 +2709,18 @@ end
 ---@param name string # The name of the preset file (with or without `.lua` extension).
 ---@param preset table # The preset data to save (must include an `ID` and valid offset data).
 ---@param allowOverwrite boolean? # Whether existing files may be overwritten.
----@param saveAsDefault boolean? # If true, saves the preset to the `defaults` directory instead of `presets`.
+---@param forceDefault boolean? # If true, saves the preset to the `defaults` directory instead of `presets`.
 ---@return boolean # True on success, or false if writing failed or nothing needed to be saved.
-local function savePreset(name, preset, allowOverwrite, saveAsDefault)
-	local path = getPresetFilePath(name, saveAsDefault)
-	if not path or not isTable(preset) then return false end
+local function savePreset(name, preset, allowOverwrite, forceDefault)
+	if not isStringValid(name) or not isTableValid(preset) then return false end
+
+	local status = getVehicleStatus()
+	local isVanilla = status == 0 or status == 1
+	local path = combine(
+		forceDefault and PresetFolders.DEFAULTS or
+		isVanilla and PresetFolders.VANILLA or
+		PresetFolders.CUSTOM, ensureLuaExt(name))
+	if not isStringValid(path) then return false end
 
 	--To always save all values, as the currently retrieved defaults may change in future.
 	local isCustom = preset.ID == getCustomVehicleCameraID()
@@ -2499,7 +2729,7 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 		local check = io.open(path, "r")
 		if check then
 			check:close()
-			log(LogLevels.WARN, 0x8515, Text.LOG_FILE_EXIST, path)
+			log(LogLevels.WARN, 0x8515, Text.LOG_PSET_FILE_EXIST, path)
 			return false
 		end
 	end
@@ -2516,7 +2746,7 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 		if isTable(p) then
 			d = isTable(d) and d or {}
 			for _, k in ipairs(PresetOffsets) do
-				if isCustom or saveAsDefault or not equals(p[k], d[k]) then
+				if isCustom or forceDefault or not equals(p[k], d[k]) then
 					save = true
 					insert(sub, format("%s=%s", k, serialize(p[k])))
 				end
@@ -2529,14 +2759,14 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 	end
 
 	if not save then
-		log(LogLevels.WARN, 0x8515, Text.LOG_PSET_NOT_CHANGED, name, default.ID)
+		log(LogLevels.WARN, 0x8515, Text.LOG_PSET_NOT_CHANGED, path, default.ID)
 
-		if not saveAsDefault then
+		if not forceDefault then
 			local ok, err = os.remove(path)
 			if ok then
-				logF(DevLevels.ALERT, LogLevels.WARN, 0x8515, Text.LOG_DEL_SUCCESS, path)
+				logF(DevLevels.ALERT, LogLevels.WARN, 0x8515, Text.LOG_PSET_DELETED, path)
 			else
-				logF(DevLevels.FULL, LogLevels.ERROR, 0x8515, Text.LOG_DEL_FAILURE, path, err)
+				logF(DevLevels.FULL, LogLevels.ERROR, 0x8515, Text.LOG_PSET_DEL_FAIL, path, err)
 			end
 			return ok and setPresetEntry(name)
 		end
@@ -2544,13 +2774,10 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 		return false
 	end
 
-	if saveAsDefault then
+	if forceDefault then
 		insert(parts, "IsDefault=true")
-	else
-		local status = getVehicleStatus()
-		if status == 0 or status == 1 then
-			insert(parts, "IsVanilla=true")
-		end
+	elseif isVanilla then
+		insert(parts, "IsVanilla=true")
 	end
 
 	local last = parts[#parts]
@@ -2567,7 +2794,7 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 	file:write(concat(parts))
 	file:close()
 
-	logF(DevLevels.ALERT, LogLevels.INFO, 0x8515, Text.LOG_PSET_SAVED, name)
+	logF(DevLevels.ALERT, LogLevels.INFO, 0x8515, Text.LOG_PSET_SAVED, path)
 
 	return true
 end
@@ -2599,7 +2826,7 @@ local function savePresetUsage()
 	if not preset_usage_changed then return end
 	preset_usage_changed = false
 
-	if nilOrEmpty(preset_usage) then return end
+	if not isTableValid(preset_usage) then return end
 
 	--Removes outdated backup file.
 	local backup = ".usage.bak"
@@ -2643,7 +2870,7 @@ local function loadGlobalOptions(path)
 	if nilOrEmpty(content) then return end
 
 	local ok, result = pcall(json.decode, content)
-	if not ok or nilOrEmpty(result) then return end
+	if not ok or not isTableValid(result) then return end
 
 	for varName, data in pairs(global_params) do
 		local item = result[varName]
@@ -2661,7 +2888,7 @@ local function saveGlobalOptions()
 	if not isTable(global_params) then return end
 
 	local path = ".globals.json"
-	if nilOrEmpty(global_params) then
+	if not isTableValid(global_params) then
 		if fileExists(path) then
 			pcall(os.remove, path)
 		end
@@ -2704,10 +2931,10 @@ end
 --#region 🧪 Preset Editor
 
 ---Generates a checksum token for a camera preset by combining its ID and offset tables.
----@param preset ICameraPreset? # The camera preset containing fields `ID`, `Close`, `Medium`, and `Far`.
+---@param preset ICameraPreset # The camera preset containing fields `ID`, `Close`, `Medium`, and `Far`.
 ---@return integer # Adler-53 checksum of `preset.ID`, `preset.Close`, `preset.Medium`, `preset.Far`, or -1 if invalid.
 local function getEditorPresetToken(preset)
-	if not isTable(preset) then return -1 end ---@cast preset ICameraPreset
+	if not isTable(preset) then return -1 end
 	return checksum(preset.ID, preset.Close, preset.Medium, preset.Far)
 end
 
@@ -2746,7 +2973,7 @@ local function getEditorBundle(name, appName, id, key)
 	if not areTable(bundle.Flux, bundle.Pivot, bundle.Finale, bundle.Nexus, bundle.Tasks) then
 		local flux = getPreset(id)
 		if not flux then
-			log(LogLevels.WARN, 0xf0b7, Text.LOG_NO_PSET_FOUND, id)
+			log(LogLevels.WARN, 0xf0b7, Text.LOG_PSET_NOT_FOUND, id)
 			return
 		end
 
@@ -2786,7 +3013,7 @@ local function clearLastEditorBundle()
 	if key and hash and not presetFileExists(key) and hash == get(bundle, {}, "Nexus").Token then
 		camera_presets[key] = nil
 
-		log(LogLevels.INFO, 0xbc48, Text.LOG_DEL_SUCCESS, key)
+		log(LogLevels.INFO, 0xbc48, Text.LOG_PSET_DELETED, key)
 	end
 
 	bundle.Flux = nil
@@ -2796,8 +3023,9 @@ local function clearLastEditorBundle()
 
 	editor_last_bundle = nil
 
-	log(LogLevels.INFO, 0xbc48, Text.LOG_DEL_EPSET)
+	log(LogLevels.INFO, 0xbc48, Text.LOG_PSET_EDIT_DELETED)
 end
+function ClearLastEditorBundle() clearLastEditorBundle() end
 
 ---Replaces an existing editor preset entry with values from another and updating its checksum.
 ---@param src IEditorPreset # The source preset entry whose data will be copied.
@@ -2842,7 +3070,7 @@ local function applyEditorPreset(key, flux, pivot, tasks)
 
 	replaceEditorPreset(flux, pivot)
 
-	logF(DevLevels.ALERT, LogLevels.INFO, 0x1e64, Text.LOG_PSET_UPD, key)
+	logF(DevLevels.ALERT, LogLevels.INFO, 0x1e64, Text.LOG_PSET_UPDATED, key)
 end
 
 ---Saves the current camera preset to disk and updates the saved (finale) state.
@@ -2851,8 +3079,15 @@ end
 ---@param flux IEditorPreset # The currently edited preset with unsaved modifications.
 ---@param finale IEditorPreset # The last saved version of the preset; will be updated to match `flux`.
 ---@param tasks IEditorTasks # Tracks pending editor actions; will reset `Save`, `Restore`, and optionally `Rename`.
-local function saveEditorPreset(key, flux, finale, tasks)
-	if not isString(key) or not areTable(flux, finale, tasks) then return end
+---@param status integer # Vehicle status used to determine the folder path:
+--- - 0 = crowd vanilla vehicle
+--- - 1 = player vanilla vehicle
+--- - 2 = custom/modded vehicle
+local function saveEditorPreset(key, flux, finale, tasks, status)
+	if not isString(key) or not areTable(flux, finale, tasks) or not isNumber(status) or status == -1 then
+		logIf(DevLevels.FULL, LogLevels.ERROR, 0xebb8, Text.LOG_ARG_BROKEN)
+		return
+	end
 
 	if not savePreset(key, flux.Preset, true) then
 		logF(DevLevels.ALERT, LogLevels.WARN, 0xebb8, Text.LOG_PSET_NOT_SAVED, key)
@@ -2864,11 +3099,10 @@ local function saveEditorPreset(key, flux, finale, tasks)
 
 	if tasks.Rename then
 		tasks.Rename = false
-
-		local path = getPresetFilePath(finale.Name) ---@cast path string
-		local ok, err = os.remove(path)
+		local path = getPresetFilePath(finale.Name, status)
+		local ok, err = isStringValid(path) and os.remove(path) or false, nil
 		if not ok then
-			logF(DevLevels.FULL, LogLevels.ERROR, 0xebb8, Text.LOG_MOVE_FAILURE, finale.Name, flux.Name, err)
+			logF(DevLevels.FULL, LogLevels.ERROR, 0xebb8, Text.LOG_PSET_DEL_FAIL, finale.Name, flux.Name, err)
 		end
 
 		camera_presets[finale.Key] = nil
@@ -2925,14 +3159,13 @@ end
 ---@param vAlign boolean? # If true, vertically centers the next item. Defaults to true.
 ---@param cellHeight number? # Optional height of the cell for vertical centering. Ignored if `x` is a number.
 local function alignNext(x, hAlign, vAlign, cellHeight)
-	if isNumber(x) then
-		---@cast x number
+	if isNumber(x) then ---@cast x number
 		if hAlign then
 			hAlign = false
 		end
 		cellHeight = x
 	elseif isString(x) then
-		if hAlign == nil then
+		if not isBoolean(hAlign) then
 			hAlign = true
 		end
 	else
@@ -2946,8 +3179,7 @@ local function alignNext(x, hAlign, vAlign, cellHeight)
 	local style = ImGui.GetStyle()
 	local fh = ImGui.GetFontSize()
 
-	if hAlign then
-		---@cast x string
+	if hAlign then ---@cast x string
 		local cw = ImGui.GetColumnWidth()
 		local tw = ImGui.CalcTextSize(x)
 		local cx = ImGui.GetCursorPosX()
@@ -3038,7 +3270,7 @@ end
 ---@param contentWidth? number # Optional content width, used to center the text horizontally.
 ---@param itemSpacing? number # Optional horizontal spacing between UI elements. Used with centering logic.
 local function addText(text, color, heightPadding, contentWidth, itemSpacing)
-	if nilOrEmpty(text) then return end
+	if not isStringValid(text) then return end
 
 	if areNumber(contentWidth, itemSpacing) then
 		local halfSize = ImGui.CalcTextSize(text) * 0.5
@@ -3050,8 +3282,7 @@ local function addText(text, color, heightPadding, contentWidth, itemSpacing)
 	end
 
 	local isColor = isNumber(color)
-	if isColor then
-		---@cast color number
+	if isColor then ---@cast color number
 		ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(color, 0xff))
 	end
 
@@ -3061,8 +3292,7 @@ local function addText(text, color, heightPadding, contentWidth, itemSpacing)
 		ImGui.PopStyleColor()
 	end
 
-	if not isNumber(heightPadding) then return end
-	---@cast heightPadding number
+	if not isNumber(heightPadding) then return end ---@cast heightPadding number
 	ImGui.Dummy(0, heightPadding)
 end
 
@@ -3070,7 +3300,7 @@ end
 ---@param text string # The text to display.
 ---@param wrap number # The maximum width before wrapping.
 local function addTextCenterWrap(text, wrap)
-	if nilOrEmpty(text) then return end
+	if not isStringValid(text) then return end
 
 	if not isNumber(wrap) or wrap < 40 then
 		ImGui.Text(text)
@@ -3088,7 +3318,7 @@ local function addTextCenterWrap(text, wrap)
 			ln = t
 		end
 	end
-	if not nilOrEmpty(ln) then
+	if isStringValid(ln) then
 		ImGui.SetCursorPosX((w - ImGui.CalcTextSize(ln)) * 0.5)
 		ImGui.Text(ln)
 	end
@@ -3238,7 +3468,7 @@ local function openGlobalOptionsWindow(scale, contentWidth, controlPadding, heig
 	if not global_options_open then return end
 
 	ImGui.Dummy(0, floor(4 * heightPadding))
-	if nilOrEmpty(global_params) or not ImGui.BeginTable("GlobalOptions", 2, ImGuiTableFlags.Borders) then
+	if not isTableValid(global_params) or not ImGui.BeginTable("GlobalOptions", 2, ImGuiTableFlags.Borders) then
 		ImGui.End()
 		return
 	end
@@ -3286,8 +3516,7 @@ local function openGlobalOptionsWindow(scale, contentWidth, controlPadding, heig
 		end
 
 		---@diagnostic disable-next-line
-		local tip = data.Tooltip
-		---@cast tip string
+		local tip = data.Tooltip ---@cast tip string
 		if isStringValid(tip) then
 			addTooltip(scale, tip)
 		else
@@ -3353,13 +3582,34 @@ end
 local function openFileManWindow(scale, controlPadding, halfHeightPadding, buttonHeight, x, y, w, h)
 	if not file_man_open or not areNumber(scale, controlPadding, halfHeightPadding, buttonHeight) then return end
 
-	local files = shared_cache.openFileManWindow or dir("presets")
-	if not files then
+	local cache = shared_cache.openFileManWindow or {}
+	local dirs = cache.dirs or {
+		[1] = PresetFolders.VANILLA,
+		[2] = PresetFolders.CUSTOM
+	}
+	local files = cache.files or {}
+	local dirsCount = cache.dirsCount or 0
+	if not isTableValid(files) then
+		for i, location in ipairs(dirs) do
+			local entries = dir(location)
+			if entries then
+				dirsCount = dirsCount + 1
+				for _, entry in ipairs(entries) do
+					local name = entry.name
+					if name and hasLuaExt(name) then
+						files[name] = i
+					end
+				end
+			end
+		end
+	end
+
+	if dirsCount ~= #dirs then
 		file_man_open = false
-		logF(DevLevels.FULL, LogLevels.ERROR, 0x970b, Text.LOG_DIR_NOT_EXIST, "presets")
+		logF(DevLevels.FULL, LogLevels.ERROR, 0x970b, Text.LOG_PSETS_DIR_MISS)
 		return
 	end
-	shared_cache.openFileManWindow = files
+	shared_cache.openFileManWindow = cache
 
 	if areNumber(x, y, w, h) then
 		---@cast x number
@@ -3408,8 +3658,6 @@ local function openFileManWindow(scale, controlPadding, halfHeightPadding, butto
 	end
 	ImGui.Dummy(0, halfHeightPadding)
 
-	local anyFiles = false
-
 	local command = nil
 	local search = (file_man_search or ""):lower()
 	for _, value in pairs(SearchCommands) do
@@ -3425,12 +3673,7 @@ local function openFileManWindow(scale, controlPadding, halfHeightPadding, butto
 		ImGui.TableSetupColumn(" \u{f05e9}", ImGuiTableColumnFlags.WidthFixed)
 		ImGui.TableHeadersRow()
 
-		for _, file in ipairs(files) do
-			local f = file.name
-			if not hasLuaExt(f) then goto continue end
-
-			anyFiles = true
-
+		for f, i in opairs(files) do
 			if #search > 0 and not f:lower():find(search, 1, true) then
 				goto continue
 			end
@@ -3438,8 +3681,8 @@ local function openFileManWindow(scale, controlPadding, halfHeightPadding, butto
 			local k = trimLuaExt(f)
 			local p = camera_presets[k]
 			if isTableValid(p) and
-				(command == SearchCommands.MODDED and p.IsVanilla or
-					command == SearchCommands.VANILLA and not p.IsVanilla) then
+				command == SearchCommands.MODDED and p.IsVanilla or
+				command == SearchCommands.VANILLA and not p.IsVanilla then
 				goto continue
 			end
 
@@ -3504,8 +3747,10 @@ local function openFileManWindow(scale, controlPadding, halfHeightPadding, butto
 				ImGui.OpenPopup(f)
 			end
 
-			if addPopupYesNo(f, format(Text.GUI_FMAN_DEL_CONFIRM, f), scale, Colors.GARNET) then
-				local path = getPresetFilePath(f) ---@cast path string
+			local path = combine(dirs[i], f)
+			if addPopupYesNo(f, format(Text.GUI_FMAN_DEL_CONFIRM, path), scale, Colors.GARNET) then
+				if not dirs[i] then goto continue end
+
 				local ok, err = os.remove(path)
 				log_suspend = false
 				if ok then
@@ -3523,6 +3768,7 @@ local function openFileManWindow(scale, controlPadding, halfHeightPadding, butto
 
 					setPresetEntry(k)
 
+					---@cast editor_last_bundle IEditorBundle
 					if get(editor_last_bundle, {}, "Flux").Key == k then
 						restoreModifiedPresets()
 						clearLastEditorBundle()
@@ -3530,9 +3776,11 @@ local function openFileManWindow(scale, controlPadding, halfHeightPadding, butto
 
 					savePresetUsage()
 
-					logF(DevLevels.ALERT, LogLevels.INFO, 0x970b, Text.LOG_DEL_SUCCESS, f)
+					logF(DevLevels.ALERT, LogLevels.INFO, 0x970b, Text.LOG_PSET_DELETED, f)
+
+					shared_cache.openFileManWindow = nil
 				else
-					logF(DevLevels.FULL, LogLevels.WARN, 0x970b, Text.LOG_DEL_FAILURE, f, err)
+					logF(DevLevels.FULL, LogLevels.WARN, 0x970b, Text.LOG_PSET_DEL_FAIL, f, err)
 				end
 			end
 
@@ -3542,7 +3790,7 @@ local function openFileManWindow(scale, controlPadding, halfHeightPadding, butto
 		ImGui.EndTable()
 	end
 
-	if not anyFiles then
+	if nilOrEmpty(files) then
 		local hPad = ceil(180 * scale)
 		local wPad = floor(controlPadding - 4 * scale)
 		ImGui.Dummy(0, hPad)
@@ -3566,9 +3814,17 @@ end
 local function onInit()
 	loadGlobalOptions()
 	updateDefaultParams()
-	loadPresets(true)
 	loadPresetUsage()
-	applyPreset()
+
+	local task = presets_loader_task
+	if isTableValid(task) and not isFunction(task.finalCall) then
+		task.finalCall = function()
+			clearLastEditorBundle()
+			vehicle_cache = {}
+			applyPreset()
+		end
+	end
+	loadPresets(true, 5)
 end
 
 ---Handles logic when a vehicle is unmounted.
@@ -3681,16 +3937,11 @@ registerForEvent("onInit", function()
 	--every few seconds for no apparent reason, so it's essential
 	--to ensure the code runs only once when entering a vehicle.
 	Observe("VehicleComponent", "OnMountingEvent", function(_)
-		if not mod_enabled or not isVehicleMounted() or not nilOrEmpty(vehicle_cache) then
+		if not mod_enabled or not isVehicleMounted() or isTableValid(vehicle_cache) then
 			return
 		end
-
 		log_suspend = false
-
-		if dev_mode >= DevLevels.ALERT then
-			log(LogLevels.INFO, 0x0f9b, Text.LOG_EVNT_MNT)
-		end
-
+		logIf(DevLevels.ALERT, LogLevels.INFO, 0x0f9b, Text.LOG_EVNT_MNT)
 		updateDefaultParams()
 		applyPreset()
 	end)
@@ -3698,12 +3949,9 @@ registerForEvent("onInit", function()
 	--When the player unmounts from a vehicle, reset to default camera offsets.
 	Observe("VehicleComponent", "OnUnmountingEvent", function(_)
 		if isVehicleMounted() then
-			if dev_mode >= DevLevels.ALERT then
-				log(LogLevels.INFO, 0x0f9b, Text.LOG_EVNT_UMNT_FAIL)
-			end
+			logIf(DevLevels.ALERT, LogLevels.INFO, 0x0f9b, Text.LOG_EVNT_UMNT_FAIL)
 			return
 		end
-
 		onUnmount(false)
 	end)
 
@@ -3745,7 +3993,7 @@ registerForEvent("onInit", function()
 		onUnmount(true)
 
 		local deadline = 20
-		callEvery(0.3, function(id)
+		callAsync(0.3, function(id)
 			if not mod_enabled then
 				callHalt(id)
 				return
@@ -3788,7 +4036,7 @@ end)
 --Display a simple GUI with some options.
 registerForEvent("onDraw", function()
 	--Notification system (requires at least CET 'v1.35.1').
-	if runtime_full and toaster_active and not nilOrEmpty(toaster_bumps) then
+	if runtime_full and toaster_active and isTableValid(toaster_bumps) then
 		toaster_active = false
 		for k, v in pairs(toaster_bumps) do
 			local toast = ImGui.Toast.new(k, v)
@@ -3808,7 +4056,7 @@ registerForEvent("onDraw", function()
 	if not ImGui.Begin(Text.GUI_TITL, flags) then return end
 
 	local locked = overlay_locked
-	if locked then
+	if locked or presets_loader_task.isActive then
 		ImGui.BeginDisabled(true)
 	end
 
@@ -3886,7 +4134,6 @@ registerForEvent("onDraw", function()
 		restoreAllPresets()
 		loadPresets(true)
 		applyPreset()
-		logF(DevLevels.ALERT, LogLevels.INFO, 0xcb3d, Text.LOG_PSETS_RLD)
 	end
 	addTooltip(scale, Text.GUI_RLD_ALL_TIP)
 	ImGui.Dummy(0, halfHeightPadding)
@@ -3906,7 +4153,7 @@ registerForEvent("onDraw", function()
 	ImGui.Dummy(0, doubleHeightPadding)
 
 	--Table showing vehicle name, camera ID and more — if certain conditions are met.
-	local vehicle, name, appName, id, key, displayName, status
+	local vehicle, name, appName, id, key, displayName, status, statusText
 	local steps = {
 		function()
 			return not locked and dev_mode > DevLevels.DISABLED
@@ -3918,22 +4165,22 @@ registerForEvent("onDraw", function()
 		function()
 			name = getVehicleName()
 			if not name then
-				log(LogLevels.ERROR, 0xcb3d, Text.LOG_NO_NAME)
+				log(LogLevels.ERROR, 0xcb3d, Text.LOG_VEH_NAME_MISS)
 			end
 			return name
 		end,
 		function()
 			appName = getVehicleAppearanceName()
 			if not appName then
-				log(LogLevels.ERROR, 0xcb3d, Text.LOG_NO_APP)
+				log(LogLevels.ERROR, 0xcb3d, Text.LOG_APP_NOT_FOUND)
 			end
 			return appName
 		end,
 		function()
 			id = getVehicleCameraID()
 			if not id then
-				log(LogLevels.ERROR, 0xcb3d, Text.LOG_NO_ID)
-				addText(Text.LOG_NO_ID, Colors.GARNET, halfHeightPadding, contentWidth, itemSpacing)
+				log(LogLevels.ERROR, 0xcb3d, Text.LOG_CAM_ID_MISS)
+				addText(Text.LOG_CAM_ID_MISS, Colors.GARNET, halfHeightPadding, contentWidth, itemSpacing)
 			end
 			return id
 		end,
@@ -3945,7 +4192,7 @@ registerForEvent("onDraw", function()
 			vehicle_cache.onDraw_key = key
 
 			if not key then
-				log(LogLevels.ERROR, 0xcb3d, Text.LOG_NO_ID)
+				log(LogLevels.ERROR, 0xcb3d, Text.LOG_CAM_ID_MISS)
 			end
 
 			return key
@@ -3956,15 +4203,31 @@ registerForEvent("onDraw", function()
 
 			displayName = getVehicleDisplayName() or Text.GUI_NONE
 			vehicle_cache.onDraw_displayName = displayName
+
 			return displayName
 		end,
 		function()
 			status = vehicle_cache.onDraw_status
 			if isString(status) then return status end
 
-			status = Text["GUI_TBL_VAL_STATUS_" .. getVehicleStatus()] or Text.GUI_NONE
+			status = getVehicleStatus()
 			vehicle_cache.onDraw_status = status
+
 			return status
+		end,
+		function()
+			statusText = vehicle_cache.onDraw_statusText
+			if isString(status) then return status end
+
+			statusText = ({
+				[0] = Text.GUI_TBL_VAL_STATUS_0,
+				[1] = Text.GUI_TBL_VAL_STATUS_1,
+				[2] = Text.GUI_TBL_VAL_STATUS_2
+			})[status] or Text.GUI_NONE
+
+			vehicle_cache.onDraw_statusText = statusText
+
+			return statusText
 		end
 	}
 	local failed = false
@@ -4012,7 +4275,7 @@ registerForEvent("onDraw", function()
 	end
 
 	local bundle = getEditorBundle(name, appName, id, key) ---@cast bundle IEditorBundle
-	if nilOrEmpty(bundle) then
+	if not isTableValid(bundle) then
 		--Nothing else to display.
 		ImGui.End()
 	end
@@ -4037,7 +4300,7 @@ registerForEvent("onDraw", function()
 		local customID = getCustomVehicleCameraID()
 		local rows = {
 			{ label = "\u{f0208}", tip = Text.GUI_TBL_LABL_DNAME_TIP,  value = displayName },
-			{ label = "\u{f1975}", tip = Text.GUI_TBL_LABL_STATUS_TIP, value = status },
+			{ label = "\u{f1975}", tip = Text.GUI_TBL_LABL_STATUS_TIP, value = statusText },
 			{ label = "\u{f010b}", tip = Text.GUI_TBL_LABL_VEH_TIP,    value = name },
 			{ label = "\u{f07ac}", tip = Text.GUI_TBL_LABL_APP_TIP,    value = appName },
 			{ label = "\u{f0567}", tip = Text.GUI_TBL_LABL_CAMID_TIP,  value = id },
@@ -4046,7 +4309,7 @@ registerForEvent("onDraw", function()
 				tip    = Text.GUI_TBL_LABL_CCAMID_TIP,
 				value  = customID,
 				valTip = Text.GUI_TBL_VAL_CCAMID_TIP,
-				custom = not nilOrEmpty(customID)
+				custom = isStringValid(customID)
 			},
 			{
 				label    = "\u{f1952}",
@@ -4075,8 +4338,7 @@ registerForEvent("onDraw", function()
 				ImGui.Text(row.value)
 
 				local camMap = getVehicleCameraMap()
-				if isTableValid(camMap) then
-					---@cast camMap table<string, string>
+				if isTableValid(camMap) then ---@cast camMap table<string, string>
 					local list = split(row.valTip, "|") or {}
 					for _, v in ipairs(CameraLevels) do
 						local cam = camMap[v]
@@ -4288,7 +4550,8 @@ registerForEvent("onDraw", function()
 	addTooltip(scale, format(tasks.Restore and Text.GUI_REST_TIP or Text.GUI_SAVE_TIP, key))
 
 	if overwrite_confirm then
-		local confirmed = addPopupYesNo(key, format(Text.GUI_OVWR_CONFIRM, key), scale, Colors.CARAMEL)
+		local path = getPresetFilePath(key, status)
+		local confirmed = addPopupYesNo(key, format(Text.GUI_OVWR_CONFIRM, path), scale, Colors.CARAMEL)
 		if confirmed ~= nil then
 			overwrite_confirm = false
 			saveConfirmed = confirmed
@@ -4304,7 +4567,7 @@ registerForEvent("onDraw", function()
 		--user could theoretically delete preset files manually outside the game, and
 		--the mod wouldn't detect that at runtime. It would be problematic if saving
 		--were blocked just because the mod assumes there are no changes.
-		saveEditorPreset(key, flux, finale, tasks)
+		saveEditorPreset(key, flux, finale, tasks, status)
 	end
 
 	ImGui.Dummy(0, heightPadding)
@@ -4323,7 +4586,7 @@ end)
 registerForEvent("onShutdown", onShutdown)
 
 ---Called every frame to update active timers.
----Processes all running `callEvery` timers and executes their callbacks when their interval elapses.
+---Processes all running `callAsync` timers and executes their callbacks when their interval elapses.
 registerForEvent("onUpdate", function(deltaTime)
 	if not call_is_active then return end
 
@@ -4339,5 +4602,81 @@ registerForEvent("onUpdate", function(deltaTime)
 		::continue::
 	end
 end)
+
+--#endregion
+
+--#region 📟 Console Commands
+
+---Moves vanilla preset files to the correct folder and updates their metadata.
+---This command is intended for users who only create their own presets.
+---With the new version, vanilla presets are stored in a different folder.
+---If you downloaded a version of the mod without built-in presets, vanilla
+---presets might not load correctly.
+---This task scans the custom presets folder, identifies vanilla files, moves
+---them to the proper folder, and validates them.
+local function repairVanillaPresetFilesAsyncTask()
+	if shared_cache.moveVanillaFilesTask then return end
+	shared_cache.moveVanillaFilesTask = true
+
+	local files = {}
+	local entries = dir(PresetFolders.CUSTOM)
+	if entries then
+		for i, entry in ipairs(entries) do
+			local name = entry.name
+			if name and hasLuaExt(name) then
+				files[i] = name
+			end
+		end
+	end
+
+	local index, file
+	local vehicles = getPlayerVehicles()
+	local length = getVanillaVehicleCount()
+	length = length < #vehicles and length or #vehicles
+	callAsync(0, function(id)
+		index, file = next(files, index)
+		if not file then
+			callHalt(id)
+
+			editor_bundles = {}
+			vehicle_cache = {}
+			restoreAllPresets()
+			loadPresets(true)
+			applyPreset()
+
+			shared_cache.moveVanillaFilesTask = nil
+			return
+		end
+
+		local key = trimLuaExt(file)
+		for i = 1, length do
+			local name = findVehicleName(vehicles[i])
+			if isStringValid(name) then ---@cast name string
+				local search = "Vehicle." .. key
+				if startsWith(name, search) or findVehicleApperanceByName(name, key, 1) then
+					local path = getPresetFilePath(key, 2)
+					local chunk, _ = loadfile(path)
+					if not chunk then break end
+
+					local ok, result = pcall(chunk)
+					if not ok or not result or not isStringValid(result.ID) then break end
+
+					log_suspend = false
+					vehicle_cache.getVehicleStatus = 1
+					savePreset(key, result, true)
+					vehicle_cache.getVehicleStatus = nil
+
+					pcall(os.remove, path)
+					break
+				end
+			end
+		end
+	end)
+end
+
+return {
+	---Command: GetMod("ThirdPersonVehicleCameraTool").RepairVanillaPresets()
+	RepairVanillaPresets = repairVanillaPresetFilesAsyncTask
+}
 
 --#endregion

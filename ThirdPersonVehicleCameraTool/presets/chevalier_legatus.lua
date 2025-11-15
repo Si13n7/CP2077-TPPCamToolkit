@@ -1,1 +1,0 @@
-return{ID="v_utility4_centurion",Close={y=0.1,d=0.6},Medium={y=0.1},Far={y=0.1,d=5.6},IsVanilla=true}

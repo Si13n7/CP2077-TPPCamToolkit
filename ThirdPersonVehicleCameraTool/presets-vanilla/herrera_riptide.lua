@@ -1,0 +1,1 @@
+return{ID="4w_herrera_riptide",Close={a=nil,x=nil,y=0.35,z=nil,d=-0.5},Medium={a=nil,x=nil,y=0.35,z=nil,d=0.5},Far={a=nil,x=nil,y=0.35,z=nil,d=3.8},IsVanilla=true}

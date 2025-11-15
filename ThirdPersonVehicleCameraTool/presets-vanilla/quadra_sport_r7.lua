@@ -1,0 +1,1 @@
+return{ID="4w_Quadra66",Close={a=nil,x=nil,y=-0.15,z=nil,d=0.2},Medium={a=nil,x=nil,y=-0.15,z=nil,d=1.7},Far={a=nil,x=nil,y=-0.15,z=nil,d=5},IsVanilla=true}

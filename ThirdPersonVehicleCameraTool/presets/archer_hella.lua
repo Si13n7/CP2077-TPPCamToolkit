@@ -1,1 +1,0 @@
-return{ID="4w_Archer_Hella",Close={y=0,d=-0.3},Medium={y=0,d=1},Far={y=0,d=4.4},IsVanilla=true}

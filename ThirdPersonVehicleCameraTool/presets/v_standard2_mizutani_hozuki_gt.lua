@@ -1,1 +1,0 @@
-return{ID="4w_Hozuki",Close={y=0,d=-0.5},Medium={y=0,d=0.5},Far={y=0,d=3},IsVanilla=true}

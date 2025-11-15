@@ -1,0 +1,1 @@
+return{ID="4w_Limo_Thrax",Close={a=nil,x=nil,y=-0.3,z=nil,d=0.1},Medium={a=nil,x=nil,y=-0.3,z=nil,d=1.3},Far={a=nil,x=nil,y=-0.3,z=nil,d=4.3},IsVanilla=true}

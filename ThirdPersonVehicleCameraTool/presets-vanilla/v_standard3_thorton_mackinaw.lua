@@ -1,0 +1,1 @@
+return{ID="4w_Truck_Preset",Close={a=nil,x=nil,y=0,z=nil,d=-0.4},Medium={a=nil,x=nil,y=0,z=nil,d=1.1},Far={a=nil,x=nil,y=0,z=nil,d=4.2},IsVanilla=true}

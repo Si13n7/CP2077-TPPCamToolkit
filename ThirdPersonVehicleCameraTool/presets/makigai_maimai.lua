@@ -1,1 +1,0 @@
-return{ID="4w_Makigai",Close={y=0.06,d=-0.3},Medium={y=0.06,d=0.8},Far={y=0.06,d=3},IsVanilla=true}

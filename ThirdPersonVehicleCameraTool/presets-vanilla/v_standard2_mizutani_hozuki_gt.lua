@@ -1,0 +1,1 @@
+return{ID="4w_Hozuki",Close={a=nil,x=nil,y=0,z=nil,d=-0.5},Medium={a=nil,x=nil,y=0,z=nil,d=0.5},Far={a=nil,x=nil,y=0,z=nil,d=3},IsVanilla=true}

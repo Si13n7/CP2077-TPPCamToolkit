@@ -1,0 +1,1 @@
+return{ID="4w_Mahir_Supron_Kurtz",Close={a=nil,x=nil,y=0,z=nil,d=nil},Medium={a=nil,x=nil,y=0,z=nil,d=1.4},Far={a=nil,x=nil,y=0,z=nil,d=4.8},IsVanilla=true}
