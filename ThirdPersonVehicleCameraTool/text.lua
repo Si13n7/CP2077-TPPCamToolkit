@@ -1,3 +1,22 @@
+--[[
+==============================================
+This file is distributed under the MIT License
+==============================================
+
+Third-Person Vehicle Camera Tool
+
+Allows you to adjust third-person perspective
+(TPP) camera offsets for any vehicle.
+
+Filename: text.lua
+Version: 2025-04-15, 12:32 UTC+01:00 (MEZ)
+
+Copyright (c) 2025, Si13n7 Developments(tm)
+All rights reserved.
+______________________________________________
+--]]
+
+
 return {
 	--GUI: General
 	GUI_TRUE = "True",

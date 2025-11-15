@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-04-14, 00:05 UTC+01:00 (MEZ)
+Version: 2025-04-15, 12:55 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -17,176 +17,14 @@ ______________________________________________
 --]]
 
 
-
---[[====================================================
-		STANDARD DEFINITIONS FOR INTELLISENSE
-=======================================================]]
-
-
----Provides functions to create graphical user interface elements within the Cyber Engine Tweaks overlay.
----@class ImGui
----@field Begin fun(title: string, flags?: integer): boolean # Begins a new ImGui window with optional flags. Must be closed with `ImGui.End()`. Returns `true` if the window is open and should be rendered.
----@field Begin fun(title: string, open: boolean, flags?: integer): boolean # Begins a new ImGui window. Returns `true` if the window is open and should be rendered. If `open` is `false`, the window is not shown.
----@field End fun(): nil # Ends the creation of the current ImGui window. Must always be called after `ImGui.Begin()`.
----@field Separator fun(): nil # Draws a horizontal line to visually separate UI sections.
----@field Dummy fun(width: number, height: number): nil # Creates an invisible element of specified width and height, useful for spacing.
----@field SameLine fun(offsetX?: number, spacing?: number): nil # Places the next UI element on the same line. Optionally adds horizontal offset and spacing.
----@field Text fun(text: string): nil # Displays text within the current window or tooltip.
----@field PushTextWrapPos fun(wrapLocalPosX?: number): nil # Sets a maximum width (in pixels) for wrapping text. Applies to subsequent Text elements until `PopTextWrapPos()` is called. If no value is provided, wraps at the edge of the window.
----@field PopTextWrapPos fun(): nil # Restores the previous text wrapping position. Should be called after `PushTextWrapPos()` to reset wrapping behavior.
----@field Button fun(label: string, width?: number, height?: number): boolean # Creates a clickable button with optional width and height. Returns true if the button was clicked.
----@field Checkbox fun(label: string, value: boolean): (boolean, boolean) # Creates a toggleable checkbox. Returns `changed` (true if state has changed) and `value` (the new state).
----@field InputText fun(label: string, value: string, maxLength?: integer): (string, boolean) # Creates a single-line text input field. Returns a tuple: the `new value` and `changed` (true if the text was edited).
----@field SliderInt fun(label: string, value: integer, min: integer, max: integer): integer # Creates an integer slider. Returns the new `value`.
----@field DragFloat fun(label: string, value: number, speed?: number, min?: number, max?: number, format?: string): number # Creates a draggable float input widget. Allows the user to adjust the value by dragging or with arrow keys. Optional speed, min/max limits, and format string. Returns the updated float value.
----@field IsItemHovered fun(): boolean # Returns true if the last item is hovered by the mouse cursor.
----@field IsItemActive fun(): boolean # Returns true while the last item is being actively used (e.g., held with mouse or keyboard input).
----@field PushItemWidth fun(width: number): nil # Sets the width of the next UI element (e.g., slider, text input).
----@field PopItemWidth fun(): nil # Resets the width of the next UI element to the default value.
----@field BeginTooltip fun(): nil # Begins creating a tooltip. Must be paired with `ImGui.EndTooltip()`.
----@field EndTooltip fun(): nil # Ends the creation of a tooltip. Must be called after `ImGui.BeginTooltip()`.
----@field BeginTable fun(id: string, columns: integer, flags?: integer): boolean # Begins a table with the specified number of columns. Returns `true` if the table is created successfully and should be rendered.
----@field TableSetupColumn fun(label: string, flags?: integer, init_width_or_weight?: number): nil # Defines a column in the current table with optional flags and initial width or weight.
----@field TableHeadersRow fun(): nil # Automatically creates a header row using column labels defined by `TableSetupColumn()`. Must be called right after defining the columns.
----@field TableNextRow fun(): nil # Advances to the next row of the table. Must be called between rows.
----@field TableSetColumnIndex fun(index: integer): nil # Moves the focus to a specific column index within the current table row.
----@field EndTable fun(): nil # Ends the creation of the current table. Must always be called after `ImGui.BeginTable()`.
----@field GetColumnWidth fun(columnIndex?: integer): number # Returns the current width in pixels of the specified column index (default: 0). Only valid when called within an active table.
----@field GetContentRegionAvail fun(): number # Returns the width of the remaining content region inside the current window, excluding padding. Useful for calculating dynamic layouts or centering elements.
----@field CalcTextSize fun(text: string): number # Calculates the width of a given text string as it would be displayed using the current font. Returns the width in pixels as a floating-point number.
----@field GetStyle fun(): ImGuiStyle # Returns the current ImGui style object, which contains values for UI layout, spacing, padding, rounding, and more.
----@field GetWindowPos fun(): number, number # Returns the X and Y position of the current window, relative to the screen.
----@field GetWindowSize fun(): number, number # Returns the width and height of the current window in pixels.
----@field SetNextWindowPos fun(x: number, y: number): nil # Sets the position for the next window before calling ImGui.Begin().
----@field SetNextWindowSize fun(width: number, height: number): nil # Sets the size for the next window before calling ImGui.Begin().
----@field OpenPopup fun(id: string): nil # Opens a popup by identifier. Should be followed by ImGui.BeginPopup().
----@field BeginPopup fun(id: string): boolean # Starts a popup window with the given ID. Returns true if it should be drawn.
----@field CloseCurrentPopup fun(): nil # Closes the currently open popup window. Should be called inside the popup itself.
----@field EndPopup fun(): nil # Ends the current popup window. Always call after BeginPopup().
----@field PushStyleColor fun(idx: integer, color: integer): nil # Pushes a new color style override for the current ImGui context.
----@field PopStyleColor fun(count?: integer): nil # Removes one or more pushed style colors from the stack. Default count is 1.
-ImGui = ImGui
-
----Flags used to configure ImGui window behavior and appearance.
----@class ImGuiWindowFlags
----@field AlwaysAutoResize integer # Automatically resizes the window to fit its content each frame.
----@field NoCollapse integer # Disables the ability to collapse the window.
----@field NoResize integer # Disables window resizing.
----@field NoMove integer # Disables window moving.
-ImGuiWindowFlags = ImGuiWindowFlags
-
----Flags to customize table behavior and appearance.
----@class ImGuiTableFlags
----@field Borders integer # Draws borders between cells.
-ImGuiTableFlags = ImGuiTableFlags
-
----Flags to customize individual columns within a table.
----@class ImGuiTableColumnFlags
----@field WidthFixed integer # Makes the column have a fixed width.
----@field WidthStretch integer # Makes the column stretch to fill available space.
-ImGuiTableColumnFlags = ImGuiTableColumnFlags
-
----UI color indices used for styling via ImGui.PushStyleColor().
----Each index refers to a specific UI element's color.
----@class ImGuiCol
----@field Text integer # Color of text.
----@field Button integer # Color of button.
----@field ButtonHovered integer # Color of hovered button.
----@field ButtonActive integer # Color of pressed button.
----@field FrameBg integer # Background color of widgets with a frame (e.g., InputText, DragFloat, etc.) when idle.
----@field FrameBgHovered integer # Background color of framed widgets when hovered by the mouse.
----@field FrameBgActive integer # Background color of framed widgets when active (being edited or held).
-ImGuiCol = ImGuiCol
-
----Represents the current ImGui style configuration, controlling layout, spacing, padding, rounding, and more.
----@class ImGuiStyle
----@field ItemSpacing { x: number, y: number } # Horizontal and vertical spacing between widgets.
-ImGuiStyle = ImGuiStyle
-
----Bitwise operations (Lua 5.1 compatibility).
----@class bit32
----@field bor fun(...: integer): integer # Bitwise OR of all given integer values.
----@field band fun(x: integer, y: integer): integer # Returns the bitwise AND of two integers.
----@field bxor fun(x: integer, y: integer): integer # Returns the bitwise XOR (exclusive or) of two integers.
----@field rshift fun(x: integer, disp: integer): integer # Shifts `x` right by `disp` bits, filling in with zeros from the left.
----@field lshift fun(x: integer, disp: integer): integer # Shifts `x` left by `disp` bits, discarding bits shifted out on the left.
-bit32 = bit32
-
----Provides access to game data stored in the database, including camera offsets and various other game settings.
----@class TweakDB
----@field GetFlat fun(self: TweakDB, key: string): any? # Retrieves a value from the database based on the provided key.
----@field SetFlat fun(self: TweakDB, key: string, value: any) # Sets or modifies a value in the database for the specified key.
-TweakDB = TweakDB
-
----Represents a TweakDB ID used to reference records in the game database.
----@class TDBID
----@field ToStringDEBUG fun(id: TDBID): string? # Converts a TDBID to a readable string, typically starting with a namespace like "Vehicle.".
-TDBID = TDBID
-
----Provides various global game functions, such as getting the player, mounted vehicles, and converting names to strings.
----@class Game
----@field NameToString fun(value: any): string # Converts a game name object to a readable string.
----@field GetPlayer fun(): Player? # Retrieves the current player instance if available.
----@field GetMountedVehicle fun(player: Player): Vehicle? # Returns the vehicle the player is currently mounted in, if any.
-Game = Game
-
----Represents the player character in the game, providing functions to interact with the player instance.
----@class Player
----@field SetWarningMessage fun(self: Player, message: string, duration: number): nil # Displays a warning message on the player's screen for a specified duration.
-Player = Player
-
----Represents a vehicle entity within the game, providing functions to interact with it, such as getting the appearance name.
----@class Vehicle
----@field GetCurrentAppearanceName fun(self: Vehicle): string? # Retrieves the current appearance name of the vehicle.
----@field GetRecordID fun(self: Vehicle): any # Returns the unique TweakDBID associated with the vehicle.
----@field GetTDBID fun(self: Vehicle): TDBID? # Retrieves the internal TweakDB identifier used to reference this vehicle in the game database. Returns `nil` if unavailable.
-Vehicle = Vehicle
-
----Represents a three-dimensional vector, commonly used for positions or directions in the game.
----@class Vector3
----@field x number # The X-coordinate.
----@field y number # The Y-coordinate.
----@field z number # The Z-coordinate.
----@field new fun(x: number, y: number, z: number): Vector3 # Creates a new Vector3 instance with specified x, y, and z coordinates.
-Vector3 = Vector3
-
----Provides functionality to observe game events, allowing custom functions to be executed when certain events occur.
----@class Observe
----@field Observe fun(className: string, functionName: string, callback: fun(...): nil) # Sets up an observer for a specified function within the game.
-Observe = Observe
-
----Allows the registration of functions to be executed when certain game events occur, such as initialization or shutdown.
----@class registerForEvent
----@field registerForEvent fun(eventName: string, callback: fun(...): nil) # Registers a callback function for a specified event (e.g., `onInit`, `onIsDefault`).
-registerForEvent = registerForEvent
-
----Provides logging functionality, allowing messages to be printed to the console or log files for debugging purposes.
----@class spdlog
----@field info fun(message: string) # Logs an informational message, typically used for general debug output.
----@field error fun(message: string) # Logs an error message, usually when something goes wrong.
-spdlog = spdlog
-
----Retrieves a list of files and folders from a specified directory.
----@class dir
----(IntelliSense needs this extra line, as it is dissatisfied with the name `dir`, which we cannot change.)
----@return table # Returns a table containing information about each file and folder within the directory.
-dir = dir
-
-
-
---[[====================================================
-						MOD START
-=======================================================]]
-
-
----This function is equivalent to `string.format(...)` and exists for convenience and brevity.
+---This function is a short alias for `string.format(...)`.
 ---@type fun(format: string|number, ...: any): string
-F = string.format
+local F = string.format
 
 ---Loads all static UI and log string constants from `text.lua` into the global `Text` table.
 ---This is the most efficient way to manage display strings separately from logic and code.
 ---@type table<string, string>
-Text = dofile("text.lua")
+local Text = dofile("text.lua")
 
 ---Developer mode levels used to control the verbosity and behavior of debug output.
 ---@alias DevLevelType 0|1|2|3
@@ -196,20 +34,12 @@ Text = dofile("text.lua")
 ---@field ALERT DevLevelType # Print + alert.
 ---@field FULL DevLevelType # Print + alert + log.
 ---@type DevLevelEnum
-DevLevel = {
+local DevLevels = {
 	DISABLED = 0,
 	BASIC = 1,
 	ALERT = 2,
 	FULL = 3
 }
-
----The current debug mode level controlling logging and alerts:
----0 = Disabled
----1 = Print
----2 = Print + Alert
----3 = Print + Alert + Log
----@type DevLevelType
-DevMode = DevLevel.DISABLED
 
 ---Log levels used to classify the severity of log messages.
 ---@alias LogLevelType 0|1|2
@@ -218,40 +48,29 @@ DevMode = DevLevel.DISABLED
 ---@field WARN LogLevelType # Non-critical issues or unexpected behavior.
 ---@field ERROR LogLevelType # Critical failures or important errors that need attention.
 ---@type LogLevelEnum
-LogLevel = {
+local LogLevels = {
 	INFO = 0,
 	WARN = 1,
 	ERROR = 2
 }
 
----Color values used to style UI elements depending on context.
+---Defines color constants used for theming and UI interaction states.
 ---@class ColorEnum
----@field CUSTOM integer # Used for user-defined or dynamically adjusted presets.
----@field RESTORE integer # Used for presets that will restore to default values.
----@field CONFIRM integer # Used when confirming modifications or changes.
----@field DELETE integer # Used for destructive actions such as deletion.
+---@field CUSTOM integer # Verdigris Teal – indicates custom or user-adjusted presets.
+---@field RESTORE integer # Moss Jade – represents actions that revert values to defaults.
+---@field CONFIRM integer # Antique Bronze – used for confirming user-driven changes.
+---@field DELETE integer # Burnt Cranberry – signals destructive operations such as deletions.
 ---@type ColorEnum
-Colors = {
+local Colors = {
 	CUSTOM = 0x8a6a7a29,
 	RESTORE = 0x8a297a68,
 	CONFIRM = 0x8a295c7a,
-	DELETE = 0x8a29297a,
+	DELETE = 0x8a29297a
 }
 
----Format string for generating a TweakDB path to a vehicle's default rotation pitch value.
----First `%s` = camera ID, second `%s` = camera level (e.g., "High_Close").
----@type string
-local TWEAKDB_PATH_FORMAT_DRP = "Camera.VehicleTPP_%s_%s.defaultRotationPitch"
-
----Format string for generating a TweakDB path to a vehicle's look-at offset vector.
----First `%s` = camera ID, second `%s` = camera level (e.g., "Low_Medium").
----@type string
-local TWEAKDB_PATH_FORMAT_LAO = "Camera.VehicleTPP_%s_%s.lookAtOffset"
-
----Constant array of possible camera levels used in TweakDB path generation.
----Each level corresponds to the second `%s` in the `TWEAKDB_PATH_FORMAT` strings.
+---Constant array of possible camera levels.
 ---@type string[]
-local TWEAKDB_PATH_LEVELS = {
+local CameraLevels = {
 	"High_Close",
 	"High_Medium",
 	"High_Far",
@@ -266,25 +85,33 @@ local TWEAKDB_PATH_LEVELS = {
 	"Low_DriverCombatFar"
 }
 
----Constant array of camera levels.
+---Constant array of preset camera levels.
 ---@type string[]
-local CAMERA_LEVELS = { "Close", "Medium", "Far" }
+local PresetLevels = { "Close", "Medium", "Far" }
 
 ---Constant array of `IOffsetData` keys.
 ---@type string[]
-local OFFSETDATA_KEYS = { "a", "x", "y", "z" }
+local PresetOffsets = { "a", "x", "y", "z" }
+
+---The current debug mode level controlling logging and alerts:
+---0 = Disabled
+---1 = Print
+---2 = Print + Alert
+---3 = Print + Alert + Log
+---@type DevLevelType
+local dev_mode = DevLevels.DISABLED
 
 ---Determines whether the mod is enabled.
 ---@type boolean
-local _isEnabled = true
+local mod_enabled = true
 
 ---Determines whether a vehicle is currently mounted.
 ---@type boolean
-local _isVehicleMounted = false
+local vehicle_mounted = false
 
 ---List of camera preset IDs that were modified at runtime to enable selective restoration.
 ---@type string[]
-local _modifiedPresets = {}
+local used_presets = {}
 
 ---Represents a camera offset configuration with rotation and positional data.
 ---@class IOffsetData
@@ -304,20 +131,20 @@ local _modifiedPresets = {}
 
 ---Contains all camera presets and linked vehicles.
 ---@type table<string, ICameraPreset>
-local _cameraPresets = {}
+local camera_presets = {}
 
 ---Determines whether the CET overlay is open.
 ---@type boolean
-local _isOverlayOpen = false
+local overlay_open
 
 ---Current horizontal padding value used for centering UI elements.
 ---Dynamically adjusted based on available window width.
 ---@type number
-local _guiPadding
+local padding_width
 
----When set to true, disables dynamic window padding adjustments and uses the fixed `_guiPadding` value.
+---When set to true, disables dynamic window padding adjustments and uses the fixed `padding_width` value.
 ---@type boolean
-local _guiLockPadding
+local padding_locked
 
 ---Represents the state of a editable vehicle camera preset in the UI editor.
 ---Tracks different versions of the preset to properly trace changes.
@@ -340,28 +167,28 @@ local _guiLockPadding
 ---The key is always the vehicle name and appearance name, separated by an asterisk (*).
 ---Each entry tracks editor data and preset version states for the given vehicle.
 ---@type table<string, IEditorPresetData|nil>
-local _guiEditorPresetData = {}
+local editor_data = {}
 
 ---Determines whether overwriting the preset file is allowed.
 ---@type boolean
-local _guiOverwriteConfirm = false
+local overwrite_confirm
 
 ---Determines whether the Preset File Manager is open.
 ---@type boolean
-local _guiFileManToggle = false
+local file_man_open = false
 
----Logs and displays messages based on the current `DevMode` level.
+---Logs and displays messages based on the current `dev_mode` level.
 ---Messages can be written to the log file, printed to the console, or shown as in-game alerts.
 ---@param level LogLevelType # Logging level (0 = Info, 1 = Warning, 2 = Error).
 ---@param format string # A format string for the message.
 ---@vararg any # Additional arguments for formatting the message.
-function Log(level, format, ...)
-	if DevMode == DevLevel.DISABLED then return end
+local function log(level, format, ...)
+	if dev_mode == DevLevels.DISABLED then return end
 
-	local msg = F "[TPVCamTool]  "
-	if level >= LogLevel.ERROR then
+	local msg = "[TPVCamTool]  "
+	if level >= LogLevels.ERROR then
 		msg = msg .. "[Error]  "
-	elseif level == LogLevel.WARN then
+	elseif level == LogLevels.WARN then
 		msg = msg .. "[Warn]  "
 	else
 		msg = msg .. "[Info]  "
@@ -374,37 +201,37 @@ function Log(level, format, ...)
 		msg = formatted
 	end
 
-	if DevMode >= DevLevel.FULL then
-		if level == LogLevel.ERROR then
+	if dev_mode >= DevLevels.FULL then
+		if level == LogLevels.ERROR then
 			spdlog.error(msg)
 		else
 			spdlog.info(msg)
 		end
 	end
-	if DevMode >= DevLevel.ALERT then
+	if dev_mode >= DevLevels.ALERT then
 		local player = Game.GetPlayer()
 		if player then
 			player:SetWarningMessage(msg, 5)
 		end
 	end
-	if DevMode >= DevLevel.BASIC then
+	if dev_mode >= DevLevels.BASIC then
 		print(msg)
 	end
 end
 
----Enforces a log message to be emitted using a temporary `DevMode` override.
+---Enforces a log message to be emitted using a temporary `dev_mode` override.
 ---Useful for outputting messages regardless of the current developer mode setting.
----Internally calls `Log()` with the given parameters, then restores the previous `DevMode`.
+---Internally calls `log()` with the given parameters, then restores the previous `dev_mode`.
 ---@param mode DevLevelType # Temporary debug mode to use.
----@param level LogLevelType # Log level passed to `Log()`.
+---@param level LogLevelType # Log level passed to `log()`.
 ---@param format string # Format string for the message.
 ---@vararg any # Optional arguments for formatting the message.
-function LogE(mode, level, format, ...)
+local function logE(mode, level, format, ...)
 	if mode < 1 then return end
-	local previous = DevMode
-	DevMode = mode
-	Log(level, format, ...)
-	DevMode = previous
+	local previous = dev_mode
+	dev_mode = mode
+	log(level, format, ...)
+	dev_mode = previous
 end
 
 ---Checks whether all provided arguments are of a specified Lua type.
@@ -719,17 +546,20 @@ local function fileExists(path)
 	return false
 end
 
----Returns a formatted TweakDB record key for camera or vehicle data.
----@param format string # The format string to use, e.g. "Camera.VehicleTPP_%s_%s.defaultRotationPitch".
+---Returns a formatted TweakDB record key for accessing vehicle camera data.
 ---@param id string # The vehicle camera preset ID.
 ---@param path string # The camera level path (e.g. "High_Close").
----@return string # The formatted TweakDB record key.
-local function getRecordKey(format, id, path)
-	if id == "v_militech_basilisk_CameraPreset" then
-		format = format:gsub("^Camera", "Vehicle", 1)
-		path = path:gsub("Low", "High", 1):gsub("DriverCombat", "")
+---@return string? # The formatted TweakDB record key.
+local function getCameraTweakKey(id, path, var)
+	if not isString(id, path, var) then return nil end
+
+	local isVehicle = id == "v_militech_basilisk_CameraPreset"
+	if isVehicle and (startsWith(path, "Low") or contains(path, "DriverCombat")) then
+		return nil
 	end
-	return F(format, id, path)
+
+	local section = isVehicle and "Vehicle" or "Camera"
+	return F("%s.VehicleTPP_%s_%s.%s", section, id, path, var)
 end
 
 ---Fetches the default rotation pitch value for a vehicle camera.
@@ -737,12 +567,16 @@ end
 ---@param path string # The camera path for the vehicle.
 ---@return number # The default rotation pitch for the given camera path.
 local function getCameraDefaultRotationPitch(id, path)
+	local key = getCameraTweakKey(id, path, "defaultRotationPitch")
+
 	local defaults = {
 		v_militech_basilisk_CameraPreset = 5,
 		v_utility4_militech_behemoth_Preset = 12
 	}
 	local defValue = defaults[id] or 11
-	return tonumber(TweakDB:GetFlat(getRecordKey(TWEAKDB_PATH_FORMAT_DRP, id, path))) or defValue
+	if not key then return defValue end
+
+	return tonumber(TweakDB:GetFlat(key)) or defValue
 end
 
 ---Sets the default rotation pitch value for a vehicle camera.
@@ -750,9 +584,13 @@ end
 ---@param path string # The camera path for the vehicle.
 ---@param value number # The value to set for the default rotation pitch.
 local function setCameraDefaultRotationPitch(id, path, value)
+	local key = getCameraTweakKey(id, path, "defaultRotationPitch")
+	if not key then return end
+
 	local fallback = getCameraDefaultRotationPitch(id, path)
 	if not isNumber(value) or equals(value, fallback) then return end
-	TweakDB:SetFlat(getRecordKey(TWEAKDB_PATH_FORMAT_DRP, id, path), value or fallback)
+
+	TweakDB:SetFlat(key, value or fallback)
 end
 
 ---Fetches the current camera offset from TweakDB based on the specified ID and path.
@@ -760,7 +598,10 @@ end
 ---@param path string # The camera path to retrieve the offset for.
 ---@return Vector3? # The camera offset as a Vector3.
 local function getCameraLookAtOffset(id, path)
-	return TweakDB:GetFlat(getRecordKey(TWEAKDB_PATH_FORMAT_LAO, id, path))
+	local key = getCameraTweakKey(id, path, "lookAtOffset")
+	if not key then return nil end
+
+	return TweakDB:GetFlat(key)
 end
 
 ---Sets a camera offset in TweakDB to the specified position values.
@@ -770,10 +611,14 @@ end
 ---@param y number # The Y-coordinate of the camera position.
 ---@param z number # The Z-coordinate of the camera position.
 local function setCameraLookAtOffset(id, path, x, y, z)
+	local key = getCameraTweakKey(id, path, "lookAtOffset")
+	if not key then return end
+
 	local fallback = getCameraLookAtOffset(id, path)
 	if not fallback or (equals(x, fallback.x) and equals(y, fallback.y) and equals(z, fallback.z)) then return end
+
 	local value = Vector3.new(x or fallback.x, y or fallback.y, z or fallback.z)
-	TweakDB:SetFlat(getRecordKey(TWEAKDB_PATH_FORMAT_LAO, id, path), value)
+	TweakDB:SetFlat(key, value)
 end
 
 ---Extracts the record name from a TweakDBID string representation.
@@ -790,11 +635,11 @@ end
 local function getMountedVehicle()
 	local player = Game.GetPlayer()
 	if not player then
-		_isVehicleMounted = false
+		vehicle_mounted = false
 		return nil
 	end
 	local vehicle = Game.GetMountedVehicle(player)
-	_isVehicleMounted = vehicle ~= nil
+	vehicle_mounted = vehicle ~= nil
 	return vehicle
 end
 
@@ -852,15 +697,15 @@ local function getVehicleAppearanceName(vehicle)
 	return result
 end
 
----Attempts to find the best matching key in the `_cameraPresets` table using one or more candidate values.
+---Attempts to find the best matching key in the `camera_presets` table using one or more candidate values.
 ---It first checks for exact matches, and then for prefix-based partial matches.
 ---@param ... string # One or more strings to match against known preset keys (e.g., vehicle name, appearance name).
----@return string? # The matching key from `_cameraPresets`, or `nil` if no match was found.
+---@return string? # The matching key from `camera_presets`, or `nil` if no match was found.
 local function findPresetKey(...)
 	for pass = 1, 2 do
 		for i = 1, select("#", ...) do
 			local search = select(i, ...)
-			for key in pairs(_cameraPresets) do
+			for key in pairs(camera_presets) do
 				local exact = pass == 1 and search == key
 				local partial = pass == 2 and startsWith(search, key)
 				if exact or partial then return key end
@@ -886,7 +731,7 @@ local function validatePresetKey(vehicleName, appearanceName, currentKey, newKey
 
 	local len = #name
 	if len < 1 then
-		Log(LogLevel.WARN, Text.LOG_BLANK_NAME)
+		log(LogLevels.WARN, Text.LOG_BLANK_NAME)
 		return currentKey
 	end
 
@@ -896,9 +741,9 @@ local function validatePresetKey(vehicleName, appearanceName, currentKey, newKey
 	end
 
 	if vehicleName ~= appearanceName then
-		Log(LogLevel.WARN, Text.LOG_NAMES_MISM, vehicleName, appearanceName)
+		log(LogLevels.WARN, Text.LOG_NAMES_MISM, vehicleName, appearanceName)
 	else
-		Log(LogLevel.WARN, Text.LOG_NAME_MISM, vehicleName)
+		log(LogLevels.WARN, Text.LOG_NAME_MISM, vehicleName)
 	end
 
 	return currentKey
@@ -911,11 +756,11 @@ local function getPreset(id)
 	if not id then return nil end
 
 	local preset = { ID = id }
-	for i, path in ipairs(TWEAKDB_PATH_LEVELS) do
+	for i, path in ipairs(CameraLevels) do
 		local vec3 = getCameraLookAtOffset(id, path)
-		if not vec3 or (not vec3.x and not vec3.y and not vec3.z) then return nil end
+		if not vec3 or (not vec3.x and not vec3.y and not vec3.z) then goto continue end
 
-		local level = CAMERA_LEVELS[(i - 1) % 3 + 1]
+		local level = PresetLevels[(i - 1) % 3 + 1]
 		local angle = getCameraDefaultRotationPitch(id, path)
 
 		---@cast preset ICameraPreset
@@ -927,14 +772,16 @@ local function getPreset(id)
 		}
 
 		if preset.Far and preset.Medium and preset.Close then
-			if DevMode >= DevLevel.FULL then
-				Log(LogLevel.INFO, Text.LOG_CAM_OSET_DONE, id)
+			if dev_mode >= DevLevels.FULL then
+				log(LogLevels.INFO, Text.LOG_CAM_OSET_DONE, id)
 			end
 			return preset
 		end
+
+		::continue::
 	end
 
-	Log(LogLevel.ERROR, Text.LOG_NO_CAM_OSET, id)
+	log(LogLevels.ERROR, Text.LOG_NO_CAM_OSET, id)
 	return nil
 end
 
@@ -947,22 +794,22 @@ local function getDefaultPreset(preset)
 	local id = preset.ID
 	if not id then return nil end
 
-	for _, item in pairs(_cameraPresets) do
+	for _, item in pairs(camera_presets) do
 		if item.IsDefault and item.ID == id then
-			if DevMode >= DevLevel.FULL then
-				Log(LogLevel.INFO, Text.LOG_FOUND_DEF, id)
+			if dev_mode >= DevLevels.FULL then
+				log(LogLevels.INFO, Text.LOG_FOUND_DEF, id)
 			end
 			return item
 		end
 	end
 
-	Log(LogLevel.ERROR, Text.LOG_MISS_DEF, id)
+	log(LogLevels.ERROR, Text.LOG_MISS_DEF, id)
 
 	local fallback = getPreset(id)
 	if not fallback then return nil end
 
 	fallback.IsDefault = true
-	_cameraPresets[id] = fallback
+	camera_presets[id] = fallback
 	return fallback
 end
 
@@ -975,8 +822,8 @@ end
 ---@return number y # The Y offset value. Falls back to 0 if not found.
 ---@return number z # The Z offset value. Falls back to a default per level (Close = 1.115, Medium = 1.65, Far = 2.25).
 local function getOffsetData(preset, fallback, level)
-	if not isTable(preset) or not contains(CAMERA_LEVELS, level) then
-		LogE(DevLevel.FULL, LogLevel.ERROR, Text.LOG_NO_PSET_FOR_LVL, level)
+	if not isTable(preset) or not contains(PresetLevels, level) then
+		logE(DevLevels.FULL, LogLevels.ERROR, Text.LOG_NO_PSET_FOR_LVL, level)
 		return 0, 0, 0, 0 --Should never be returned with the current code.
 	end
 
@@ -997,7 +844,7 @@ end
 ---If the preset includes a `Link` field, the function follows the link recursively
 ---until a final preset is found or the recursion depth limit (8) is reached.
 ---Missing values in the preset are replaced with fallback values from the default preset, if available.
----Each successfully applied preset ID is recorded in `_modifiedPresets`.
+---Each successfully applied preset ID is recorded in `used_presets`.
 ---@param preset ICameraPreset? # The preset to apply. May be `nil` to auto-resolve via the current vehicle.
 ---@param count number? # Internal recursion counter to prevent infinite loops via `Link`. Do not set manually.
 local function applyPreset(preset, count)
@@ -1014,20 +861,20 @@ local function applyPreset(preset, count)
 		local key = name == appName and findPresetKey(name) or findPresetKey(name, appName)
 		if not key then return end
 
-		if DevMode >= DevLevel.ALERT then
-			Log(LogLevel.INFO, Text.LOG_CAM_PSET, key)
+		if dev_mode >= DevLevels.ALERT then
+			log(LogLevels.INFO, Text.LOG_CAM_PSET, key)
 		end
 
-		applyPreset(_cameraPresets[key], 0)
+		applyPreset(camera_presets[key], 0)
 		return
 	end
 
 	if preset and preset.Link then
 		count = (count or 0) + 1
-		if DevMode >= DevLevel.FULL then
-			Log(LogLevel.INFO, Text.LOG_LINK_PSET, count, preset.Link)
+		if dev_mode >= DevLevels.FULL then
+			log(LogLevels.INFO, Text.LOG_LINK_PSET, count, preset.Link)
 		end
-		preset = _cameraPresets[preset.Link]
+		preset = camera_presets[preset.Link]
 		if preset and preset.Link and count < 8 then
 			applyPreset(preset, count)
 			return
@@ -1035,52 +882,52 @@ local function applyPreset(preset, count)
 	end
 
 	if not preset or not preset.ID then
-		Log(LogLevel.ERROR, Text.LOG_FAIL_APPLY)
+		log(LogLevels.ERROR, Text.LOG_FAIL_APPLY)
 		return
 	end
 
 	local fallback = getDefaultPreset(preset) or {}
-	for i, path in ipairs(TWEAKDB_PATH_LEVELS) do
-		local level = CAMERA_LEVELS[(i - 1) % 3 + 1]
+	for i, path in ipairs(CameraLevels) do
+		local level = PresetLevels[(i - 1) % 3 + 1]
 		local a, x, y, z = getOffsetData(preset, fallback, level)
 
 		setCameraLookAtOffset(preset.ID, path, x, y, z)
 		setCameraDefaultRotationPitch(preset.ID, path, a)
 	end
 
-	table.insert(_modifiedPresets, preset.ID)
+	table.insert(used_presets, preset.ID)
 end
 
 ---Restores all camera offset presets to their default values.
 local function restoreAllPresets()
-	for _, preset in pairs(_cameraPresets) do
+	for _, preset in pairs(camera_presets) do
 		if preset.IsDefault then
 			applyPreset(preset)
 		end
 	end
-	_modifiedPresets = {}
+	used_presets = {}
 
-	Log(LogLevel.INFO, Text.LOG_REST_ALL)
+	log(LogLevels.INFO, Text.LOG_REST_ALL)
 end
 
 ---Restores modified camera offset presets to their default values.
 local function restoreModifiedPresets()
-	local changed = _modifiedPresets
+	local changed = used_presets
 	if #changed == 0 then return end
 
 	local amount = #changed
 	local restored = 0
-	for _, preset in pairs(_cameraPresets) do
+	for _, preset in pairs(camera_presets) do
 		if preset.IsDefault and contains(changed, preset.ID) then
 			applyPreset(preset)
-			Log(LogLevel.INFO, Text.LOG_REST_PSET, preset.ID)
+			log(LogLevels.INFO, Text.LOG_REST_PSET, preset.ID)
 			restored = restored + 1
 		end
 		if restored >= amount then break end
 	end
-	_modifiedPresets = {}
+	used_presets = {}
 
-	Log(LogLevel.INFO, Text.LOG_REST_PSETS, restored, amount)
+	log(LogLevels.INFO, Text.LOG_REST_PSETS, restored, amount)
 end
 
 ---Validates whether the given camera offset preset is structurally valid.
@@ -1093,12 +940,12 @@ local function isPresetValid(preset)
 	if not isTable(preset) then return false end
 
 	if isString(preset.ID) then
-		for _, e in ipairs(CAMERA_LEVELS) do
+		for _, e in ipairs(PresetLevels) do
 			local offset = preset[e]
 			if not isTable(offset) then
 				goto continue
 			end
-			for _, k in ipairs(OFFSETDATA_KEYS) do
+			for _, k in ipairs(PresetOffsets) do
 				if isNumber(offset[k]) then
 					return true
 				end
@@ -1119,7 +966,7 @@ local function isPresetValid(preset)
 	return false
 end
 
----Adds, updates, or removes a preset entry in the `_cameraPresets` table.
+---Adds, updates, or removes a preset entry in the `camera_presets` table.
 ---@param key string # The key under which the preset is stored (usually the preset name without ".lua").
 ---@param preset ICameraPreset? # The preset to store. If `nil`, the existing entry will be removed.
 ---@return boolean # True if the operation was successful (added, updated or removed), false if the key is invalid or the preset is not valid.
@@ -1127,15 +974,15 @@ local function setPresetEntry(key, preset)
 	if not isString(key) then return false end
 
 	if preset == nil then
-		if _cameraPresets[key] ~= nil then
-			_cameraPresets[key] = nil
+		if camera_presets[key] ~= nil then
+			camera_presets[key] = nil
 		end
 		return true
 	end
 
 	if not isPresetValid(preset) then return false end
 
-	_cameraPresets[key] = preset
+	camera_presets[key] = preset
 	return true
 end
 
@@ -1152,8 +999,8 @@ end
 
 ---Clears all currently loaded camera offset presets.
 local function purgePresets()
-	_cameraPresets = {}
-	Log(LogLevel.WARN, Text.LOG_CLEAR_PSETS)
+	camera_presets = {}
+	log(LogLevels.WARN, Text.LOG_CLEAR_PSETS)
 end
 
 ---Loads camera offset presets from `./defaults` (first) and `./presets` (second).
@@ -1164,7 +1011,7 @@ local function loadPresets(refresh)
 	local function loadFrom(path)
 		local files = dir("./" .. path)
 		if not files then
-			LogE(DevLevel.FULL, LogLevel.ERROR, Text.LOG_DIR_NOT_EXIST, path)
+			logE(DevLevels.FULL, LogLevels.ERROR, Text.LOG_DIR_NOT_EXIST, path)
 			return -1
 		end
 
@@ -1175,27 +1022,27 @@ local function loadPresets(refresh)
 			if not name or not hasLuaExt(name) then goto continue end
 
 			local key = trimLuaExt(name)
-			if _cameraPresets[key] then
+			if camera_presets[key] then
 				count = count + 1
-				LogE(DevLevel.BASIC, LogLevel.WARN, Text.LOG_SKIP_PSET, key, path, name)
+				logE(DevLevels.BASIC, LogLevels.WARN, Text.LOG_SKIP_PSET, key, path, name)
 				goto continue
 			end
 
 			local chunk, err = loadfile(path .. "/" .. name)
 			if not chunk then
-				LogE(DevLevel.BASIC, LogLevel.ERROR, Text.LOG_FAIL_LOAD, path, name, err)
+				logE(DevLevels.BASIC, LogLevels.ERROR, Text.LOG_FAIL_LOAD, path, name, err)
 				goto continue
 			end
 
 			local ok, result = pcall(chunk)
 			if not ok or (isDef and not result.IsDefault) or not setPresetEntry(key, result) then
-				LogE(DevLevel.BASIC, LogLevel.ERROR, Text.LOG_BAD_PSET, path, name)
+				logE(DevLevels.BASIC, LogLevels.ERROR, Text.LOG_BAD_PSET, path, name)
 				goto continue
 			end
 
 			count = count + 1
-			if DevMode >= DevLevel.FULL then
-				Log(LogLevel.INFO, Text.LOG_LOAD_PSET, key, path, name)
+			if dev_mode >= DevLevels.FULL then
+				log(LogLevels.INFO, Text.LOG_LOAD_PSET, key, path, name)
 			end
 
 			::continue::
@@ -1209,12 +1056,12 @@ local function loadPresets(refresh)
 	end
 
 	if loadFrom("defaults") < 39 then
-		_isEnabled = false
-		LogE(DevLevel.FULL, LogLevel.ERROR, Text.LOG_DEFS_INCOMP)
+		mod_enabled = false
+		logE(DevLevels.FULL, LogLevels.ERROR, Text.LOG_DEFS_INCOMP)
 		return
 	end
 
-	_isEnabled = loadFrom("presets") >= 0
+	mod_enabled = loadFrom("presets") >= 0
 end
 
 ---Saves a camera preset to file, either as a regular preset or as a default.
@@ -1232,7 +1079,7 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 		local check = io.open(path, "r")
 		if check then
 			check:close()
-			Log(LogLevel.WARN, Text.LOG_FILE_EXIST, path)
+			log(LogLevels.WARN, Text.LOG_FILE_EXIST, path)
 			return false
 		end
 	end
@@ -1241,14 +1088,14 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 	local save = false
 	local parts = { "return{" }
 	table.insert(parts, F("ID=%q,", preset.ID))
-	for _, mode in ipairs(CAMERA_LEVELS) do
+	for _, mode in ipairs(PresetLevels) do
 		local p = preset[mode]
 		local d = default[mode]
 		local sub = {}
 
 		if isTable(p) then
 			d = isTable(d) and d or {}
-			for _, k in ipairs(OFFSETDATA_KEYS) do
+			for _, k in ipairs(PresetOffsets) do
 				if saveAsDefault or not equals(p[k], d[k]) then
 					save = true
 					table.insert(sub, F("%s=%s", k, stringOf(p[k])))
@@ -1262,12 +1109,12 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 	end
 
 	if not save then
-		Log(LogLevel.WARN, Text.LOG_PSET_NOT_CHANGED, name, default.ID)
+		log(LogLevels.WARN, Text.LOG_PSET_NOT_CHANGED, name, default.ID)
 
 		if not saveAsDefault then
 			local ok = os.remove(path)
 			if ok then
-				LogE(DevLevel.ALERT, LogLevel.WARN, Text.LOG_DEL_SUCCESS, path)
+				logE(DevLevels.ALERT, LogLevels.WARN, Text.LOG_DEL_SUCCESS, path)
 			end
 			return ok and setPresetEntry(name)
 		end
@@ -1293,7 +1140,7 @@ local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 	file:write(table.concat(parts))
 	file:close()
 
-	LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_PSET_SAVED, name)
+	logE(DevLevels.ALERT, LogLevels.INFO, Text.LOG_PSET_SAVED, name)
 
 	return true
 end
@@ -1304,25 +1151,32 @@ end
 ---@return number padding # The calculated horizontal padding for centering elements.
 local function getMetrics()
 	local width = ImGui.GetContentRegionAvail()
-	if _guiLockPadding then return width, _guiPadding end
+	if padding_locked then return width, padding_width end
 	local style = ImGui.GetStyle()
-	_guiPadding = math.max(10, math.floor((width - 230) * 0.5 + 18) - style.ItemSpacing.x)
-	return width, _guiPadding
+	padding_width = math.max(10, math.floor((width - 230) * 0.5 + 18) - style.ItemSpacing.x)
+	return width, padding_width
 end
 
 ---Adjusts an ABGR color by modifying its alpha, blue, green, and red (weird order in LUA) components.
----@param col integer # The input color in 0xAARRGGBB format.
----@param da integer # Amount to add to the alpha channel.
----@param db integer # Amount to add to the blue channel.
----@param dg integer # Amount to add to the green channel.
----@param dr integer # Amount to add to the red channel.
+---@param c integer # The input color in 0xAARRGGBB format.
+---@param aa integer? # Amount to add to the alpha channel.
+---@param bb integer? # Amount to add to the blue channel.
+---@param gg integer? # Amount to add to the green channel.
+---@param rr integer? # Amount to add to the red channel.
 ---@return integer # The resulting adjusted color in 0xAARRGGBB format.
-local function adjustColor(col, da, db, dg, dr)
-	if not isNumber(col, da, db, dg, dr) then return 0 end
-	local a = math.min(0xff, bit32.band(bit32.rshift(col, 24), 0xff) + da)
-	local b = math.min(0xff, bit32.band(bit32.rshift(col, 16), 0xff) + db)
-	local g = math.min(0xff, bit32.band(bit32.rshift(col, 8), 0xff) + dg)
-	local r = math.min(0xff, bit32.band(col, 0xff) + dr)
+local function adjustColor(c, aa, bb, gg, rr)
+	if not isNumber(c) then return 0 end
+
+	local a = bit32.band(bit32.rshift(c, 24), 0xff)
+	local b = bit32.band(bit32.rshift(c, 16), 0xff)
+	local g = bit32.band(bit32.rshift(c, 8), 0xff)
+	local r = bit32.band(c, 0xff)
+
+	a = isNumber(aa) and math.min(0xff, a + aa) or a
+	b = isNumber(bb) and math.min(0xff, b + bb) or b
+	g = isNumber(gg) and math.min(0xff, g + gg) or g
+	r = isNumber(rr) and math.min(0xff, r + rr) or r
+
 	return bit32.bor(bit32.lshift(a, 24), bit32.lshift(b, 16), bit32.lshift(g, 8), r)
 end
 
@@ -1331,9 +1185,12 @@ end
 ---@param base integer # The base color in 0xAAGGBBRR format.
 ---@return integer, integer, integer # Returns three color variants: base, hover, and active.
 local function getThreeColorsFrom(idx, base)
+	if not isNumber(base) then return 0, 0, 0 end
+
 	local alpha = idx == ImGuiCol.Button and 0xff or 0
 	local hover = adjustColor(base, alpha, 32, 32, 32)
 	local active = adjustColor(base, alpha, 64, 64, 64)
+
 	return base, hover, active
 end
 
@@ -1342,15 +1199,19 @@ end
 ---Returns the number of pushed styles so they can be popped accordingly.
 ---@param idx integer # The ImGuiCol index for the base color (e.g. ImGuiCol.FrameBg or ImGuiCol.Button).
 ---@param color integer # The base color in 0xAAGGBBRR format.
----@return integer # The number of style colors pushed (atm always 3). Returns 0 if arguments are invalid.
+---@return integer # The number of style colors pushed. Returns 0 if arguments are invalid.
 local function pushStyleColors(idx, color)
 	if not isNumber(idx, color) then return 0 end
+
 	local hoveredIdx = idx + 1
 	local activeIdx = idx + 2
 	local base, hover, active = getThreeColorsFrom(idx, color)
+
 	ImGui.PushStyleColor(idx, base)
 	ImGui.PushStyleColor(hoveredIdx, hover)
 	ImGui.PushStyleColor(activeIdx, active)
+
+	--Currently always 3; may become dynamic if more GUI elements are added someday.
 	return 3
 end
 
@@ -1461,41 +1322,41 @@ registerForEvent("onInit", function()
 	applyPreset()
 
 	--When the player mounts a vehicle, automatically apply the matching camera preset if available.
-	--This event can fire even if the player is already mounted, so we guard with `_isVehicleMounted`.
+	--This event can fire even if the player is already mounted, so we guard with `vehicle_mounted`.
 	Observe("VehicleComponent", "OnMountingEvent", function()
-		if not _isEnabled or _isVehicleMounted then return end
+		if not mod_enabled or vehicle_mounted then return end
 		applyPreset()
 	end)
 
 	--When the player unmounts from a vehicle, reset to default camera offsets.
 	Observe("VehicleComponent", "OnUnmountingEvent", function()
-		if not _isEnabled then return end
-		_isVehicleMounted = false
+		if not mod_enabled then return end
+		vehicle_mounted = false
 		restoreModifiedPresets()
 	end)
 
 	--Reset the current editor state when the player takes control of their character
 	--(usually after loading a save game). This ensures UI does not persist stale data.
 	Observe("PlayerPuppet", "OnTakeControl", function(self)
-		if not _isEnabled or self:GetEntityID().hash ~= 1 then return end
-		_isVehicleMounted = false
+		if not mod_enabled or self:GetEntityID().hash ~= 1 then return end
+		vehicle_mounted = false
 	end)
 end)
 
 --Detects when the CET overlay is opened.
 registerForEvent("onOverlayOpen", function()
-	_isOverlayOpen = true
+	overlay_open = true
 end)
 
 --Detects when the CET overlay is closed.
 registerForEvent("onOverlayClose", function()
-	_isOverlayOpen = false
+	overlay_open = false
 end)
 
 --Display a simple GUI with some options.
 registerForEvent("onDraw", function()
 	--Main window begins
-	if not _isOverlayOpen or not ImGui.Begin(Text.GUI_TITL, ImGuiWindowFlags.AlwaysAutoResize) then return end
+	if not overlay_open or not ImGui.Begin(Text.GUI_TITL, ImGuiWindowFlags.AlwaysAutoResize) then return end
 
 	--Minimum window width and height padding.
 	ImGui.Dummy(230, 4)
@@ -1506,19 +1367,19 @@ registerForEvent("onDraw", function()
 	--Checkbox to toggle mod functionality and handle enable/disable logic.
 	ImGui.Dummy(controlPadding, 0)
 	ImGui.SameLine()
-	local isEnabled = ImGui.Checkbox(Text.GUI_TGL_MOD, _isEnabled)
+	local isEnabled = ImGui.Checkbox(Text.GUI_TGL_MOD, mod_enabled)
 	addTooltip(Text.GUI_TGL_MOD_TIP)
-	if isEnabled ~= _isEnabled then
-		_isEnabled = isEnabled
+	if isEnabled ~= mod_enabled then
+		mod_enabled = isEnabled
 		if isEnabled then
 			loadPresets()
 			applyPreset()
-			LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_MOD_ON)
+			logE(DevLevels.ALERT, LogLevels.INFO, Text.LOG_MOD_ON)
 		else
-			_guiEditorPresetData = {}
+			editor_data = {}
 			restoreAllPresets()
 			purgePresets()
-			LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_MOD_OFF)
+			logE(DevLevels.ALERT, LogLevels.INFO, Text.LOG_MOD_OFF)
 
 			--Mod is disabled — nothing left to add.
 			ImGui.End()
@@ -1531,11 +1392,11 @@ registerForEvent("onDraw", function()
 	ImGui.Dummy(controlPadding, 0)
 	ImGui.SameLine()
 	if ImGui.Button(Text.GUI_RLD_ALL, 192, 24) then
-		_guiEditorPresetData = {}
+		editor_data = {}
 		loadPresets(true)
 		restoreAllPresets()
 		applyPreset()
-		LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_PSETS_RLD)
+		logE(DevLevels.ALERT, LogLevels.INFO, Text.LOG_PSETS_RLD)
 	end
 	addTooltip(Text.GUI_RLD_ALL_TIP)
 	ImGui.Dummy(0, 2)
@@ -1544,8 +1405,8 @@ registerForEvent("onDraw", function()
 	ImGui.Dummy(controlPadding, 0)
 	ImGui.SameLine()
 	ImGui.PushItemWidth(77)
-	DevMode = ImGui.SliderInt(Text.GUI_DMODE, DevMode, DevLevel.DISABLED, DevLevel.FULL)
-	_guiLockPadding = ImGui.IsItemActive()
+	dev_mode = ImGui.SliderInt(Text.GUI_DMODE, dev_mode, DevLevels.DISABLED, DevLevels.FULL)
+	padding_locked = ImGui.IsItemActive()
 	addTooltip(Text.GUI_DMODE_TIP)
 	ImGui.PopItemWidth()
 	ImGui.Dummy(0, 8)
@@ -1554,7 +1415,7 @@ registerForEvent("onDraw", function()
 	local vehicle, name, appName, id, key
 	for _, fn in ipairs({
 		function()
-			return DevMode > DevLevel.DISABLED
+			return dev_mode > DevLevels.DISABLED
 		end,
 		function()
 			vehicle = getMountedVehicle()
@@ -1584,7 +1445,7 @@ registerForEvent("onDraw", function()
 		end
 	end
 
-	local editor = deep(_guiEditorPresetData, F("%s*%s", name, appName))
+	local editor = deep(editor_data, F("%s*%s", name, appName))
 	---@cast editor IEditorPresetData
 	if not editor.CurName then
 		editor.CurName = key
@@ -1644,7 +1505,7 @@ registerForEvent("onDraw", function()
 	--Camera preset editor allowing adjustments to Angle, X, Y, and Z coordinates — if certain conditions are met.
 	local preset = editor.Current or getPreset(id)
 	if not preset then
-		Log(LogLevel.WARN, Text.LOG_NO_PSET_FOUND)
+		log(LogLevels.WARN, Text.LOG_NO_PSET_FOUND)
 
 		--GUI closed — no further controls required.
 		ImGui.End()
@@ -1679,7 +1540,7 @@ registerForEvent("onDraw", function()
 
 	local default = editor.Default
 	if not default then
-		Log(LogLevel.ERROR, Text.LOG_NO_DEF_PSET, id, name)
+		log(LogLevels.ERROR, Text.LOG_NO_DEF_PSET, id, name)
 
 		--GUI ends early — default preset not found.
 		ImGui.End()
@@ -1707,12 +1568,12 @@ registerForEvent("onDraw", function()
 			Text.GUI_TBL_VAL_Y_TIP,
 			Text.GUI_TBL_VAL_Z_TIP
 		}
-		for _, level in ipairs(CAMERA_LEVELS) do
+		for _, level in ipairs(PresetLevels) do
 			ImGui.TableNextRow()
 			ImGui.TableSetColumnIndex(0)
 			ImGui.Text(level)
 
-			for i, field in ipairs(OFFSETDATA_KEYS) do
+			for i, field in ipairs(PresetOffsets) do
 				local defValue = get(default, 0, level, field)
 				local curValue = get(preset, defValue, level, field)
 				local speed = pick(i, 1, 5e-3)
@@ -1768,8 +1629,8 @@ registerForEvent("onDraw", function()
 	if ImGui.Button(Text.GUI_APPLY, contentWidth, 24) then
 		editor.RefreshPending = true
 		editor.ApplyPending = false
-		_cameraPresets[key] = preset
-		LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_PSET_UPD, key)
+		camera_presets[key] = preset
+		logE(DevLevels.ALERT, LogLevels.INFO, Text.LOG_PSET_UPD, key)
 	end
 	popSyleColors(pushedStyles)
 	addTooltip(Text.GUI_APPLY_TIP)
@@ -1781,7 +1642,7 @@ registerForEvent("onDraw", function()
 	pushedStyles = editor.SavePending and pushStyleColors(ImGuiCol.Button, color) or 0
 	if ImGui.Button(Text.GUI_SAVE, contentWidth, 24) then
 		if presetFileExists(key) then
-			_guiOverwriteConfirm = true
+			overwrite_confirm = true
 			ImGui.OpenPopup(overwritePopup)
 		else
 			saveConfirmed = true
@@ -1790,25 +1651,25 @@ registerForEvent("onDraw", function()
 	popSyleColors(pushedStyles)
 	addTooltip(F(editor.SaveIsRestore and Text.GUI_REST_TIP or Text.GUI_SAVE_TIP, key))
 
-	if _guiOverwriteConfirm then
+	if overwrite_confirm then
 		local confirmed = addPopupYesNo(overwritePopup, F(Text.GUI_OVWR_CONFIRM, key), Colors.CONFIRM)
 		if confirmed ~= nil then
-			_guiOverwriteConfirm = false
+			overwrite_confirm = false
 			saveConfirmed = confirmed
 		end
 	end
 	if saveConfirmed then
 		saveConfirmed = false
 
-		_cameraPresets[key] = preset
+		camera_presets[key] = preset
 		editor.RefreshPending = true
 		editor.ApplyPending = false
-		Log(LogLevel.INFO, Text.LOG_PSET_UPD, key)
+		log(LogLevels.INFO, Text.LOG_PSET_UPD, key)
 
 		if savePreset(key, preset, true) then
 			editor.SavePending = false
 		else
-			LogE(DevLevel.ALERT, LogLevel.WARN, Text.LOG_PSET_NOT_SAVED, key)
+			logE(DevLevels.ALERT, LogLevels.WARN, Text.LOG_PSET_NOT_SAVED, key)
 		end
 	end
 
@@ -1821,7 +1682,7 @@ registerForEvent("onDraw", function()
 	if ImGui.Button(Text.GUI_OPEN_FMAN, contentWidth, 24) then
 		x, y = ImGui.GetWindowPos()
 		w, h = ImGui.GetWindowSize()
-		_guiFileManToggle = not _guiFileManToggle
+		file_man_open = not file_man_open
 	end
 	ImGui.Dummy(0, 2)
 
@@ -1829,12 +1690,12 @@ registerForEvent("onDraw", function()
 	ImGui.End()
 
 	--Preset File Manager window
-	if not _guiFileManToggle then return end
+	if not file_man_open then return end
 
 	local files = dir("./presets")
 	if not files then
-		_guiFileManToggle = false
-		LogE(DevLevel.FULL, LogLevel.ERROR, Text.LOG_DIR_NOT_EXIST, "presets")
+		file_man_open = false
+		logE(DevLevels.FULL, LogLevels.ERROR, Text.LOG_DIR_NOT_EXIST, "presets")
 		return
 	end
 
@@ -1844,8 +1705,8 @@ registerForEvent("onDraw", function()
 	end
 
 	local flags = bit32.bor(ImGuiWindowFlags.NoCollapse, ImGuiWindowFlags.NoResize, ImGuiWindowFlags.NoMove)
-	_guiFileManToggle = ImGui.Begin(Text.GUI_FMAN_TITLE, _guiFileManToggle, flags)
-	if not _guiFileManToggle then return end
+	file_man_open = ImGui.Begin(Text.GUI_FMAN_TITLE, file_man_open, flags)
+	if not file_man_open then return end
 
 	local anyFiles = false
 	if ImGui.BeginTable("PresetFilesTable", 2, ImGuiTableFlags.Borders) then
@@ -1879,29 +1740,29 @@ registerForEvent("onDraw", function()
 
 			ImGui.TableSetColumnIndex(1)
 			local popup = "ConfirmDelete_" .. file
-			if ImGui.Button(F(Text.GUI_FMAN_DEL_BTN, file)) then
+			if ImGui.Button(f(Text.GUI_FMAN_DEL_BTN, file)) then
 				ImGui.OpenPopup(popup)
 			end
 
-			if addPopupYesNo(popup, F(Text.GUI_FMAN_DEL_CONFIRM, file), Colors.DELETE) then
+			if addPopupYesNo(popup, f(Text.GUI_FMAN_DEL_CONFIRM, file), Colors.DELETE) then
 				local ok = os.remove("presets/" .. file)
 				if ok then
 					local k = trimLuaExt(file)
-					for n, _ in pairs(_guiEditorPresetData) do
+					for n, _ in pairs(editor_data) do
 						local parts = split(n, "*")
 						if #parts < 2 then goto continue end
 
 						local vName, aName = parts[1], parts[2]
 						if startsWith(vName, k) or startsWith(aName, k) then
-							_guiEditorPresetData[n] = nil
+							editor_data[n] = nil
 						end
 
 						::continue::
 					end
 					setPresetEntry(k)
-					LogE(DevLevel.ALERT, LogLevel.INFO, Text.LOG_DEL_SUCCESS, file)
+					logE(DevLevels.ALERT, LogLevels.INFO, Text.LOG_DEL_SUCCESS, file)
 				else
-					LogE(DevLevel.ALERT, LogLevel.WARN, Text.LOG_DEL_FAILURE, file)
+					logE(DevLevels.ALERT, LogLevels.WARN, Text.LOG_DEL_FAILURE, file)
 				end
 			end
 
@@ -1915,7 +1776,7 @@ registerForEvent("onDraw", function()
 		ImGui.Dummy(0, 180)
 		ImGui.Dummy(controlPadding - 4, 0)
 		ImGui.SameLine()
-		ImGui.PushStyleColor(ImGuiCol.Text, 0xff6060dd)
+		ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(Colors.DELETE, 0xff))
 		ImGui.Text(Text.GUI_FMAN_NO_PSETS)
 		ImGui.PopStyleColor()
 	end
