@@ -1,1 +1,1 @@
-return{ID="4w_Archer_Hella",Close={y=1.1},Medium={y=1},Far={y=0.6}}
+--This file has been replaced by `ctrlsec_hycade_r34.lua`.

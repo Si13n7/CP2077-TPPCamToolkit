@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-05-12, 11:00 UTC+01:00 (MEZ)
+Version: 2025-05-11, 11:32 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -60,13 +60,12 @@ ______________________________________________
 ---@field y number # The offset on the Y-axis.
 ---@field z number # The offset on the Z-axis.
 
----Represents a vehicle camera preset or links to another one.
+---Represents a vehicle camera preset.
 ---@class ICameraPreset
 ---@field ID string? # The camera ID used for the vehicle.
 ---@field Close IOffsetData? # The offset data for close camera view.
 ---@field Medium IOffsetData? # The offset data for medium camera view.
 ---@field Far IOffsetData? # The offset data for far camera view.
----@field Link string? # The name of another camera preset to link to (if applicable).
 ---@field IsDefault boolean? # Determines whether this camera preset is a default one.
 ---@field IsJoined boolean? # Determines whether this camera preset was newly generated as a default.
 
@@ -270,7 +269,7 @@ local custom_params = {}
 ---@type string[]
 local used_presets = {}
 
----Contains all camera presets and linked vehicles.
+---Contains all camera presets.
 ---@type table<string, ICameraPreset>
 local camera_presets = {}
 
@@ -307,7 +306,7 @@ local file_man_search
 ---Checks whether the provided argument is of the specified type.
 ---@param t string # The expected type name.
 ---@param v any # The value to check against the specified type.
----@return boolean # Returns `true` if the argument match the specified type, `false` otherwise.
+---@return boolean # True if the argument match the specified type, false otherwise.
 local function isType(t, v)
 	return type(v) == t
 end
@@ -340,6 +339,14 @@ local function isString(s)
 	return isType("string", s)
 end
 
+---Checks whether the provided argument is a non-empty string.
+---Returns false if the argument is not a string or is an empty string.
+---@param s any # Value to check.
+---@return boolean # True if the argument is a string, false otherwise.
+local function isStringValid(s)
+	return isString(s) and #s > 0
+end
+
 ---Checks whether the provided argument is of type `table`.
 ---@param t any # Value to check.
 ---@return boolean # True if the argument is a table, false otherwise.
@@ -348,10 +355,10 @@ local function isTable(t)
 end
 
 ---Checks whether the provided argument is a non-empty table.
----Returns false if any argument is not a table or is an empty table.
+---Returns false if the argument is not a table or is an empty table.
 ---@param t any # Value to check.
 ---@return boolean # True if the argument is a non-empty table, false otherwise.
-local function isTableNotEmpty(t)
+local function isTableValid(t)
 	return isTable(t) and next(t) ~= nil
 end
 
@@ -362,23 +369,36 @@ local function isUserdata(u)
 	return isType("userdata", u)
 end
 
----Checks whether the provided argument is of the specified custom type
----(by matching `__name` from metatables for userdata objects).
+---Attempts to determine a human-readable type name of a userdata value.
+---@param v any # The value to check. Must be userdata to return a result.
+---@return string? # A type name string if available, otherwise `nil`.
+local function getUserdataType(v)
+	if not isUserdata(v) then return nil end
+	local mt = getmetatable(v)
+	if isTable(mt) then
+		local x = mt.__name or mt.__type or mt.__tag
+		if isStringValid(x) then
+			return x
+		end
+	end
+	local s = tostring(v)
+	return s:sub(1, 3) ~= "0x" and s or nil
+end
+
+---Checks whether the provided argument is of the specified custom type.
 ---@param t string # The expected type name.
 ---@param v any # The value to check against the specified type.
----@return boolean # Returns `true` if the argument match the specified type, `false` otherwise.
-local function isMetaType(t, v)
-	if not isUserdata(v) then return false end
-
-	local m = getmetatable(v)
-	return m and m.__name == t
+---@return boolean # True if the argument match the specified type, false otherwise.
+local function isUserdataType(t, v)
+	if t == nil then return false end
+	return t == getUserdataType(v)
 end
 
 ---Checks whether the provided argument is of type `Vector3`.
 ---@param v any # Value to check.
----@return boolean # Returns true only if the argument is Vector3.
+---@return boolean # True only if the argument is Vector3.
 local function isVector3(v)
-	return isMetaType("sol.Vector3", v)
+	return isUserdataType("sol.Vector3", v)
 end
 
 ---Checks whether a value is nil or considered empty (string or table).
@@ -395,7 +415,7 @@ end
 ---Checks whether all provided arguments are of the specified type.
 ---@param t string # The expected type name.
 ---@param ... any # A variable number of values to check against the specified type.
----@return boolean # Returns `true` if all arguments match the specified type, `false` otherwise.
+---@return boolean # True if all arguments match the specified type, false otherwise.
 local function areType(t, ...)
 	for i = 1, select("#", ...) do
 		local v = select(i, ...)
@@ -431,25 +451,24 @@ end
 ---Returns false if any argument is not a table or is an empty table.
 ---@param ... any # Values to check.
 ---@return boolean # True if all arguments are non-empty tables, false otherwise.
-local function areTableNotEmpty(...)
+local function areTableValid(...)
 	for i = 1, select("#", ...) do
 		local t = select(i, ...)
-		if not isTableNotEmpty(t) then
+		if not isTableValid(t) then
 			return false
 		end
 	end
 	return true
 end
 
----Checks whether all provided arguments are of the specified custom type
----(by matching `__name` from metatables for userdata objects).
+---Checks whether all provided arguments are of the specified custom type.
 ---@param t string # The expected type name (a custom `__name` string).
 ---@param ... any # A variable number of values to check against the specified type.
----@return boolean # Returns `true` if all arguments match the specified type, `false` otherwise.
-local function areMetaType(t, ...)
+---@return boolean # True if all arguments match the specified type, false otherwise.
+local function areUserdataType(t, ...)
 	for i = 1, select("#", ...) do
 		local v = select(i, ...)
-		if not isMetaType(t, v) then
+		if not isUserdataType(t, v) then
 			return false
 		end
 	end
@@ -460,7 +479,7 @@ end
 ---@param ... any # Values to check.
 ---@return boolean # True if all arguments are `Vector3`, false otherwise.
 local function areVector3(...)
-	return areMetaType("sol.Vector3", ...)
+	return areUserdataType("sol.Vector3", ...)
 end
 
 ---Determines whether a table is a pure sequence (array) with contiguous integer keys 1..#t.
@@ -624,7 +643,7 @@ end
 
 ---Checks if a given filename string ends with `.lua`.
 ---@param s string # The value to check, typically a string representing a filename.
----@return boolean # Returns `true` if the filename ends with `.lua`, otherwise `false`.
+---@return boolean # True if the filename ends with `.lua`, otherwise false.
 local function hasLuaExt(s)
 	if not s then return false end
 	return endsWith(s, ".lua", true)
@@ -920,7 +939,7 @@ end
 
 ---Checks if the runtime version is greater than or equal to a specified minimum version.
 ---@param v string # Minimum required version in "[v]major[.minor[.build[.revision]]]" format.
----@return boolean # `true` if the runtime version is >= the specified version, `false` otherwise.
+---@return boolean # True if the runtime version is >= the specified version, false otherwise.
 local function isRuntimeVersionAtLeast(v)
 	return compareVersion(GetVersion(), v) >= 0
 end
@@ -942,26 +961,27 @@ end
 local function log(lvl, id, fmt, ...)
 	if log_suspend or dev_mode == DevLevels.DISABLED then return end
 
-	local hash = checksum(lvl, id, fmt, ...)
-	local now = os.time()
-	if log_timeout[hash] and log_timeout[hash] >= now then return end
-	for k, v in pairs(log_timeout) do
-		--Remove stale log entries older than 60 seconds.
-		if v < now - 60 then log_timeout[k] = nil end
-	end
-	log_timeout[hash] = now + 5 --Timout for 5 seconds.
-
-	if not fmt then
+	if not isStringValid(fmt) then
 		lvl = LogLevels.ERROR
 		fmt = "Format string in log() is empty!"
 	end
 
-	local tag =
-		lvl == LogLevels.ERROR and "[Error]  " or
-		lvl == LogLevels.WARN and "[Warn]  " or
-		"[Info]  "
+	local hash = checksum(lvl, id, fmt, ...)
+	local now = os.time()
+	if log_timeout[hash] and log_timeout[hash] >= now then return end
+	log_timeout[hash] = now + 5 --Timout for 5 seconds.
+	for k, v in pairs(log_timeout) do
+		--Remove stale log entries older than 60 seconds.
+		if v < now - 60 then log_timeout[k] = nil end
+	end
 
-	local msg = format("[TPVCamTool]  [%04X]  %s%s", id or 0, tag, format(fmt, ...))
+	local tag =
+		lvl == LogLevels.ERROR and "[Error]" or
+		lvl == LogLevels.WARN and "[Warn]" or
+		"[Info]"
+
+	local str = (select("#", ...) > 0 and fmt:find("%%")) and format(fmt, ...) or fmt
+	local msg = format("[TPVCamTool]  [%04X]  %s  %s", id or 0, tag, str)
 
 	if dev_mode >= DevLevels.FULL then
 		(lvl == LogLevels.ERROR and spdlog.error or spdlog.info)(msg)
@@ -1071,7 +1091,7 @@ end
 ---@return string[]? # Array of camera preset keys, or `nil` if not found.
 local function getVehicleCameraKeys()
 	local cache = vehicle_cache.getVehicleCameraKeys
-	if isTableNotEmpty(cache) then return cache end
+	if isTableValid(cache) then return cache end
 
 	local vehicle = getMountedVehicle()
 	if not vehicle then return nil end
@@ -1214,7 +1234,7 @@ end
 ---@return table<string, string>|nil # A map from camera preset names (e.g., "High_Close") to raw TweakDB key strings.
 local function getVehicleCameraMap()
 	local cache = vehicle_cache.getVehicleCameraMap
-	if isTableNotEmpty(cache) then return cache end
+	if isTableValid(cache) then return cache end
 
 	local keys = getVehicleCameraKeys()
 	if not isTable(keys) then return nil end ---@cast keys string[]
@@ -1303,7 +1323,7 @@ local function getCameraTweakKey(preset, path, var)
 
 	if isString(getCustomVehicleCameraID()) then
 		local map = getVehicleCameraMap()
-		if isTableNotEmpty(map) then
+		if isTableValid(map) then
 			---@cast map table
 			local key = map[path]
 			if isString(key) then
@@ -1668,15 +1688,12 @@ end
 
 ---Applies a camera offset preset to the vehicle by updating values in TweakDB.
 ---If no `preset` is provided, the preset is looked up automatically based on the mounted vehicle.
----If the preset includes a `Link` field, the function follows the link recursively
----until a final preset is found or the recursion depth limit (8) is reached.
 ---Missing values in the preset are replaced with fallback values from the default preset, if available.
 ---Each successfully applied preset ID is recorded in `used_presets`.
 ---@param preset ICameraPreset? # The preset to apply. May be `nil` to auto-resolve via the current vehicle.
 ---@param id string? # The camera ID of the mounted vehicle.
----@param count number? # Internal recursion counter to prevent infinite loops via `Link`. Do not set manually.
-local function applyPreset(preset, id, count)
-	if not preset and not count then
+local function applyPreset(preset, id)
+	if not preset then
 		local name = getVehicleName()
 		if not name then return end
 
@@ -1694,7 +1711,7 @@ local function applyPreset(preset, id, count)
 		end
 
 		local pset = camera_presets[key]
-		if not isTableNotEmpty(pset) then return end
+		if not isTableValid(pset) then return end
 
 		resetCustomCameraParams(key)
 		applyPreset(pset, cid)
@@ -1706,20 +1723,10 @@ local function applyPreset(preset, id, count)
 		usage.Last = now
 		usage.Total = usage.Total and usage.Total + 1 or 1
 		preset_usage[key] = usage
+		return
 	end
 
-	if preset and preset.Link then
-		count = (count or 0) + 1
-		if dev_mode >= DevLevels.FULL then
-			log(LogLevels.INFO, 0x9583, Text.LOG_LINK_PSET, count, preset.Link)
-		end
-		preset = camera_presets[preset.Link]
-		if preset and preset.Link and count < 8 then
-			return applyPreset(preset, id, count)
-		end
-	end
-
-	if not preset or not isString(preset.ID) then
+	if not isStringValid(preset.ID) then
 		logF(DevLevels.BASIC, LogLevels.ERROR, 0x9583, Text.LOG_FAIL_APPLY)
 		return
 	end
@@ -1758,7 +1765,7 @@ end
 ---Restores modified camera offset presets to their default values.
 local function restoreModifiedPresets()
 	local changed = used_presets
-	if nilOrEmpty(changed) then return end
+	if not isTableValid(changed) then return end
 
 	local amount = #changed
 	local restored = 0
@@ -1776,36 +1783,24 @@ local function restoreModifiedPresets()
 end
 
 ---Validates whether the given camera offset preset is structurally valid.
----A preset is valid if it either:
----1. Has a string ID and at least one of Close, Medium, or Far contains a numeric `y` or `z` value.
----2. Or: has only a string `Link` and no other keys.
+---A preset is valid if it has a string ID and at least one of Close, Medium,
+---or Far contains a numeric `y` or `z` value.
 ---@param preset ICameraPreset # The preset to validate.
----@return boolean # Returns true if the preset is valid, false otherwise.
+---@return boolean # True if the preset is valid, false otherwise.
 local function isPresetValid(preset)
-	if not isTable(preset) then return false end
+	if not isTable(preset) or not isStringValid(preset.ID) then return false end
 
-	if isString(preset.ID) then
-		for _, e in ipairs(PresetLevels) do
-			local offset = preset[e]
-			if not isTable(offset) then
-				goto continue
-			end
-			for _, k in ipairs(PresetOffsets) do
-				if isNumber(offset[k]) then
-					return true
-				end
-			end
-			::continue::
+	for _, e in ipairs(PresetLevels) do
+		local offset = preset[e]
+		if not isTable(offset) then
+			goto continue
 		end
-	end
-
-	if isString(preset.Link) then
-		for k in pairs(preset) do
-			if k ~= "Link" then
-				return false
+		for _, k in ipairs(PresetOffsets) do
+			if isNumber(offset[k]) then
+				return true
 			end
 		end
-		return true
+		::continue::
 	end
 
 	return false
@@ -1885,7 +1880,7 @@ end
 ---Loads camera offset presets from `defaults` (first) and `presets` (second).
 ---Each `.lua` file must return a `ICameraPreset` table with at least an `ID` field.
 ---Skips already loaded presets unless `refresh` is true (then clears and reloads all).
----@param refresh boolean? — If true, clears existing presets before loading (default: false).
+---@param refresh boolean? # If true, clears existing presets before loading (default: false).
 local function loadPresets(refresh)
 	local function loadFrom(path)
 		local files = dir(path)
@@ -1896,8 +1891,8 @@ local function loadPresets(refresh)
 
 		local isDef = path == "defaults"
 		local count = 0
-		for _, file in ipairs(files) do
-			local name = file.name
+		for _, entry in ipairs(files) do
+			local name = entry.name
 			if not name or not hasLuaExt(name) then goto continue end
 
 			local key = trimLuaExt(name)
@@ -1907,7 +1902,8 @@ local function loadPresets(refresh)
 				goto continue
 			end
 
-			local chunk, err = loadfile(path .. "/" .. name)
+			local file = path .. "/" .. name
+			local chunk, err = loadfile(file)
 			if not chunk then
 				logF(DevLevels.BASIC, LogLevels.ERROR, 0x372a, Text.LOG_FAIL_LOAD, path, name, err)
 				goto continue
@@ -1949,7 +1945,7 @@ end
 ---@param preset table # The preset data to save (must include an `ID` and valid offset data).
 ---@param allowOverwrite boolean? # Whether existing files may be overwritten.
 ---@param saveAsDefault boolean? # If true, saves the preset to the `defaults` directory instead of `presets`.
----@return boolean # Returns `true` on success, or `false` if writing failed or nothing needed to be saved.
+---@return boolean # True on success, or false if writing failed or nothing needed to be saved.
 local function savePreset(name, preset, allowOverwrite, saveAsDefault)
 	local path = getPresetFilePath(name, saveAsDefault)
 	if not path or not isTable(preset) then return false end
@@ -2469,7 +2465,7 @@ end
 ---@param text string # The message to display in the popup.
 ---@param yesBtnColor? number # Optional color index for the Yes button (ImGuiCol style constant).
 ---@param noBtnColor? number # Optional color index for the No button (ImGuiCol style constant).
----@return boolean? # true if Yes clicked, false if No clicked, nil if popup not active.
+---@return boolean? # True if Yes clicked, false if No clicked, nil if popup not active.
 local function addPopupYesNo(id, text, scale, yesBtnColor, noBtnColor)
 	if not id or not ImGui.BeginPopup(id) then return nil end
 
@@ -2720,23 +2716,6 @@ local function onInit()
 	applyPreset()
 end
 
----Handles logic when a vehicle is mounted.
----If forced or conditions are met, applies the appropriate camera preset.
----@param force boolean? # If true, the preset will be applied regardless of state.
-local function onMount(force)
-	if not force and (not mod_enabled or not isVehicleMounted() or not nilOrEmpty(vehicle_cache)) then
-		return
-	end
-
-	log_suspend = false
-
-	if dev_mode >= DevLevels.ALERT then
-		log(LogLevels.INFO, 0x0f9b, Text.LOG_EVNT_MNT)
-	end
-
-	applyPreset()
-end
-
 ---Handles logic when a vehicle is unmounted.
 ---If forced or the mod is enabled, resets padding and cache, restores default presets,
 ---and clears the last active editor session state.
@@ -2746,15 +2725,14 @@ local function onUnmount(force)
 
 	log_suspend = false
 
-	if dev_mode >= DevLevels.ALERT then
+	if not force and dev_mode >= DevLevels.ALERT then
 		log(LogLevels.INFO, 0x9dee, Text.LOG_EVNT_UMNT)
 	end
 
 	padding_width = 0
+
 	vehicle_cache = {}
-
 	restoreModifiedPresets()
-
 	clearLastEditorBundle()
 end
 
@@ -2768,6 +2746,8 @@ end
 
 --This event is triggered when the CET environment initializes for a particular game session.
 registerForEvent("onInit", function()
+	local backupDevMode
+
 	--CET version check.
 	runtime_min = isRuntimeVersionAtLeast("1.35")
 	runtime_full = isRuntimeVersionAtLeast("1.35.1")
@@ -2775,43 +2755,86 @@ registerForEvent("onInit", function()
 	--Load all saved data from disk; apply preset only if the player is in a vehicle.
 	onInit()
 
-	--When the player mounts a vehicle, automatically apply the matching camera preset if available.
-	--This event can fire even if the player is already mounted.
-	Observe("VehicleComponent", "OnMountingEvent", function(_) onMount(false) end)
+	--When the player enters a vehicle. This event also fires
+	--every few seconds for no apparent reason, so it's essential
+	--to ensure the code runs only once when entering a vehicle.
+	Observe("VehicleComponent", "OnMountingEvent", function(_)
+		if not mod_enabled or not isVehicleMounted() or not nilOrEmpty(vehicle_cache) then
+			return
+		end
+
+		log_suspend = false
+
+		if dev_mode >= DevLevels.ALERT then
+			log(LogLevels.INFO, 0x0f9b, Text.LOG_EVNT_MNT)
+		end
+
+		applyPreset()
+	end)
 
 	--When the player unmounts from a vehicle, reset to default camera offsets.
 	Observe("VehicleComponent", "OnUnmountingEvent", function(_) onUnmount(false) end)
 
-	--Triggered when control over the player character is gained (e.g. after loading a save).
+	--When the game returns to the main menu, ensure any active vehicle camera presets are reset.
+	Observe('QuestTrackerGameController', 'OnUninitialize', function() onUnmount(false) end)
+
+	--While the loading screen is active, but also triggers
+	--once when the user confirms it at the end with a key press.
+	Observe('LoadingScreenProgressBarController', 'SetProgress', function(_, progress)
+		overlay_locked = progress < 1.0 --1.0 only on keyboard-confirmation.
+		if not mod_enabled then return end
+		if overlay_locked then
+			backupDevMode = backupDevMode or dev_mode
+			dev_mode = DevLevels.DISABLED
+			file_man_open = false
+			return
+		end
+		if backupDevMode ~= nil then
+			dev_mode = backupDevMode
+			backupDevMode = nil
+		end
+	end)
+
+	--When a non-keyboard-confirmed loading screen finishes.
+	Observe('FastTravelSystem', 'OnLoadingScreenFinished', function(_, finished)
+		if not finished then return end
+		overlay_locked = false
+		if backupDevMode ~= nil then
+			dev_mode = backupDevMode
+			backupDevMode = nil
+		end
+	end)
+
+	--When control over the player character is gained (e.g. after loading a save).
 	Observe("PlayerPuppet", "OnTakeControl", function(self)
 		if not mod_enabled or overlay_locked or self:GetEntityID().hash ~= 1 then return end
 
-		overlay_locked = true
-		file_man_open = false
-
-		if dev_mode >= DevLevels.ALERT then
-			log(LogLevels.INFO, 0x0f8c, Text.LOG_EVNT_CTRL)
-		end
-
 		onUnmount(true)
 
-		local devMode = dev_mode
+		local deadline = 20
 		callEvery(0.3, function(id)
 			if not mod_enabled then
 				callHalt(id)
-				overlay_locked = false
 				return
 			end
 
-			dev_mode = DevLevels.DISABLED
-			if not getMountedVehicle() then return end
+			if not Game.GetPlayer() then return end
+			if deadline > 0 and not isVehicleMounted() then
+				deadline = deadline - 1
+				return
+			end
 
 			callHalt(id)
+
 			applyPreset()
-			dev_mode = devMode
-			overlay_locked = false
 		end)
 	end)
+
+	--When Photo Mode is activated.
+	Observe('gameuiPhotoModeMenuController', 'OnShow', function() overlay_locked = true end)
+
+	--When Photo Mode is closed.
+	Observe('gameuiPhotoModeMenuController', 'OnHide', function() overlay_locked = false end)
 end)
 
 --Detects when the CET overlay is opened.
@@ -2984,7 +3007,7 @@ registerForEvent("onDraw", function()
 	if failed then
 		log_suspend = true
 		if dev_mode > DevLevels.DISABLED then
-			if not vehicle then
+			if not locked and not vehicle then
 				ImGui.Dummy(controlPadding, 0)
 				ImGui.SameLine()
 				ImGui.PushStyleColor(ImGuiCol.Text, adjustColor(Colors.CARAMEL, 0xff))
@@ -3014,7 +3037,7 @@ registerForEvent("onDraw", function()
 	end
 
 	local bundle = getEditorBundle(name, appName, id, key) ---@cast bundle IEditorBundle
-	if not isTableNotEmpty(bundle) then
+	if not isTableValid(bundle) then
 		--Nothing else to display.
 		ImGui.End()
 	end
@@ -3025,7 +3048,7 @@ registerForEvent("onDraw", function()
 	local finale = bundle.Finale ---@cast finale IEditorPreset
 	local nexus = bundle.Nexus ---@cast nexus IEditorPreset
 	local tasks = bundle.Tasks ---@cast tasks IEditorTasks
-	if not areTableNotEmpty(flux, pivot, finale, nexus, tasks) then
+	if not areTableValid(flux, pivot, finale, nexus, tasks) then
 		--No further controls required.
 		ImGui.End()
 	end
@@ -3075,7 +3098,7 @@ registerForEvent("onDraw", function()
 				ImGui.Text(row.value)
 
 				local camMap = getVehicleCameraMap()
-				if isTableNotEmpty(camMap) then
+				if isTableValid(camMap) then
 					---@cast camMap table<string, string>
 					local list = split(row.valTip, "|") or {}
 					for _, v in ipairs(CameraLevels) do

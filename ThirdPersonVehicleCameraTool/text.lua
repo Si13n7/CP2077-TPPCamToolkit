@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-05-11, 20:54 UTC+01:00 (MEZ)
+Version: 2025-05-11, 11:32 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -72,11 +72,9 @@ return {
 	LOG_CAM_PSET = "Camera preset: '%s'.",
 	LOG_DEL_EPSET = "Last editor preset has been removed.",
 	LOG_DEL_SUCCESS = "Deleted preset '%s'.",
-	LOG_EVNT_CTRL = "Event 'PlayerPuppet:OnTakeControl' triggered.",
 	LOG_EVNT_MNT = "Event 'VehicleComponent:OnMountingEvent' triggered.",
 	LOG_EVNT_UMNT = "Event 'VehicleComponent:OnUnmountingEvent' triggered.",
 	LOG_FOUND_DEF = "Default preset '%s' found.",
-	LOG_LINK_PSET = "Following linked preset (%d): '%s'",
 	LOG_LOAD_PSET = "Preset '%s' has been loaded from '%s/%s'.",
 	LOG_MOD_OFF = "Mod has been disabled!",
 	LOG_MOD_ON = "Mod has been enabled!",
