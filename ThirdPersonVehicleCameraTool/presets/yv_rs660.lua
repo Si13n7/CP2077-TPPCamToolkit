@@ -1,0 +1,1 @@
+return{ID="2w_Preset",Close={y=0.13,d=0.35},Medium={y=0.13,d=1.3},Far={y=0.13,d=3.6}}
