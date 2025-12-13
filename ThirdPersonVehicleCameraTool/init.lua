@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-11-12, 17:19 UTC+01:00 (MEZ)
+Version: 2025-12-13, 15:37 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -88,7 +88,10 @@ Development Environment:
 ---@field Max number? # The maximum value.
 ---@field Speed number? # Adjust sensitivity for ImGui controls; lower values allow finer adjustments.
 ---@field Values string[]? # An array of selectable options.
----@field IsGameOption boolean? # Determines whether this is treated as game option.
+---@field GameOptionPath string? # The path used when linking this option to a game configuration entry.
+---@field GameOptionKey string? # The specific key within the game configuration path.
+---@field IsGameOption boolean? # Determines whether this is treated as game INI option.
+---@field IsGameTweak boolean? # Determines whether this is treated as game tweak.
 ---@field IsNotAvailable boolean? # Determines whether this option is currently not available.
 
 ---Represents a single game setting option with its associated metadata and values.
@@ -748,7 +751,17 @@ local config = {
 			Default = false
 		},
 
-		---Game option: adjusts the field of view.
+		---Game option: enables or disables auto-hiding of nearby objects.
+		autoHideDistanceNear = {
+			DisplayName = Text.GUI_GSET_OHIDE_NEAR,
+			Tooltip = Text.GUI_GSET_OHIDE_NEAR_TIP,
+			Default = true,
+			GameOptionPath = "Streaming/Culling/AutoHideDistanceNear",
+			GameOptionKey = "Enabled",
+			IsGameOption = true
+		},
+
+		---Game tweak: adjusts the field of view.
 		fov = {
 			DisplayName = Text.GUI_GSET_FOV,
 			Description = Text.GUI_GSET_FOV_DESC,
@@ -757,18 +770,18 @@ local config = {
 			Min = 1, --Real minimum: 0.338
 			Max = 172, --Real maximum: 172.186
 			Speed = 1,
-			IsGameOption = true
+			IsGameTweak = true
 		},
 
-		---Game option: toggles automatic camera reset.
+		---Game tweak: toggles automatic camera reset.
 		lockedCamera = {
 			DisplayName = Text.GUI_GSET_AUTO_CENTER,
 			Tooltip = Text.GUI_GSET_AUTO_CENTER_TIP,
 			Default = DefaultParams.Vars.lockedCamera.Default,
-			IsGameOption = true
+			IsGameTweak = true
 		},
 
-		---Game option: adjusts the zoom.
+		---Game tweak: adjusts the zoom.
 		zoom = {
 			DisplayName = Text.GUI_GSET_ZOOM,
 			Description = Text.GUI_GSET_ZOOM_DESC,
@@ -777,7 +790,7 @@ local config = {
 			Min = 1.0,
 			Max = 30.0,
 			Speed = 0.05,
-			IsGameOption = true
+			IsGameTweak = true
 		}
 	},
 
@@ -1151,6 +1164,19 @@ local function areNumeric(...)
 		end
 	end
 	return true
+end
+
+---Returns the first non-nil value between two arguments.
+---Unlike the Lua `or` operator, this function treats `false` as a valid value
+---and will only fall back when `value` is actually `nil`.
+---@param value any # Primary value to check.
+---@param fallback any # Fallback value to use if `value` is nil.
+---@return any # Returns `value` unless it is nil, in which case `fallback` is returned.
+local function coalesce(value, fallback)
+	if value == nil then
+		return fallback
+	end
+	return value
 end
 
 ---Rounds a floating-point number to a specified number of decimal places.
@@ -2150,6 +2176,61 @@ end
 
 --#region 🔦 Game Metadata
 
+---Retrieves a value from the game settings database using the appropriate getter.
+---Supports both Lua type names ("boolean", "number") and native game types ("Bool", "Int", "Float").
+---@param path string # The configuration group path (e.g. "Streaming/Culling/AutoHideDistanceNear").
+---@param key string # The specific setting key inside the group.
+---@param kind string # Optional type identifier ("boolean", "number", "Bool", "Int", "Float").
+---@return any # The retrieved value or nil if the type is unsupported or unavailable.
+local function getGameOption(path, key, kind)
+	if equalsAny(kind, "boolean", "Bool") then
+		return GameOptions.GetBool(path, key)
+	elseif kind == "Int" then
+		return GameOptions.GetInt(path, key)
+	elseif kind == "Float" then
+		return GameOptions.GetFloat(path, key)
+	elseif kind == "number" then
+		local raw = GameOptions.Get(path, key)
+		if not isNumeric(raw) then return nil end
+		return tostring(raw):find("%.") and GameOptions.GetFloat(path, key) or GameOptions.GetInt(path, key)
+	elseif equalsAny(kind, "string", "String") then
+		return GameOptions.Get(path, key)
+	end
+	return nil
+end
+
+---Sets a game INI configuration option only if its value has changed.
+---Supports automatic or explicit type selection for safe updates.
+---If the optional `kind` parameter is omitted, the function infers it from the Lua type of `value`.
+---@param path string # The configuration path (e.g. "Streaming/Culling/AutoHideDistanceNear").
+---@param key string # The option key within the given path.
+---@param value any # The new value to assign.
+---@param kind? string # Optional explicit type ("Bool", "Int", "Float", "String", or Lua types "boolean", "number", "string"). Defaults to `type(value)`.
+local function setGameOption(path, key, value, kind)
+	kind = kind or type(value)
+
+	local current = getGameOption(path, key, kind)
+	if current == nil or current == value then return end
+
+	if equalsAny(kind, "boolean", "Bool") then
+		GameOptions.SetBool(path, key, value)
+	elseif kind == "Int" then
+		GameOptions.SetInt(path, key, value)
+	elseif kind == "Float" then
+		GameOptions.SetFloat(path, key, value)
+	elseif kind == "number" then
+		if value % 1 ~= 0 then
+			if abs(current - value) > 1e-4 then
+				GameOptions.SetFloat(path, key, value)
+			end
+		else
+			GameOptions.SetInt(path, key, value)
+		end
+	elseif equalsAny(kind, "string", "String") then
+		GameOptions.Set(path, key, value)
+	end
+end
+
 ---Retrieves detailed information about a specific game setting option from the settings system.
 ---Returns an empty table if the requested option is invalid or unavailable.
 ---@param group string # The group identifier of the game setting.
@@ -2212,14 +2293,6 @@ local function getUserSettingsCameraHeight()
 	local settings = getUserSettingsOption("/controls/vehicle", "VehicleTPPCameraHeight", true)
 	---@cast settings table<string, string>
 	return isTableValid(settings) and settings.Value or nil
-end
-
----Enables or disables the near-distance auto-hide feature used by the game's culling system.
----When enabled, nearby objects outside the player's view are hidden sooner to improve performance.
----@param enable boolean # True to enable near-distance auto-hide, false to disable it.
-local function autoHideDistanceNear(enable)
-	---@diagnostic disable-next-line: undefined-global
-	GameOptions.SetBool("Streaming/Culling/AutoHideDistanceNear", "Enabled", enable)
 end
 
 ---Converts the FOV value between internal and settings formats, applying fallback logic when FovControl is unavailable.
@@ -2728,7 +2801,7 @@ end
 ---@param name string # The name of the option to update.
 ---@param value (boolean|number)? # The new value to assign.
 ---@param updateConfig boolean? # If true, the related `config.options` entry is updated as well.
-local function updateConfigDefaultParam(name, value, updateConfig)
+local function updateConfigValue(name, value, updateConfig)
 	local option = name and config.options[name]
 	if not option or option.IsNotAvailable then return end
 
@@ -2793,7 +2866,12 @@ local function updateConfigDefaultParam(name, value, updateConfig)
 		end
 	end
 
-	if not option.IsGameOption or not isRestore and not isVehicleMounted() then return end
+	if option.IsGameOption then
+		setGameOption(option.GameOptionPath, option.GameOptionKey, value)
+		return
+	end
+
+	if not option.IsGameTweak or not isRestore and not isVehicleMounted() then return end
 
 	for _, section in ipairs(DefaultParams.Keys) do
 		local key = format("%s.%s", section, name)
@@ -2807,10 +2885,6 @@ local function updateConfigDefaultParam(name, value, updateConfig)
 	if not state.isCodewareAvailable then return end
 
 	local isFOV = name == "fov"
-	if isFOV then
-		autoHideDistanceNear(value <= 80)
-	end
-
 	local player = (isFOV or name == "zoom") and Game.GetPlayer()
 	local component = player and player:FindComponentByType("vehicleTPPCameraComponent")
 	if not component then return end
@@ -2824,20 +2898,39 @@ end
 
 ---Updates or restores all default parameter in the configuration and applies them to the game if necessary.
 ---@param doRestore boolean? # If true, all values are reset to their default.
-local function updateConfigDefaultParams(doRestore)
+local function updateConfigData(doRestore)
 	for var, option in pairs(config.options) do
-		if not option.IsGameOption then
-			option.Value = option.Value or option.Default
-		else
-			if not option.IsNotAvailable and option.Value == nil then
+		if doRestore and option.IsGameOption then goto continue end
+
+		if not option.IsNotAvailable and option.Value == nil then
+			if option.IsGameOption then
+				if areString(option.GameOptionPath, option.GameOptionKey) then
+					local default = option.Default
+					local current = getGameOption(option.GameOptionPath, option.GameOptionKey, type(default))
+					option.Value = coalesce(current, default)
+				end
+			elseif option.IsGameTweak then
 				for _, section in ipairs(DefaultParams.Keys) do
 					local key = format("%s.%s", section, var)
-					option.Value = TweakDB:GetFlat(key) or option.Default
+					local current = TweakDB:GetFlat(key)
+					option.Value = coalesce(current, option.Default)
 					break
 				end
+			else
+				option.Value = option.Default
 			end
 		end
-		updateConfigDefaultParam(var, doRestore and option.Default or option.Value)
+
+		local value
+		if doRestore then
+			value = option.Default
+		else
+			value = option.Value
+		end
+
+		updateConfigValue(var, value)
+
+		::continue::
 	end
 end
 
@@ -2848,7 +2941,7 @@ end
 ---@param updateConfig? boolean # If true, updates the related advanced configuration; defaults to false if omitted.
 ---@param noDbUpdate? boolean # If true, uses `TweakDB:SetFlatNoUpdate()` instead of `TweakDB:SetFlat()`; defaults to false if omitted.
 ---@return boolean # Returns true if the parameter value changed, false otherwise.
-local function updateAdvancedConfigDefaultParam(sIdx, name, value, updateConfig, noDbUpdate)
+local function updateAdvancedConfigValue(sIdx, name, value, updateConfig, noDbUpdate)
 	if not sIdx or not name or value == nil then return false end
 
 	local section = DefaultParams.Keys[sIdx]
@@ -2891,13 +2984,13 @@ end
 ---Iterates through all advanced configuration parameters and restores or updates their default values.
 ---If any parameter changes, its section is committed to the TweakDB.
 ---@param doRestore boolean? # If true, restores all parameters to their default values instead of keeping current ones.
-local function updateAdvancedConfigDefaultParams(doRestore)
+local function updateAdvancedConfigData(doRestore)
 	for i, section in ipairs(DefaultParams.Keys) do
 		local commit = false
 		for var, data in pairs(DefaultParams.Vars) do
 			local default = pluck(data.Default, i)
 			local value = get(config.advancedOptions, default, i, var)
-			if updateAdvancedConfigDefaultParam(i, var, doRestore and default or value, false, true) then
+			if updateAdvancedConfigValue(i, var, doRestore and default or value, false, true) then
 				commit = true
 			end
 		end
@@ -2939,7 +3032,7 @@ local function resetCustomDefaultParams(key)
 		local advanced = get(config.advancedOptions, nil, sIdx, var)
 
 		if option then
-			default = option.Value or option.Default
+			default = coalesce(option.Value, option.Default)
 		elseif advanced ~= nil then
 			default = advanced
 		else
@@ -3971,7 +4064,7 @@ local function saveGlobalOptions()
 	--Update only changed entries.
 	for name, option in pairs(config.options) do
 		local default = serialize(option.Default)
-		local current = serialize(option.Value or option.Default)
+		local current = serialize(coalesce(option.Value, option.Default))
 		local previous = database[name]
 		if not equals(current, previous) then
 			if equals(current, default) then
@@ -4754,7 +4847,7 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 
 	ImGui.SetNextWindowPos(x, y)
 
-	height = math.max(height, 240 * scale)
+	height = math.max(height, 270 * scale)
 	ImGui.SetNextWindowSize(width, height)
 
 	ImGui.PushStyleColor(ImGuiCol.WindowBg, getStyleColor(ImGuiCol.WindowBg, 0xff))
@@ -4856,7 +4949,7 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 				if isFov then ---@cast recent number
 					recent = changeFovFormat(recent, true)
 				end
-				updateConfigDefaultParam(key, recent, true)
+				updateConfigValue(key, recent, true)
 			end
 		end
 
@@ -4885,7 +4978,7 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 				end
 				config.nativeInstance.setOption(config.nativeOptions[key], default)
 			else
-				updateConfigDefaultParam(key, default, true)
+				updateConfigValue(key, default, true)
 			end
 		end
 	end
@@ -4995,7 +5088,7 @@ local function openAdvancedOptionsWindow(scale, isOpening, maxWidth, maxHeight)
 					end
 
 					if changed then
-						updateAdvancedConfigDefaultParam(i, var, default, true)
+						updateAdvancedConfigValue(i, var, default, true)
 						if config.nativeInstance and config.nativeOptions[i .. var] then
 							config.nativeInstance.setOption(config.nativeOptions[i .. var], recent)
 						end
@@ -5289,8 +5382,8 @@ end
 local function onInit()
 	loadGlobalOptions()
 	loadAdvancedOptions()
-	updateAdvancedConfigDefaultParams()
-	updateConfigDefaultParams()
+	updateAdvancedConfigData()
+	updateConfigData()
 	loadPresetUsage()
 
 	local task = presets.loaderTask
@@ -5334,15 +5427,13 @@ local function onUnmount(force)
 	savePresetUsage()
 
 	restoreModifiedPresets()
-	updateConfigDefaultParams(true)
-	updateAdvancedConfigDefaultParams(true)
+	updateConfigData(true)
+	updateAdvancedConfigData(true)
 
 	clearLastEditorBundle()
 
 	resetCache()
 	presets.isAnyActive = false
-
-	autoHideDistanceNear(true)
 end
 
 ---Handles logic when the game or CET shuts down.
@@ -5350,8 +5441,8 @@ end
 local function onShutdown()
 	restoreAllPresets()
 	restoreAllCustomCameraData()
-	updateConfigDefaultParams(true)
-	updateAdvancedConfigDefaultParams(true)
+	updateConfigData(true)
+	updateAdvancedConfigData(true)
 end
 
 ---Initializes or refreshes all settings in the Native Settings UI.
@@ -5510,7 +5601,7 @@ local function setupNativeSettings()
 						if isFov and state.isFovControlAvailable and isNumber(value) then
 							value = changeFovFormat(value, true)
 						end
-						updateConfigDefaultParam(key, value, true)
+						updateConfigValue(key, value, true)
 						saveToFile()
 					end
 				)
@@ -5558,7 +5649,7 @@ local function setupNativeSettings()
 				origin.Step or 1,
 				nil,
 				function(value)
-					updateAdvancedConfigDefaultParam(i, var, value, true)
+					updateAdvancedConfigValue(i, var, value, true)
 					saveToFile(true)
 				end
 			)
@@ -5690,14 +5781,9 @@ registerForEvent("onInit", function()
 			return
 		end
 		logIf(DevLevels.ALERT, LogLevels.INFO, 0x0f9b, Text.LOG_EVNT_MNT)
-		updateAdvancedConfigDefaultParams()
-		updateConfigDefaultParams()
+		updateAdvancedConfigData()
+		updateConfigData()
 		applyPreset()
-		asyncOnce(1, function()
-			if deep(config.options, "fov").Value > 80 then
-				autoHideDistanceNear(false)
-			end
-		end)
 	end)
 
 	--When the player unmounts from a vehicle, reset to default camera offsets.

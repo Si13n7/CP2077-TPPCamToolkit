@@ -13,7 +13,7 @@ are already provided by Lua or CET and exist
 only for documentation and coding convenience.
 
 Filename: api.lua
-Version: 2025-11-02, 16:11 UTC+01:00 (MEZ)
+Version: 2025-12-13, 15:22 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -255,6 +255,19 @@ TDBID = TDBID
 ---@field GetMountedVehicle fun(player: Player): Vehicle? # Returns the vehicle the player is currently mounted in, if any.
 ---@field GetSettingsSystem fun(): SettingsSystem # Provides access to the global settings system used to query and modify game options.
 Game = Game
+
+---Provides access to the game's configuration and runtime options.
+---Used to read and modify internal settings such as graphics, streaming, or camera behavior.
+---@class GameOptions
+---@field GetBool fun(path: string, key: string): boolean # Retrieves a boolean option.
+---@field GetInt fun(path: string, key: string): integer # Retrieves an integer option.
+---@field GetFloat fun(path: string, key: string): number # Retrieves a floating-point option.
+---@field Get fun(path: string, key: string): any # Retrieves an option of any type as string.
+---@field SetBool fun(path: string, key: string, value: boolean) # Sets a boolean option (true/false) in the specified category.
+---@field SetInt fun(path: string, key: string, value: integer) # Sets an integer option value.
+---@field SetFloat fun(path: string, key: string, value: number) # Sets a floating-point option value.
+---@field Set fun(path: string, key: string, value: any) # Sets a string option value.
+GameOptions = GameOptions
 
 ---Represents a three-dimensional vector, commonly used for positions or directions in the game.
 ---@class Vector3

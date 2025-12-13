@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-11-12, 17:12 UTC+01:00 (MEZ)
+Version: 2025-12-13, 15:37 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -55,6 +55,8 @@ return {
 	GUI_GSET_AUTO_CENTER_TIP = "Disables automatic camera centering.\n\nTakes effect only after exiting and re-entering the vehicle.",
 	GUI_GSET_VAN_PSETS = "Disable Vanilla Presets",
 	GUI_GSET_VAN_PSETS_TIP = "Prevents changes to vanilla vehicles.\n\nSome vanilla vehicles have unusual camera settings that this mod corrects by default.",
+	GUI_GSET_OHIDE_NEAR = "Object Auto-Hide",
+	GUI_GSET_OHIDE_NEAR_TIP = "At very high FOV, this can hide nearby geometry too early\n(e.g., bridges disappearing).\n\nTurn this off if you notice objects popping out in front of you.",
 	GUI_GSET_FOV = "Field Of View",
 	GUI_GSET_FOV_DESC = "Determines the vertical field of view, measured in degrees.\n\nMight only work after you exit and enter the vehicle again.",
 	GUI_GSET_FOV_TIP = "Default:|%d|Min:|%d|Max:|%d",
