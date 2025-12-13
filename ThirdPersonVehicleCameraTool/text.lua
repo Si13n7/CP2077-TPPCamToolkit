@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-12-13, 15:37 UTC+01:00 (MEZ)
+Version: 2025-12-13, 17:31 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -59,7 +59,8 @@ return {
 	GUI_GSET_OHIDE_NEAR_TIP = "At very high FOV, this can hide nearby geometry too early\n(e.g., bridges disappearing).\n\nTurn this off if you notice objects popping out in front of you.",
 	GUI_GSET_FOV = "Field Of View",
 	GUI_GSET_FOV_DESC = "Determines the vertical field of view, measured in degrees.\n\nMight only work after you exit and enter the vehicle again.",
-	GUI_GSET_FOV_TIP = "Default:|%d|Min:|%d|Max:|%d",
+	GUI_GSET_FOV_TIP = "Default:|%s|Min:|%s|Max:|%s|In Use:|%s",
+	GUI_GSET_FOV_TIP_VAL = "%4d [ raw: %7.3f ]",
 	GUI_GSET_ZOOM = "Zoom",
 	GUI_GSET_ZOOM_DESC = "Controls the camera zoom level, allowing you to get closer to the subject.",
 	GUI_GSET_ZOOM_TIP = "Default:|%.2f|Min:|%.2f|Max:|%.2f",

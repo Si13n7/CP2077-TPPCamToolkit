@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-12-13, 15:48 UTC+01:00 (MEZ)
+Version: 2025-12-13, 17:31 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -692,10 +692,12 @@ local state = {
 	isCetTopical = false,
 
 	---Determines whether `Codeware` is installed.
-	isCodewareAvailable = false,
+	---@diagnostic disable-next-line: undefined-global
+	isCodewareAvailable = type(Codeware) == "userdata",
 
 	---Determines whether `FovControl` is installed.
-	isFovControlAvailable = false
+	---@diagnostic disable-next-line: undefined-global
+	isFovControlAvailable = type(FovControl) == "userdata"
 }
 
 ---Manages recurring asynchronous timers and their status.
@@ -4921,11 +4923,19 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 				max = math.huge
 			end
 
-			if isFov then
+			local rawDefault, rawCurrent, rawMin, rawMax
+			if isFov and state.isFovControlAvailable then
+				rawDefault = default
 				default = changeFovFormat(default)
+
+				rawCurrent = current
 				current = changeFovFormat(current)
+
 				min = changeFovFormat(min)
+				rawMin = min
+
 				max = changeFovFormat(max)
+				rawMax = max
 			end
 
 			local speed = option.Speed or 0.01
@@ -4937,7 +4947,16 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 				changed = true
 			end
 
-			addTooltip(nil, split(format(option.Tooltip, default, min, max), "|"))
+			if isFov and state.isFovControlAvailable then
+				local valueLabel = Text.GUI_GSET_FOV_TIP_VAL
+				addTooltip(nil, split(format(option.Tooltip,
+					format(valueLabel, default, rawDefault),
+					format(valueLabel, min, rawMin),
+					format(valueLabel, max, rawMax),
+					format(valueLabel, current, rawCurrent)), "|"))
+			else
+				addTooltip(nil, split(format(option.Tooltip, roundF(default), roundF(min), roundF(max), roundF(current)), "|"))
+			end
 		else
 			ImGui.Text(Text.GUI_UNKNOWN)
 		end
@@ -5731,15 +5750,9 @@ registerForEvent("onInit", function()
 	state.isCetTopical = isVersionAtLeast(state.cetVersion, "1.35.1")
 
 	--Codeware dependence.
-	---@diagnostic disable-next-line: undefined-global
-	state.isCodewareAvailable = isUserdata(Codeware)
 	if not state.isCodewareAvailable then
 		deep(config.options, "zoom").IsNotAvailable = false
 	end
-
-	--FovControl dependence.
-	---@diagnostic disable-next-line: undefined-global
-	state.isFovControlAvailable = isUserdata(FovControl)
 
 	--Ensures the log file is fresh when the mod initializes.
 	pcall(function()
