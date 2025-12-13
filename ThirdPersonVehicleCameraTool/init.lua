@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-12-13, 15:37 UTC+01:00 (MEZ)
+Version: 2025-12-13, 15:48 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -5477,11 +5477,11 @@ local function setupNativeSettings()
 			if gui.isOverlayOpen or not nilOrEmpty(native.currentTab) then return end
 			asyncStop(id)
 			pendingSaves[advanced] = false
-			if advanced == 0 then
-				saveGlobalOptions()
-			else
+			if advanced then
 				config.isAdvancedUnsaved = true
 				saveAdvancedOptions()
+			else
+				saveGlobalOptions()
 			end
 		end)
 	end
