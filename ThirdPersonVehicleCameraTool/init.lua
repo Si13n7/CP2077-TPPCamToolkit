@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-12-14, 14:50 UTC+01:00 (MEZ)
+Version: 2025-12-14, 15:12 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -2801,7 +2801,8 @@ end
 ---@param name string # The name of the option to update.
 ---@param value (boolean|number)? # The new value to assign.
 ---@param updateConfig boolean? # If true, the related `config.options` entry is updated as well.
-local function updateConfigValue(name, value, updateConfig)
+---@param ensureSetFov boolean? # If true, the FOV will be set even while it is locked.
+local function updateConfigValue(name, value, updateConfig, ensureSetFov)
 	local option = name and config.options[name]
 	if not option or option.IsNotAvailable then return end
 
@@ -2890,7 +2891,7 @@ local function updateConfigValue(name, value, updateConfig)
 	if not component then return end
 
 	if isFOV then
-		if state.isFovControlAvailable then
+		if state.isFovControlAvailable and ensureSetFov then
 			component:PendingSetFOV()
 		end
 		component:SetFOV(value)
@@ -4969,7 +4970,7 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 				if isFov then ---@cast recent number
 					recent = changeFovFormat(recent, true)
 				end
-				updateConfigValue(key, recent, true)
+				updateConfigValue(key, recent, true, isFov)
 			end
 		end
 
@@ -4992,13 +4993,14 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 	if ImGui.Button(Text.GUI_GSET_RESET, buttonWidth, buttonHeight) then
 		for key, option in pairs(config.options) do
 			local default = option.Default
+			local isFov = key == "fov"
 			if config.nativeInstance and config.nativeOptions[key] then
-				if key == "fov" then ---@cast default number
+				if isFov then ---@cast default number
 					default = changeFovFormat(default)
 				end
 				config.nativeInstance.setOption(config.nativeOptions[key], default)
 			else
-				updateConfigValue(key, default, true)
+				updateConfigValue(key, default, true, isFov)
 			end
 		end
 	end
@@ -5621,7 +5623,7 @@ local function setupNativeSettings()
 						if isFov and state.isFovControlAvailable and isNumber(value) then
 							value = changeFovFormat(value, true)
 						end
-						updateConfigValue(key, value, true)
+						updateConfigValue(key, value, true, isFov)
 						saveToFile()
 					end
 				)
