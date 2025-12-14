@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-12-13, 17:31 UTC+01:00 (MEZ)
+Version: 2025-12-14, 14:50 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -692,12 +692,10 @@ local state = {
 	isCetTopical = false,
 
 	---Determines whether `Codeware` is installed.
-	---@diagnostic disable-next-line: undefined-global
-	isCodewareAvailable = type(Codeware) == "userdata",
+	isCodewareAvailable = false,
 
 	---Determines whether `FovControl` is installed.
-	---@diagnostic disable-next-line: undefined-global
-	isFovControlAvailable = type(FovControl) == "userdata"
+	isFovControlAvailable = false
 }
 
 ---Manages recurring asynchronous timers and their status.
@@ -2892,6 +2890,9 @@ local function updateConfigValue(name, value, updateConfig)
 	if not component then return end
 
 	if isFOV then
+		if state.isFovControlAvailable then
+			component:PendingSetFOV()
+		end
 		component:SetFOV(value)
 	else
 		component:SetZoom(value)
@@ -5750,9 +5751,17 @@ registerForEvent("onInit", function()
 	state.isCetTopical = isVersionAtLeast(state.cetVersion, "1.35.1")
 
 	--Codeware dependence.
+	---@diagnostic disable-next-line: undefined-global
+	state.isCodewareAvailable = type(Codeware) == "userdata"
+
+	---Determines whether `FovControl` is installed.
 	if not state.isCodewareAvailable then
 		deep(config.options, "zoom").IsNotAvailable = false
 	end
+
+	--FovControl dependence.
+	---@diagnostic disable-next-line: undefined-global, undefined-field
+	state.isFovControlAvailable = type(FovControl) == "userdata" and type(FovControl.Version) == "function"
 
 	--Ensures the log file is fresh when the mod initializes.
 	pcall(function()
