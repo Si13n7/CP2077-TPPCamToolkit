@@ -1147,14 +1147,14 @@ local function isArray(t)
 end
 
 ---Checks whether the given value represents a valid number (integer or float).
----@param x number|string The value to check.
+---@param x number|string # The value to check.
 ---@return boolean # True if the value can be converted to a number, false otherwise.
 local function isNumeric(x)
 	return tonumber(x) ~= nil
 end
 
 ---Checks whether all provided values represent valid numbers (integers or floats).
----@param ... number|string The values to check.
+---@param ... number|string # The values to check.
 ---@return boolean # True if all values can be converted to numbers, false otherwise.
 local function areNumeric(...)
 	for i = 1, select("#", ...) do
@@ -1250,9 +1250,9 @@ end
 ---Strings are compared alphabetically, but numeric substrings are
 ---compared as numbers to ensure natural ordering.
 ---For example, "foo2" < "foo13".
----@param a any # First value to compare
----@param b any # Second value to compare
----@return boolean # True if `a` should come before `b`, false otherwise
+---@param a any # First value to compare.
+---@param b any # Second value to compare.
+---@return boolean # True if `a` should come before `b`, false otherwise.
 local function alphaNumericCompare(a, b)
 	a, b = tostring(a), tostring(b)
 	local ai, bi = 1, 1
@@ -1289,9 +1289,9 @@ end
 ---Performs deep comparison for tables and numeric tolerance (1e-4) for numbers or number-like strings.
 ---Also supports booleans, nil, functions, userdata, and threads using standard equality (`==`).
 ---Handles recursive tables safely using a visited map to prevent infinite loops.
----@param a any The first value to compare.
----@param b any The second value to compare.
----@param visited? table<any, any> Internal cache to handle cyclic table references (do not provide manually).
+---@param a any # The first value to compare.
+---@param b any # The second value to compare.
+---@param visited? table<any, any> # Internal cache to handle cyclic table references (do not provide manually).
 ---@return boolean # True if values are considered equal, false otherwise.
 local function equals(a, b, visited)
 	if a == b then return true end
@@ -1328,9 +1328,9 @@ local function equals(a, b, visited)
 end
 
 ---Checks if a given value is equal to any of the provided comparison values.
----@param x any The value to compare.
----@param ... any A variable number of values to compare against.
----@return boolean True if `a` equals at least one of the provided values, otherwise false.
+---@param x any # The value to compare.
+---@param ... any # A variable number of values to compare against.
+---@return boolean True # if `a` equals at least one of the provided values, otherwise false.
 local function equalsAny(x, ...)
 	for i = 1, select("#", ...) do
 		local v = select(i, ...)
@@ -1346,8 +1346,8 @@ end
 ---For tables, it distinguishes between arrays and key-value tables:
 --- - Arrays: checks if any value equals the target.
 --- - Key-value tables: checks if the key equals the target.
----@param x any The container value (string, number, or table).
----@param v any The value to search for.
+---@param x any # The container value (string, number, or table).
+---@param v any # The value to search for.
 ---@return boolean # True if the value is found, false otherwise.
 local function contains(x, v)
 	if x == nil or v == nil then return false end
