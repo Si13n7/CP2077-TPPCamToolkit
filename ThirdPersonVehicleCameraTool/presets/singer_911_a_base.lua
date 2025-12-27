@@ -1,0 +1,1 @@
+return{ID="4w_Shion_Nomad",Close={z=1.15,d=-0.2},Medium={z=1.65,d=1},Far={z=2.25,d=4.2}}
