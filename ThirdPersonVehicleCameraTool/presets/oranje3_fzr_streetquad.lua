@@ -1,0 +1,1 @@
+return{ID="4w_Quadra66_Nomad",Close={y=-0.12,d=-1.26},Medium={y=-0.12,d=-0.36},Far={y=-0.12,d=3.5}}
