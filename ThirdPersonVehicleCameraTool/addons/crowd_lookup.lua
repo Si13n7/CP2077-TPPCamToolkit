@@ -1,5 +1,5 @@
 return {
-	["Vehicle.Aerondight"]  = true,
+	["Vehicle.Aerondight"] = true,
 	["Vehicle.aldecado_archer_quartz_heat_3"] = true,
 	["Vehicle.aldecado_thorton_colby_heat_3"] = true,
 	["Vehicle.aldecado_thorton_galena_heat_1"] = true,
