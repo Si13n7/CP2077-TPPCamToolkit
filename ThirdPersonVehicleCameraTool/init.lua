@@ -9,9 +9,9 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2025-12-14, 15:12 UTC+01:00 (MEZ)
+Version: 2026-01-25, 13:33 UTC+01:00 (MEZ)
 
-Copyright (c) 2025, Si13n7 Developments(tm)
+Copyright (c) 2026, Si13n7 Developments(tm)
 All rights reserved.
 ______________________________________________
 
@@ -186,7 +186,21 @@ format, rep, concat, insert, remove, sort, unpack, abs, ceil, floor, band, bor, 
 ---Loads all static UI and log string constants from `text.lua` into the global `Text` table.
 ---This is the most efficient way to manage display strings separately from logic and code.
 ---@type table<string, string>
-local Text = dofile("text.lua")
+local Text = (function()
+	local base = dofile("text.lua")
+	local ok, addon = pcall(dofile, "addons/lang_text.lua")
+	if ok and type(addon) == "table" then
+		for k in pairs(base) do
+			if k ~= "GUI_TITLE" and k ~= "GUI_NAME" then
+				local v = addon[k]
+				if type(v) == "string" then
+					base[k] = v
+				end
+			end
+		end
+	end
+	return base
+end)()
 
 ---Developer mode levels used to control the verbosity and behavior of debug output.
 ---@type table<string, DevLevelType>
