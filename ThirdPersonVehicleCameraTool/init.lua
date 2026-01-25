@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: init.lua
-Version: 2026-01-25, 13:33 UTC+01:00 (MEZ)
+Version: 2026-01-25, 17:38 UTC+01:00 (MEZ)
 
 Copyright (c) 2026, Si13n7 Developments(tm)
 All rights reserved.
@@ -82,17 +82,18 @@ Development Environment:
 ---@field DisplayName string # The display name.
 ---@field Description string? # The description.
 ---@field Tooltip string # The value tooltip.
----@field Default boolean|number # The game's default value.
+---@field Default boolean|number # The default value.
 ---@field Value (boolean|number)? # The current value.
 ---@field Min number? # The minimum value.
 ---@field Max number? # The maximum value.
 ---@field Speed number? # Adjust sensitivity for ImGui controls; lower values allow finer adjustments.
 ---@field Values string[]? # An array of selectable options.
+---@field Dependency string? # An option key to check if its value is not default to determine whether this option should be visible.
 ---@field GameOptionPath string? # The path used when linking this option to a game configuration entry.
 ---@field GameOptionKey string? # The specific key within the game configuration path.
 ---@field IsGameOption boolean? # Determines whether this is treated as game INI option.
 ---@field IsGameTweak boolean? # Determines whether this is treated as game tweak.
----@field IsNotAvailable boolean? # Determines whether this option is currently not available.
+---@field IsUnavailable boolean? # Determines whether this option is currently not available.
 
 ---Represents a single game setting option with its associated metadata and values.
 ---@class IGameConfigOption
@@ -756,6 +757,47 @@ local config = {
 				Text.GUI_LEFT,
 				Text.GUI_RIGHT
 			}
+		},
+
+		---Mod-only options: fine-tunes the close bike camera presets.
+		closerBikesA = {
+			DisplayName = Text.GUI_GSET_CLO_BIKES_OSET_A,
+			Tooltip = Text.GUI_GSET_CLO_BIKES_OSET_TIP,
+			Default = 0,
+			Min = -30,
+			Max = 70,
+			Speed = 1,
+			Dependency = "closerBikes"
+		},
+
+		closerBikesX = {
+			DisplayName = Text.GUI_GSET_CLO_BIKES_OSET_X,
+			Tooltip = Text.GUI_GSET_CLO_BIKES_OSET_TIP,
+			Default = 0,
+			Min = -1,
+			Max = 1,
+			Speed = 0.01,
+			Dependency = "closerBikes"
+		},
+
+		closerBikesZ = {
+			DisplayName = Text.GUI_GSET_CLO_BIKES_OSET_Z,
+			Tooltip = Text.GUI_GSET_CLO_BIKES_OSET_TIP,
+			Default = 0,
+			Min = -1,
+			Max = 1,
+			Speed = 0.01,
+			Dependency = "closerBikes"
+		},
+
+		closerBikesD = {
+			DisplayName = Text.GUI_GSET_CLO_BIKES_OSET_D,
+			Tooltip = Text.GUI_GSET_CLO_BIKES_OSET_TIP,
+			Default = 0,
+			Min = -1,
+			Max = 2,
+			Speed = 0.01,
+			Dependency = "closerBikes"
 		},
 
 		---Mod-only option: enables or disables all vanilla presets.
@@ -2818,7 +2860,7 @@ end
 ---@param ensureSetFov boolean? # If true, the FOV will be set even while it is locked.
 local function updateConfigValue(name, value, updateConfig, ensureSetFov)
 	local option = name and config.options[name]
-	if not option or option.IsNotAvailable then return end
+	if not option or option.IsUnavailable then return end
 
 	local default = option.Default
 	local isRestore = equals(value, default)
@@ -2847,7 +2889,17 @@ local function updateConfigValue(name, value, updateConfig, ensureSetFov)
 			presets.restoreCollection = nil
 		end
 
-		if value > 1 then
+		local isAvailable = value > 1
+
+		local shifts = {}
+		for _, key in ipairs(PresetInfo.Offsets) do
+			local data = get(config.options, nil, name .. key:upper())
+			if data ~= nil then
+				shifts[key] = data.Value or data.Default or 0
+			end
+		end
+
+		if isAvailable then
 			presets.restoreCollection = {}
 			for key, preset in pairs(presets.collection) do
 				local isDef = preset.IsDefault
@@ -2874,6 +2926,14 @@ local function updateConfigValue(name, value, updateConfig, ensureSetFov)
 					preset.Far.x = 0.5
 					preset.Medium.x = 0.4
 					preset.Close.x = 0.3
+				end
+
+				for _, level in ipairs(PresetInfo.Levels) do
+					for offset, shift in pairs(shifts) do
+						if not equals(shift, 0) then
+							preset[level][offset] = preset[level][offset] + shift
+						end
+					end
 				end
 
 				::continue::
@@ -2920,7 +2980,7 @@ local function updateConfigData(doRestore)
 	for var, option in pairs(config.options) do
 		if doRestore and option.IsGameOption then goto continue end
 
-		if not option.IsNotAvailable and option.Value == nil then
+		if not option.IsUnavailable and option.Value == nil then
 			if option.IsGameOption then
 				if areString(option.GameOptionPath, option.GameOptionKey) then
 					local default = option.Default
@@ -4865,7 +4925,9 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 
 	ImGui.SetNextWindowPos(x, y)
 
-	height = math.max(height, 270 * scale)
+	local cache = getCache(0x958a, true) or 270
+
+	height = math.max(height, cache * scale)
 	ImGui.SetNextWindowSize(width, height)
 
 	ImGui.PushStyleColor(ImGuiCol.WindowBg, getStyleColor(ImGuiCol.WindowBg, 0xff))
@@ -4895,7 +4957,20 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 
 	for key, option in opairs(config.options, "DisplayName") do
 		---@cast option IOptionData
-		if option.IsNotAvailable then goto continue end
+		if option.IsUnavailable then goto continue end
+
+		local depKey = option.Dependency
+		if isStringValid(depKey) then
+			local depDef = get(config.options, nil, depKey, "Default")
+			if depDef ~= nil then
+				local depVal = get(config.options, nil, depKey, "Value")
+				if depVal ~= nil and depVal == depDef then
+					cache = 270
+					goto continue
+				end
+				cache = 380
+			end
+		end
 
 		ImGui.TableNextRow()
 
@@ -5021,6 +5096,8 @@ local function openGlobalOptionsWindow(scale, x, y, width, height, halfContentWi
 	addTooltip(scale, Text.GUI_GSET_RESET_TIP)
 
 	ImGui.End()
+
+	setCache(0x958a, cache)
 
 	return isAdvancedOpening
 end
@@ -5440,7 +5517,7 @@ local function onInit()
 			if not available then
 				local option = deep(config.options, "closerBikes")
 				option.Value = option.Default
-				option.IsNotAvailable = true
+				option.IsUnavailable = true
 			end
 		end
 	end
@@ -5609,7 +5686,7 @@ local function setupNativeSettings()
 		native.addSubcategory(cat, Text.NUI_CAT_GSET)
 
 		for key, option in opairs(config.options, "DisplayName") do
-			if not option.IsNotAvailable then
+			if not option.IsUnavailable then
 				local def = option.Default
 				local cur = option.Value
 				local min = option.Min
@@ -5772,7 +5849,7 @@ registerForEvent("onInit", function()
 
 	---Determines whether `FovControl` is installed.
 	if not state.isCodewareAvailable then
-		deep(config.options, "zoom").IsNotAvailable = false
+		deep(config.options, "zoom").IsUnavailable = false
 	end
 
 	--FovControl dependence.

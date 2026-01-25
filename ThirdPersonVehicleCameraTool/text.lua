@@ -9,7 +9,7 @@ Allows you to adjust third-person perspective
 (TPP) camera offsets for any vehicle.
 
 Filename: text.lua
-Version: 2025-12-13, 17:31 UTC+01:00 (MEZ)
+Version: 2026-01-25, 17:38 UTC+01:00 (MEZ)
 
 Copyright (c) 2025, Si13n7 Developments(tm)
 All rights reserved.
@@ -49,8 +49,13 @@ return {
 	GUI_PSETS_RLD_TIP = "Reloads all preset data. Use this to reset unsaved changes, after enabling or disabling vanilla presets, or when you have changed or added preset files outside of the game.\n\nKeep in mind that changes only take effect after exiting and re-entering the vehicle",
 
 	--GUI: ⚒️ Global Settings
-	GUI_GSET_CLOSER_BIKES = "Closer Bike Camera",
+	GUI_GSET_CLOSER_BIKES = "Closer Bikes",
 	GUI_GSET_CLOSER_BIKES_TIP = "Moves the camera closer to motorcycles for a tighter, more immersive view.\n\nOnly works for motorcycles that have a preset.\n\nMotorcycle presets cannot be edited while this option is enabled.",
+	GUI_GSET_CLO_BIKES_OSET_A = "Closer Bikes A-Shift",
+	GUI_GSET_CLO_BIKES_OSET_X = "Closer Bikes X-Shift",
+	GUI_GSET_CLO_BIKES_OSET_Z = "Closer Bikes Z-Shift",
+	GUI_GSET_CLO_BIKES_OSET_D = "Closer Bikes D-Shift",
+	GUI_GSET_CLO_BIKES_OSET_TIP = "Offset value that is added to the current value.",
 	GUI_GSET_AUTO_CENTER = "Disable Auto-Centering",
 	GUI_GSET_AUTO_CENTER_TIP = "Disables automatic camera centering.\n\nTakes effect only after exiting and re-entering the vehicle.",
 	GUI_GSET_VAN_PSETS = "Disable Vanilla Presets",
