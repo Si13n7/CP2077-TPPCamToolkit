@@ -1,0 +1,1 @@
+return{ID="4w_BMF",Close={y=0,d=0.3},Medium={y=0,d=1.3},Far={y=0,d=5.5}}
